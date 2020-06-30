@@ -132,13 +132,15 @@ _mount() {
 
 	umount -f -l /var/lib/docker > /dev/null 2>&1 || :
 
-	rm -rf /var/lib/docker /var/lib/boot2docker
+	rm -rf /var/lib/docker /var/lib/boot2docker /var/lib/homebridge
 	mkdir -p \
 		"/mnt/$partName/var/lib/boot2docker" \
 		"/mnt/$partName/var/lib/docker" \
+		"/mnt/$partName/var/lib/homebridge" \
 		/var/lib
 	ln -sf "/mnt/$partName/var/lib/boot2docker" /var/lib/boot2docker
 	ln -sf "/mnt/$partName/var/lib/docker" /var/lib/docker
+	ln -sf "/mnt/$partName/var/lib/homebridge" /var/lib/homebridge
 
 	rm -rf "/mnt/$partName/tmp"
 	mv /tmp "/mnt/$partName/tmp"

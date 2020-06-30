@@ -82,4 +82,35 @@ if [ -e /var/lib/boot2docker/bootlocal.sh ]; then
 	sh /var/lib/boot2docker/bootlocal.sh &
 fi
 
+until ip route | grep "default" > /dev/null 2>&1; do
+  echo 'Waiting for network...'
+	sleep 1;
+done
+
+until docker ps > /dev/null 2>&1; do
+	echo 'Waiting for docker...'
+	sleep 5;
+done
+
+[ -f /var/lib/homebridge/docker-compose.yml ] || cp /var/lib/defaults/docker-compose.yml /var/lib/homebridge/
+
+docker-compose -f /var/lib/homebridge/docker-compose.yml pull
+docker-compose -f /var/lib/homebridge/docker-compose.yml up -d
+
+HOST_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+BOLD='\e[1m'
+NC='\033[0m'
+
+printf "\n${RED}*** Homebridge Boot Image ***${NC}\n\n"
+
+printf "homebridge was created by nfarina and licensed under the Apache License 2.0.\n" | fold -s
+printf "homebridge-config-ui-x was created by oznu and licensed under the MIT License.\n\n" | fold -s
+
+printf "${BOLD}Connect to${NC} ${YELLOW}http://$HOST_IP:8581${NC} ${BOLD}to manage Homebridge.${NC}\n"
+printf "${BOLD}Default Username:${NC} ${YELLOW}admin${NC}\n"
+printf "${BOLD}Default Password:${NC} ${YELLOW}admin${NC}\n\n"
+
 /opt/bootlocal.sh &

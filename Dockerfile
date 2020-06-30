@@ -439,6 +439,10 @@ RUN DOCKER_CHANNEL='edge'; \
 		chroot . "$binary" --version; \
 	done
 
+# get docker-compose
+RUN wget -O ./usr/local/bin/docker-compose https://github.com/docker/compose/releases/download/1.26.0/docker-compose-$(uname -s)-$(uname -m) \
+	&& chmod +x ./usr/local/bin/docker-compose
+
 # set up a few branding bits
 RUN { \
 		echo 'NAME=Boot2Docker'; \
@@ -452,9 +456,9 @@ RUN { \
 		echo 'SUPPORT_URL="https://blog.docker.com/2016/11/introducing-docker-community-directory-docker-community-slack/"'; \
 		echo 'BUG_REPORT_URL="https://github.com/boot2docker/boot2docker/issues"'; \
 	} > etc/os-release; \
-	sed -i 's/HOSTNAME="box"/HOSTNAME="boot2docker"/g' usr/bin/sethostname; \
+	sed -i 's/HOSTNAME="box"/HOSTNAME="homebridge-vm"/g' usr/bin/sethostname; \
 	tcl-chroot sethostname; \
-	[ "$(< etc/hostname)" = 'boot2docker' ]; \
+	[ "$(< etc/hostname)" = 'homebridge-vm' ]; \
 	for num in 0 1 2 3; do \
 		echo "server $num.boot2docker.pool.ntp.org"; \
 	done > etc/ntp.conf; \
@@ -532,6 +536,7 @@ COPY files/isolinux.cfg /tmp/iso/isolinux/
 
 COPY files/init.d/* ./etc/init.d/
 COPY files/bootsync.sh ./opt/
+COPY files/docker-compose.yml ./var/lib/defaults/docker-compose.yml
 
 # temporary boot debugging aid
 #RUN sed -i '2i set -x' etc/init.d/tc-config
