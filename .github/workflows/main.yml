@@ -37,9 +37,13 @@ jobs:
         release_name: ${{ github.ref }}
         body: |
           Click the link below to start your download:
+
           <span align="center">
+
           ### [boot2homebridge.iso](https://github.com/oznu/boot2docker/releases/download/${{ steps.get_version.outputs.VERSION }}/boot2homebridge.iso)
+          
           </span>
+
           ---
           * **SHA-256:** ${{ steps.get_sha256_checksum.outputs.IMAGE_SHA256_CHECKSUM }}
         draft: false
