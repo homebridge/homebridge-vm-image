@@ -318,6 +318,7 @@ RUN tcl-tce-load \
 		rsync \
 		tar \
 		util-linux \
+		nano \
 		xz
 
 # bash-completion puts auto-load in /usr/local/etc/profile.d instead of /etc/profile.d
@@ -537,6 +538,9 @@ COPY files/isolinux.cfg /tmp/iso/isolinux/
 COPY files/init.d/* ./etc/init.d/
 COPY files/bootsync.sh ./opt/
 COPY files/docker-compose.yml ./var/lib/defaults/docker-compose.yml
+
+RUN > ./etc/motd \
+	&& echo "cd /var/lib/homebridge" >> ./home/docker/.profile
 
 # temporary boot debugging aid
 #RUN sed -i '2i set -x' etc/init.d/tc-config

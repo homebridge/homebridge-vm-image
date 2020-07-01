@@ -5,7 +5,10 @@ services:
     image: oznu/homebridge:ubuntu
     restart: always
     network_mode: host
+    privileged: true
     environment:
+      - PGID=50
+      - PUID=1000
       - HOMEBRIDGE_CONFIG_UI=1
       - HOMEBRIDGE_CONFIG_UI_PORT=8581
     volumes:

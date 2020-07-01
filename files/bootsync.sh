@@ -92,10 +92,11 @@ until docker ps > /dev/null 2>&1; do
 	sleep 5;
 done
 
+# check docker-compose.yml exists
 [ -f /var/lib/homebridge/docker-compose.yml ] || cp /var/lib/defaults/docker-compose.yml /var/lib/homebridge/
 
-docker-compose -f /var/lib/homebridge/docker-compose.yml pull
-docker-compose -f /var/lib/homebridge/docker-compose.yml up -d
+# bring up docker image
+docker-compose -f /var/lib/homebridge/docker-compose.yml up -d --remove-orphans
 
 HOST_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
 
@@ -104,10 +105,14 @@ YELLOW='\033[1;33m'
 BOLD='\e[1m'
 NC='\033[0m'
 
-printf "\n${RED}*** Homebridge Boot Image ***${NC}\n\n"
+printf "\n${RED}*** Homebridge VM Boot Image ***${NC}\n\n"
 
 printf "homebridge was created by nfarina and licensed under the Apache License 2.0.\n" | fold -s
 printf "homebridge-config-ui-x was created by oznu and licensed under the MIT License.\n\n" | fold -s
+
+printf "If you need to update the Homebridge Docker image run:\n"
+printf "  docker-compose pull\n"
+printf "  docker-compose up -d\n\n"
 
 printf "${BOLD}Connect to${NC} ${YELLOW}http://$HOST_IP:8581${NC} ${BOLD}to manage Homebridge.${NC}\n"
 printf "${BOLD}Default Username:${NC} ${YELLOW}admin${NC}\n"

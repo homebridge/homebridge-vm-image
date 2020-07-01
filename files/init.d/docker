@@ -224,7 +224,7 @@ start() {
 	mkdir -p /var/lib/boot2docker/log
 
 	echo 'Starting dockerd'
-	dockerd --data-root "$DOCKER_DIR" -H unix:// $EXTRA_ARGS --pidfile "$PIDFILE" >> /var/lib/boot2docker/log/docker.log 2>&1 &
+	dockerd --data-root "$DOCKER_DIR" -H unix:// $EXTRA_ARGS --pidfile "$PIDFILE" --userland-proxy=false >> /var/lib/boot2docker/log/docker.log 2>&1 &
 }
 
 stop() {
