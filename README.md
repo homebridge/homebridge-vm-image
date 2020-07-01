@@ -1,4 +1,4 @@
-# Homebridge Boot Image
+# Homebridge VM Boot Image
 
 A minimal ISO image that runs Homebridge. 
 
@@ -23,7 +23,7 @@ A minimal ISO image that runs Homebridge.
 6. Manage Homebridge.
 
 <p align="center">
-  <img width="600px" src="https://user-images.githubusercontent.com/3979615/86241831-fb3a5e00-bbe6-11ea-8070-f3e6c2bf5ec6.png">
+  <img src="https://user-images.githubusercontent.com/3979615/86241831-fb3a5e00-bbe6-11ea-8070-f3e6c2bf5ec6.png">
 </p>
 
 ## Credits
