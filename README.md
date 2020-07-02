@@ -1,6 +1,6 @@
 # Homebridge VM Boot Image
 
-A minimal ISO image that runs Homebridge. 
+A minimal ISO image that runs Homebridge.
 
 ## Currently Experimental!
 
@@ -8,7 +8,7 @@ A minimal ISO image that runs Homebridge.
 
 ## Usage
 
-1. Download the latest boot2homebridge.iso image here: https://github.com/oznu/boot2docker/releases
+1. Download the latest homebridge-vm-image.iso image here: https://github.com/oznu/homebridge-vm-image/releases
 2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.
     * *OS*: Linux -> Other Linux (64bit)
     * *Hyper-V*: Select "Generation 1 VM"
@@ -18,7 +18,7 @@ A minimal ISO image that runs Homebridge.
     * **HDD**: 8GB virtual hard disk (thin / dynamic)
         * *ESXi*: Use a SATA / IDE Controller (SCSI controllers will not work)
     * **Network Adapter**: [Bridged Adapter](https://github.com/homebridge/homebridge/wiki/VirtualBox-and-Parallels-Desktop-VM-Network-Settings) (VirtualBox / Parallels Desktop) or [External Switch](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/create-a-virtual-switch-for-hyper-v-virtual-machines) (Hyper-V).
-    * **ISO**: boot2homebridge.iso (this must stay attached forever, so store the .iso in a safe place).
+    * **ISO**: homebridge-vm-image.iso (this must stay attached forever, so store the .iso in a safe place).
         * *VirtualBox*: check the "Is Live CD" box.
         * *Parallels Desktop*: you may need to re-mount the ISO once after the first boot in the VM settings.
 4. Start your VM.

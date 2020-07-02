@@ -20,12 +20,12 @@ jobs:
     - name: Build Image
       run: |
         docker build -t boot2homebridge .
-        docker run --rm boot2homebridge > boot2homebridge.iso
+        docker run --rm boot2homebridge > homebridge-vm-image.iso
     - name: Calculate Checksum
       id: get_sha256_checksum
       run: |
-        export IMAGE_SHA256_CHECKSUM=$(shasum -a 256 boot2homebridge.iso | awk '{print $1}')
-        echo "$IMAGE_SHA256_CHECKSUM boot2homebridge.iso"
+        export IMAGE_SHA256_CHECKSUM=$(shasum -a 256 homebridge-vm-image.iso | awk '{print $1}')
+        echo "$IMAGE_SHA256_CHECKSUM homebridge-vm-image.iso"
         echo ::set-output name=IMAGE_SHA256_CHECKSUM::${IMAGE_SHA256_CHECKSUM}
     - name: Create Release
       id: create_release
@@ -40,7 +40,7 @@ jobs:
 
           <span align="center">
 
-          ### [boot2homebridge.iso](https://github.com/oznu/boot2docker/releases/download/${{ steps.get_version.outputs.VERSION }}/boot2homebridge.iso)
+          ### [homebridge-vm-image.iso](https://github.com/oznu/homebridge-vm-image/releases/download/${{ steps.get_version.outputs.VERSION }}/homebridge-vm-image.iso)
           
           </span>
 
@@ -55,6 +55,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: boot2homebridge.iso
-        asset_name: boot2homebridge.iso
+        asset_path: homebridge-vm-image.iso
+        asset_name: homebridge-vm-image.iso
         asset_content_type: application/x-iso9660-image
