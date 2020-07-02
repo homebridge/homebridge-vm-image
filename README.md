@@ -8,7 +8,7 @@ A minimal ISO image that runs Homebridge.
 
 ## Usage
 
-1. Download the latest homebridge-vm-image.iso image here: https://github.com/oznu/homebridge-vm-image/releases
+1. Click here to download the latest [**homebridge-vm-image.iso**](https://github.com/oznu/homebridge-vm-image/releases/latest/download/homebridge-vm-image.iso) ISO file.
 2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.
     * *OS*: Linux -> Other Linux (64bit)
     * *Hyper-V*: Select "Generation 1 VM"
