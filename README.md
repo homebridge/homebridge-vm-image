@@ -2,9 +2,7 @@
 
 A minimal ISO image that runs Homebridge.
 
-## Currently Experimental!
-
-**For use in virtual machines only, do not boot this ISO in a machine with access to a disk containing data you care about.**
+**:warning: For use in virtual machines only, do not boot this ISO in a machine with access to a disk containing data you care about.**
 
 ## Usage
 
