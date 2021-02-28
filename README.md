@@ -14,7 +14,7 @@ A minimal ISO image that runs Homebridge.
     * **RAM**: 1GB Minimum
     * **CPU**: 1+
     * **HDD**: 8GB virtual hard disk (thin / dynamic)
-        * *ESXi*: Use a SATA / IDE Controller (SCSI controllers will not work)
+        * *Important*: Use a SATA / IDE Controller (SCSI controllers will not work)
     * **Network Adapter**: [Bridged Adapter](https://github.com/homebridge/homebridge/wiki/VirtualBox-and-Parallels-Desktop-VM-Network-Settings) (VirtualBox / Parallels Desktop) or [External Switch](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/create-a-virtual-switch-for-hyper-v-virtual-machines) (Hyper-V).
     * **ISO**: homebridge-vm-image.iso (this must stay attached forever, so store the .iso in a safe place).
         * *VirtualBox*: check the "Is Live CD" box.
