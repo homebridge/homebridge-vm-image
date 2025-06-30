@@ -1,0 +1,14 @@
+[Unit]
+Description=Homebridge
+After=network.target
+
+[Service]
+Type=simple
+User=homebridge
+WorkingDirectory=/var/lib/homebridge
+ExecStart=/usr/bin/homebridge
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

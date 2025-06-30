@@ -1,0 +1,10 @@
+#cloud-config
+users:
+  - default
+packages:
+  - avahi-daemon
+  - homebridge
+  - homebridge-config-ui-x
+runcmd:
+  - systemctl enable avahi-daemon
+  - systemctl enable homebridge

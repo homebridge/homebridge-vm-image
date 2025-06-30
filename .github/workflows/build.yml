@@ -1,0 +1,47 @@
+name: Build Bootable Homebridge VM Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+      - beta
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [arm64, amd64]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: all
+
+    - name: Install required packages
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          debootstrap parted e2fsprogs dosfstools \
+          grub-pc-bin grub-efi-amd64-bin \
+          qemu-user-static gzip
+
+    - name: Run build script
+      run: |
+        chmod +x ./build.sh
+        sudo ./build.sh "${{ matrix.arch }}"
+
+    - name: Upload to GitHub Releases (only on tag or manual)
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: output/homebridge-${{ matrix.arch }}.img.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
