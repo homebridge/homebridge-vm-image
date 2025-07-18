@@ -6,7 +6,7 @@ A minimal image that runs Homebridge.
 
 ## Usage
 
-1. Click here to download the latest [**X86**](https://github.com/homebridge/homebridge-vm-image/releases/latest/download/homebridge-amd64.img.gz) or [**ARM**](https://github.com/homebridge/homebridge-vm-image/releases/latest/download/homebridge-arm64.img.gz) image
+1. Click here to download the latest [**homebridge-vm-image.img (70 MB)**](https://github.com/homebridge/homebridge-vm-image-boot2docker/releases/download/v0.0.4/homebridge-vm-image.iso) ISO file.
 2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.
     * *OS*: Linux -> Other Linux (64bit)
     * *Hyper-V*: Select "Generation 1 VM"
