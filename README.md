@@ -4,7 +4,7 @@ A minimal image that runs Homebridge.
 
 **:warning: For use in virtual machines only, do not boot this Image in a machine with access to a disk containing data you care about.**
 
-> **Note**: This VM image uses the official [Homebridge](https://github.com/homebridge/homebridge) packages from the official APT repository. If you were previously using images based on `oznu/homebridge`, these new VM images provide the updated official Homebridge distribution.
+> **Note**: This VM image uses the official [Homebridge](https://github.com/homebridge/homebridge) packages from the official APT repository. If you were previously using images based on `oznu/homebridge` or from the old `homebridge-vm-image-boot2docker` repository, these new VM images provide the updated official Homebridge distribution.
 
 ## Usage
 
