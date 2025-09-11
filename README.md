@@ -4,9 +4,13 @@ A minimal image that runs Homebridge.
 
 **:warning: For use in virtual machines only, do not boot this Image in a machine with access to a disk containing data you care about.**
 
+> **Note**: This VM image uses the official [Homebridge](https://github.com/homebridge/homebridge) packages from the official APT repository. If you were previously using images based on `oznu/homebridge` or from the old [`homebridge-vm-image-boot2docker`](https://github.com/homebridge/homebridge-vm-image-boot2docker) repository (v0.0.4), these new VM images provide the updated official Homebridge distribution.
+
 ## Usage
 
-1. Click here to download the latest [**homebridge-vm-image.img (70 MB)**](https://github.com/homebridge/homebridge-vm-image-boot2docker/releases/download/v0.0.4/homebridge-vm-image.iso) ISO file.
+1. Click here to download the latest VM image:
+   - [**homebridge-amd64.img.gz**](https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-amd64.img.gz) (AMD64/x86_64 systems)
+   - [**homebridge-arm64.img.gz**](https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-arm64.img.gz) (ARM64 systems)
 2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.
     * *OS*: Linux -> Other Linux (64bit)
     * *Hyper-V*: Select "Generation 1 VM"
@@ -16,7 +20,7 @@ A minimal image that runs Homebridge.
     * **HDD**: 8GB virtual hard disk (thin / dynamic)
         * *Important*: Use a SATA / IDE Controller (SCSI controllers will not work)
     * **Network Adapter**: [Bridged Adapter](https://github.com/homebridge/homebridge/wiki/VirtualBox-and-Parallels-Desktop-VM-Network-Settings) (VirtualBox / Parallels Desktop) or [External Switch](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/create-a-virtual-switch-for-hyper-v-virtual-machines) (Hyper-V).
-    * **IMG**: homebridge-*.img (this must stay attached forever, so store the .img in a safe place).
+    * **IMG**: homebridge-*.img.gz (extract first, then this must stay attached forever, so store the .img in a safe place).
         * *VirtualBox*: check the "Is Live CD" box.
         * *Parallels Desktop*: you may need to re-mount the IMG once after the first boot in the VM settings.
 4. Start your VM.
