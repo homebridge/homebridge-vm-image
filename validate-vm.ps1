@@ -64,14 +64,24 @@ if ($ImagePath.EndsWith(".gz")) {
     # Extract using 7-Zip (should be available on GitHub Actions Windows runners)
     try {
         & "C:\Program Files\7-Zip\7z.exe" e $ImagePath -o$workDir -y
-        $extractedFiles = Get-ChildItem -Path $workDir -Filter "*.img"
+        
+        # Look for any extracted files (not just .img)
+        $extractedFiles = Get-ChildItem -Path $workDir -File
         if ($extractedFiles.Count -gt 0) {
-            $workImg = $extractedFiles[0].FullName
+            # Get the largest file (which should be our disk image)
+            $workImg = ($extractedFiles | Sort-Object Length -Descending)[0].FullName
+            Write-Host "✅ Extracted file: $($extractedFiles[0].Name)" -ForegroundColor Green
         } else {
-            throw "No .img file found after extraction"
+            throw "No files found after extraction"
         }
     } catch {
         Write-Host "❌ Failed to extract image: $_" -ForegroundColor Red
+        Write-Host "Attempting to list extracted files for debugging..." -ForegroundColor Yellow
+        try {
+            Get-ChildItem -Path $workDir | Write-Host
+        } catch {
+            Write-Host "Could not list directory contents" -ForegroundColor Red
+        }
         exit 1
     }
 } else {

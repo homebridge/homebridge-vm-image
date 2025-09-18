@@ -35,7 +35,9 @@ jobs:
             $url = "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe"
             $output = "$env:TEMP\VirtualBox-installer.exe"
             Invoke-WebRequest -Uri $url -OutFile $output
+            Write-Host "Downloaded VirtualBox for AMD64"
             Start-Process -FilePath $output -ArgumentList "/S" -Wait
+            Write-Host "Started VirtualBox for AMD64"
             
             # Add VirtualBox to PATH
             $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
