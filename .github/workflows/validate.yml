@@ -67,11 +67,39 @@ jobs:
               }
             }
             
-            # Add VirtualBox to PATH
+            # Add VirtualBox to PATH and refresh environment
             $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
-            $env:PATH += ";$vboxPath"
-            [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
-            Write-Host "Added VirtualBox to PATH"
+            Write-Host "Adding VirtualBox to PATH: $vboxPath"
+            
+            # Check if installation directory exists
+            if (Test-Path $vboxPath) {
+              Write-Host "VirtualBox installation directory found: $vboxPath"
+              $env:PATH += ";$vboxPath"
+              [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
+              
+              # Force refresh the current session PATH
+              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+              Write-Host "Updated PATH environment variable"
+            } else {
+              Write-Host "VirtualBox installation directory not found at: $vboxPath"
+              # Try alternative locations
+              $altPaths = @(
+                "${env:ProgramFiles(x86)}\Oracle\VirtualBox",
+                "C:\Program Files\Oracle\VirtualBox",
+                "C:\Program Files (x86)\Oracle\VirtualBox"
+              )
+              foreach ($altPath in $altPaths) {
+                if (Test-Path $altPath) {
+                  Write-Host "Found VirtualBox at alternative location: $altPath"
+                  $env:PATH += ";$altPath"
+                  [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  $vboxPath = $altPath
+                  break
+                }
+              }
+            }
+            Write-Host "Final VirtualBox path: $vboxPath"
           } else {
             # For ARM64, enable Hyper-V (VirtualBox has limited ARM64 support)
             Write-Host "Enabling Hyper-V for ARM64..."
@@ -124,12 +152,13 @@ jobs:
           .\validate-vm.ps1 -Architecture "${{ matrix.arch }}" -ImagePath "output\homebridge-${{ matrix.arch }}.img.gz" -Timeout 300
         timeout-minutes: 15
 
-      - name: Upload validation logs (on failure)
-        if: failure()
+      - name: Upload validation logs and Homebridge logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: validation-logs-${{ matrix.arch }}
           path: |
             *.log
             vm-*.txt
+            homebridge-validation-*.log
           retention-days: 7
