@@ -100,6 +100,24 @@ jobs:
               }
             }
             Write-Host "Final VirtualBox path: $vboxPath"
+            
+            # Verify VBoxManage is accessible
+            Write-Host "Verifying VBoxManage accessibility..."
+            try {
+              $vboxVersion = & VBoxManage --version 2>&1
+              Write-Host "VBoxManage version: $vboxVersion"
+            } catch {
+              Write-Host "VBoxManage still not accessible, trying direct path..."
+              $vboxManagePath = Join-Path $vboxPath "VBoxManage.exe"
+              if (Test-Path $vboxManagePath) {
+                Write-Host "Found VBoxManage at: $vboxManagePath"
+                $env:PATH = "$vboxPath;$env:PATH"
+                Write-Host "Prepended VirtualBox path to beginning of PATH"
+              } else {
+                Write-Host "VBoxManage.exe not found at expected location: $vboxManagePath"
+                Get-ChildItem -Path $vboxPath -Filter "*.exe" | Write-Host
+              }
+            }
           } else {
             # For ARM64, enable Hyper-V (VirtualBox has limited ARM64 support)
             Write-Host "Enabling Hyper-V for ARM64..."
