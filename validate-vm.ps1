@@ -37,8 +37,11 @@ try {
     # Start VM and validate Homebridge
     $validationResult = Test-HomebridgeService -VmName $vmName -Architecture $Architecture -Timeout $Timeout
     
+    # Start VM and validate Homebridge
+    $validationResult = Test-HomebridgeService -VmName $vmName -Architecture $Architecture -Timeout $Timeout
+    
     # Generate validation reports
-    Write-ValidationReport -Result $validationResult -Architecture $Architecture
+    Write-ValidationReport -ValidationResult $validationResult -Architecture $Architecture
     
     Write-Host "🎉 VM image validation completed successfully for $Architecture!" -ForegroundColor Green
     exit 0
