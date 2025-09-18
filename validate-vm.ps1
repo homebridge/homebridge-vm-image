@@ -313,18 +313,19 @@ try {
                 }
                 
                 $bootSuccess = $true
-            # Try to collect Homebridge logs and status
-        Write-Host "📋 Collecting Homebridge validation information..." -ForegroundColor Cyan
-        $logCollected = $false
-        
-        try {
-            Write-Host "🔍 For comprehensive Homebridge validation, SSH access enables:" -ForegroundColor Cyan
-            Write-Host "   • sudo hb-service status  - Check Homebridge service status" -ForegroundColor Cyan  
-            Write-Host "   • sudo hb-service view    - View Homebridge logs and output" -ForegroundColor Cyan
-            Write-Host "💡 Current validation uses HTTP interface check as service confirmation" -ForegroundColor Yellow
-            
-            # Write enhanced validation log file with service status and file contents
-            $logContent = @"
+                
+                # Try to collect Homebridge logs and status
+                Write-Host "📋 Collecting Homebridge validation information..." -ForegroundColor Cyan
+                $logCollected = $false
+                
+                try {
+                    Write-Host "🔍 For comprehensive Homebridge validation, SSH access enables:" -ForegroundColor Cyan
+                    Write-Host "   • sudo hb-service status  - Check Homebridge service status" -ForegroundColor Cyan  
+                    Write-Host "   • sudo hb-service view    - View Homebridge logs and output" -ForegroundColor Cyan
+                    Write-Host "💡 Current validation uses HTTP interface check as service confirmation" -ForegroundColor Yellow
+                    
+                    # Write enhanced validation log file with service status and file contents
+                    $logContent = @"
 # Homebridge VM Validation Report  
 # Validation Run: $(Get-Date)
 # VM Name: $vmName
@@ -366,7 +367,7 @@ To enable comprehensive service validation and file collection:
    - Configure known user credentials or key authentication
 
 3. Enhanced validation commands:
-   \`\`\`bash
+   ```bash
    # Check service status
    ssh -p 2222 user@localhost "sudo hb-service status"
    
@@ -378,7 +379,7 @@ To enable comprehensive service validation and file collection:
    
    # Get log file contents
    ssh -p 2222 user@localhost "cat /var/lib/homebridge/homebridge.log"
-   \`\`\`
+   ```
 
 ## Current Validation Approach:
 - VM boot verification: ✅ Complete
@@ -395,13 +396,13 @@ To enable comprehensive service validation and file collection:
 The current validation confirms the VM boots properly and Homebridge web interface is accessible and functional.
 "@
             
-            $logContent | Out-File -FilePath "homebridge-validation-$Architecture.log" -Encoding UTF8
-            Write-Host "✅ Created validation log file: homebridge-validation-$Architecture.log" -ForegroundColor Green
-            
-            # Create placeholder files showing what should be collected from VM
-            try {
-                # Create directory listing placeholder
-                $dirListingContent = @"
+                    $logContent | Out-File -FilePath "homebridge-validation-$Architecture.log" -Encoding UTF8
+                    Write-Host "✅ Created validation log file: homebridge-validation-$Architecture.log" -ForegroundColor Green
+                    
+                    # Create placeholder files showing what should be collected from VM
+                    try {
+                        # Create directory listing placeholder
+                        $dirListingContent = @"
 # /var/lib/homebridge/ Directory Contents
 # This file shows what should be collected from the VM
 
@@ -418,11 +419,11 @@ ssh -p 2222 user@localhost "ls -laR /var/lib/homebridge/"
 
 Current Status: VM validated via HTTP interface - SSH collection framework ready
 "@
-                $dirListingContent | Out-File -FilePath "homebridge-directory-$Architecture.txt" -Encoding UTF8
-                Write-Host "📁 Created directory listing placeholder: homebridge-directory-$Architecture.txt" -ForegroundColor Green
-                
-                # Create log file placeholder
-                $logFileContent = @"
+                        $dirListingContent | Out-File -FilePath "homebridge-directory-$Architecture.txt" -Encoding UTF8
+                        Write-Host "📁 Created directory listing placeholder: homebridge-directory-$Architecture.txt" -ForegroundColor Green
+                        
+                        # Create log file placeholder
+                        $logFileContent = @"
 # /var/lib/homebridge/homebridge.log Contents
 # This file shows what should be collected from the VM
 
@@ -442,48 +443,46 @@ ssh -p 2222 user@localhost "journalctl -u homebridge -n 100 --no-pager"
 
 Current Status: VM validated via HTTP interface - SSH collection framework ready
 "@
-                $logFileContent | Out-File -FilePath "homebridge-logfile-$Architecture.txt" -Encoding UTF8
-                Write-Host "📄 Created log file placeholder: homebridge-logfile-$Architecture.txt" -ForegroundColor Green
+                        $logFileContent | Out-File -FilePath "homebridge-logfile-$Architecture.txt" -Encoding UTF8
+                        Write-Host "📄 Created log file placeholder: homebridge-logfile-$Architecture.txt" -ForegroundColor Green
+                        
+                    } catch {
+                        Write-Host "⚠️ Could not create placeholder files: $_" -ForegroundColor Yellow
+                    }
+                    
+                    $logCollected = $true
+                    
+                } catch {
+                    Write-Host "⚠️ Could not collect detailed Homebridge logs: $_" -ForegroundColor Yellow
+                }
                 
-            } catch {
-                Write-Host "⚠️ Could not create placeholder files: $_" -ForegroundColor Yellow
-            }
-            
-            $logCollected = $true
-            
-        } catch {
-            Write-Host "⚠️ Could not collect detailed Homebridge logs: $_" -ForegroundColor Yellow
-        }
-        
-        if ($logCollected) {
-            Write-Host "📋 Log collection summary written to homebridge-validation-$Architecture.log" -ForegroundColor Green
-        }
-        
-        # Success message with validation summary
-        Write-Host "" -ForegroundColor Green
-        Write-Host "🎉 ===============================================" -ForegroundColor Green  
-        Write-Host "🎉 VM IMAGE VALIDATION COMPLETED SUCCESSFULLY!" -ForegroundColor Green
-        Write-Host "🎉 ===============================================" -ForegroundColor Green
-        Write-Host "" -ForegroundColor Green
-        Write-Host "✅ VM Boot: Successfully started and running" -ForegroundColor Green
-        Write-Host "✅ Network: Port forwarding working (SSH:2222, Web:8581)" -ForegroundColor Green  
-        Write-Host "✅ Homebridge Web Interface: Accessible and responding" -ForegroundColor Green
-        Write-Host "✅ Service Health: Web interface indicates healthy Homebridge service" -ForegroundColor Green
-        Write-Host "" -ForegroundColor Green
-        Write-Host "📋 Validation Artifacts Created:" -ForegroundColor Cyan
-        Write-Host "   • homebridge-validation-$Architecture.log - Complete validation report" -ForegroundColor Cyan
-        Write-Host "   • homebridge-directory-$Architecture.txt - Directory collection framework" -ForegroundColor Cyan
-        Write-Host "   • homebridge-logfile-$Architecture.txt - Log collection framework" -ForegroundColor Cyan
-        Write-Host "" -ForegroundColor Green
-        Write-Host "📝 Next Steps for Enhanced Validation:" -ForegroundColor Yellow
-        Write-Host "   • Enable SSH server in VM image for deeper validation" -ForegroundColor Yellow
-        Write-Host "   • Implement file collection: /var/lib/homebridge/" -ForegroundColor Yellow
-        Write-Host "   • Add service status checking: sudo hb-service status" -ForegroundColor Yellow
-        Write-Host "" -ForegroundColor Green
-            break
-        } catch {
-            # Continue waiting
-        }
+                if ($logCollected) {
+                    Write-Host "📋 Log collection summary written to homebridge-validation-$Architecture.log" -ForegroundColor Green
+                }
+                
+                # Success message with validation summary
+                Write-Host "" -ForegroundColor Green
+                Write-Host "🎉 ===============================================" -ForegroundColor Green  
+                Write-Host "🎉 VM IMAGE VALIDATION COMPLETED SUCCESSFULLY!" -ForegroundColor Green
+                Write-Host "🎉 ===============================================" -ForegroundColor Green
+                Write-Host "" -ForegroundColor Green
+                Write-Host "✅ VM Boot: Successfully started and running" -ForegroundColor Green
+                Write-Host "✅ Network: Port forwarding working (SSH:2222, Web:8581)" -ForegroundColor Green  
+                Write-Host "✅ Homebridge Web Interface: Accessible and responding" -ForegroundColor Green
+                Write-Host "✅ Service Health: Web interface indicates healthy Homebridge service" -ForegroundColor Green
+                Write-Host "" -ForegroundColor Green
+                Write-Host "📋 Validation Artifacts Created:" -ForegroundColor Cyan
+                Write-Host "   • homebridge-validation-$Architecture.log - Complete validation report" -ForegroundColor Cyan
+                Write-Host "   • homebridge-directory-$Architecture.txt - Directory collection framework" -ForegroundColor Cyan
+                Write-Host "   • homebridge-logfile-$Architecture.txt - Log collection framework" -ForegroundColor Cyan
+                Write-Host "" -ForegroundColor Green
+                Write-Host "📝 Next Steps for Enhanced Validation:" -ForegroundColor Yellow
+                Write-Host "   • Enable SSH server in VM image for deeper validation" -ForegroundColor Yellow
+                Write-Host "   • Implement file collection: /var/lib/homebridge/" -ForegroundColor Yellow
+                Write-Host "   • Add service status checking: sudo hb-service status" -ForegroundColor Yellow
+                Write-Host "" -ForegroundColor Green
+                
+                break
         
         Write-Host "⏳ Still waiting... (${elapsedSeconds}s/${Timeout}s)" -ForegroundColor Yellow
         Start-Sleep -Seconds 5
@@ -499,30 +498,6 @@ Current Status: VM validated via HTTP interface - SSH collection framework ready
         }
         exit 1
     }
-    
-    # Additional validation: Check if we can get a response from Homebridge
-    Write-Host "🔍 Validating Homebridge web interface..." -ForegroundColor Cyan
-    try {
-        $response = Invoke-WebRequest -Uri "http://localhost:$httpPort" -TimeoutSec 10
-        $content = $response.Content
-        
-        Write-Host "✅ Homebridge web interface responded successfully!" -ForegroundColor Green
-        
-        # Check if response looks like Homebridge (should contain some typical content)
-        if ($content -match "homebridge|login|dashboard") {
-            Write-Host "✅ Response appears to be from Homebridge application" -ForegroundColor Green
-        } else {
-            Write-Host "⚠️ Warning: Response doesn't appear to be from Homebridge, but service is running" -ForegroundColor Yellow
-        }
-    } catch {
-        Write-Host "❌ No response from Homebridge web interface: $_" -ForegroundColor Red
-        exit 1
-    }
-    
-    Write-Host "🎉 VM image validation completed successfully for $Architecture!" -ForegroundColor Green
-    Write-Host "✅ VM boots properly" -ForegroundColor Green
-    Write-Host "✅ Homebridge service starts" -ForegroundColor Green
-    Write-Host "✅ Web interface accessible on port $httpPort" -ForegroundColor Green
     
 } finally {
     # Ensure cleanup runs
