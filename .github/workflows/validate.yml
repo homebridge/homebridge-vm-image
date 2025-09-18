@@ -2,11 +2,20 @@
 name: Validate VM Images
 
 on:
+  push:
+    branches:
+      - main
+      - beta
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   validate:
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    
     strategy:
       fail-fast: false
       matrix:
@@ -16,30 +25,39 @@ jobs:
           - arch: arm64
             runner: windows-11-arm
 
-    runs-on: ${{ matrix.runner }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install VirtualBox or Hyper-V (architecture-specific)
+        timeout-minutes: 10
         run: |
           if ("${{ matrix.arch }}" -eq "amd64") {
             # Download and install VirtualBox for AMD64
             $url = "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe"
             $output = "$env:TEMP\VirtualBox-installer.exe"
+            Write-Host "Downloading VirtualBox..."
             Invoke-WebRequest -Uri $url -OutFile $output
-            Write-Host "Downloaded VirtualBox for AMD64"
-            Start-Process -FilePath $output -ArgumentList "/S" -Wait
-            Write-Host "Started VirtualBox for AMD64"
+            Write-Host "Downloaded VirtualBox installer"
+            
+            # Install VirtualBox with timeout and better error handling
+            Write-Host "Installing VirtualBox (this may take a few minutes)..."
+            $process = Start-Process -FilePath $output -ArgumentList "/S" -PassThru -Wait
+            if ($process.ExitCode -eq 0) {
+              Write-Host "VirtualBox installed successfully"
+            } else {
+              Write-Host "VirtualBox installation failed with exit code: $($process.ExitCode)"
+              exit 1
+            }
             
             # Add VirtualBox to PATH
             $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
             $env:PATH += ";$vboxPath"
             [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
-            Write-Host "Installed VirtualBox for AMD64"
+            Write-Host "Added VirtualBox to PATH"
           } else {
             # For ARM64, enable Hyper-V (VirtualBox has limited ARM64 support)
+            Write-Host "Enabling Hyper-V for ARM64..."
             Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -All -NoRestart
             Write-Host "Enabled Hyper-V for ARM64"
           }
