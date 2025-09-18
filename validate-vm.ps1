@@ -163,8 +163,8 @@ try {
         Write-Host "⚠️ ARM64 VM testing with Hyper-V requires manual disk conversion" -ForegroundColor Yellow
         Write-Host "The raw .img format needs to be converted to VHD for Hyper-V usage" -ForegroundColor Yellow
         
-        # Create VM
-        New-VM -Name $vmName -MemoryStartupBytes ($VmRam * 1MB) -Generation 1
+        # Create VM - ARM64 Hyper-V requires Generation 2 VMs
+        New-VM -Name $vmName -MemoryStartupBytes ($VmRam * 1MB) -Generation 2
         $vmCreated = $true
         
         # Configure VM
