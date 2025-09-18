@@ -1,0 +1,85 @@
+---
+name: Validate VM Images
+ 
+
+on:
+  push:
+    branches:
+      - main
+      - beta
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64]  # ARM64 validation requires dedicated ARM64 runners or manual testing
+        # Note: ARM64 VMs are not well-supported on GitHub Actions Windows runners
+        # ARM64 validation should be done manually or on self-hosted ARM64 runners
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install VirtualBox
+        run: |
+          # Download and install VirtualBox
+          $url = "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe"
+          $output = "$env:TEMP\VirtualBox-installer.exe"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          Start-Process -FilePath $output -ArgumentList "/S" -Wait
+          
+          # Add VirtualBox to PATH
+          $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
+          $env:PATH += ";$vboxPath"
+          [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
+
+      - name: Verify VirtualBox installation
+        run: |
+          VBoxManage --version
+
+      - name: Check for existing VM image
+        id: check-image
+        run: |
+          New-Item -ItemType Directory -Path "output" -Force
+          # Try to download from latest release first
+          $releaseUrl = "https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-${{ matrix.arch }}.img.gz"
+          try {
+            Invoke-WebRequest -Uri $releaseUrl -OutFile "output\homebridge-${{ matrix.arch }}.img.gz" -ErrorAction Stop
+            Write-Host "Downloaded VM image from release"
+            Write-Output "image_source=release" >> $env:GITHUB_OUTPUT
+          } catch {
+            Write-Host "No existing VM image found. Building for validation..."
+            Write-Output "image_source=build" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Build VM image for validation
+        if: steps.check-image.outputs.image_source == 'build'
+        run: |
+          # Install WSL2 and required tools for building
+          wsl --install --no-distribution
+          # Note: This would require a reboot in normal circumstances
+          # For CI, we'll skip building and use existing images only
+          Write-Host "Building VM images in CI not supported yet. Please ensure images exist in releases."
+          exit 1
+
+      - name: Validate VM image
+        run: |
+          .\validate-vm.ps1 -Architecture "${{ matrix.arch }}" -ImagePath "output\homebridge-${{ matrix.arch }}.img.gz" -Timeout 300
+        timeout-minutes: 15
+
+      - name: Upload validation logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-logs-${{ matrix.arch }}
+          path: |
+            *.log
+            vm-*.txt
+          retention-days: 7
