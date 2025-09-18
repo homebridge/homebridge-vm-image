@@ -40,14 +40,31 @@ jobs:
             Invoke-WebRequest -Uri $url -OutFile $output
             Write-Host "Downloaded VirtualBox installer"
             
+            # Check installer help first
+            Write-Host "Checking VirtualBox installer options..."
+            try {
+              $helpOutput = & $output --help 2>&1
+              Write-Host "Installer help output: $helpOutput"
+            } catch {
+              Write-Host "Could not get installer help: $_"
+            }
+            
             # Install VirtualBox with timeout and better error handling
             Write-Host "Installing VirtualBox (this may take a few minutes)..."
-            $process = Start-Process -FilePath $output -ArgumentList "/S" -PassThru -Wait
+            $process = Start-Process -FilePath $output -ArgumentList "--silent" -PassThru -Wait
             if ($process.ExitCode -eq 0) {
               Write-Host "VirtualBox installed successfully"
             } else {
               Write-Host "VirtualBox installation failed with exit code: $($process.ExitCode)"
-              exit 1
+              Write-Host "Trying alternative installation method..."
+              # Try with /quiet instead of --silent
+              $process2 = Start-Process -FilePath $output -ArgumentList "/quiet" -PassThru -Wait
+              if ($process2.ExitCode -eq 0) {
+                Write-Host "VirtualBox installed successfully with /quiet parameter"
+              } else {
+                Write-Host "VirtualBox installation failed with both methods. Exit codes: $($process.ExitCode), $($process2.ExitCode)"
+                exit 1
+              }
             }
             
             # Add VirtualBox to PATH
