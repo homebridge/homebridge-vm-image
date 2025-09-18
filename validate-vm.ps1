@@ -63,24 +63,41 @@ if ($ImagePath.EndsWith(".gz")) {
     
     # Extract using 7-Zip (should be available on GitHub Actions Windows runners)
     try {
-        & "C:\Program Files\7-Zip\7z.exe" e $ImagePath -o$workDir -y
+        Write-Host "Extracting $ImagePath to $workDir..." -ForegroundColor Cyan
+        & "C:\Program Files\7-Zip\7z.exe" e $ImagePath -o"$workDir" -y
+        
+        Write-Host "Listing extraction directory contents..." -ForegroundColor Cyan
+        Get-ChildItem -Path $workDir -Force | ForEach-Object { 
+            Write-Host "Found: $($_.Name) ($($_.Length) bytes)" -ForegroundColor Cyan 
+        }
         
         # Look for any extracted files (not just .img)
-        $extractedFiles = Get-ChildItem -Path $workDir -File
+        $extractedFiles = Get-ChildItem -Path $workDir -File -Force
+        Write-Host "Found $($extractedFiles.Count) files after extraction" -ForegroundColor Cyan
+        
         if ($extractedFiles.Count -gt 0) {
             # Get the largest file (which should be our disk image)
-            $workImg = ($extractedFiles | Sort-Object Length -Descending)[0].FullName
-            Write-Host "✅ Extracted file: $($extractedFiles[0].Name)" -ForegroundColor Green
+            $largestFile = ($extractedFiles | Sort-Object Length -Descending)[0]
+            $workImg = $largestFile.FullName
+            Write-Host "✅ Using extracted file: $($largestFile.Name) ($($largestFile.Length) bytes)" -ForegroundColor Green
         } else {
-            throw "No files found after extraction"
+            throw "No files found after extraction in directory: $workDir"
         }
     } catch {
         Write-Host "❌ Failed to extract image: $_" -ForegroundColor Red
-        Write-Host "Attempting to list extracted files for debugging..." -ForegroundColor Yellow
+        Write-Host "Work directory: $workDir" -ForegroundColor Yellow
+        Write-Host "Image path: $ImagePath" -ForegroundColor Yellow
+        Write-Host "Attempting to list work directory contents..." -ForegroundColor Yellow
         try {
-            Get-ChildItem -Path $workDir | Write-Host
+            if (Test-Path $workDir) {
+                Get-ChildItem -Path $workDir -Force | ForEach-Object { 
+                    Write-Host "Directory content: $($_.Name) - $($_.Length) bytes" -ForegroundColor Yellow 
+                }
+            } else {
+                Write-Host "Work directory does not exist: $workDir" -ForegroundColor Red
+            }
         } catch {
-            Write-Host "Could not list directory contents" -ForegroundColor Red
+            Write-Host "Could not list directory contents: $_" -ForegroundColor Red
         }
         exit 1
     }
