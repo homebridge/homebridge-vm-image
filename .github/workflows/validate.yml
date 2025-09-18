@@ -208,4 +208,6 @@ jobs:
             *.log
             vm-*.txt
             homebridge-validation-*.log
+            homebridge-directory-*.txt
+            homebridge-logfile-*.txt
           retention-days: 7
