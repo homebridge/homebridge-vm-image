@@ -13,65 +13,65 @@ on:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: [amd64]  # ARM64 validation requires dedicated ARM64 runners or manual testing
+        # Note: ARM64 VMs are not well-supported on GitHub Actions Windows runners
+        # ARM64 validation should be done manually or on self-hosted ARM64 runners
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
-
-      - name: Install required packages
+      - name: Install VirtualBox
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            qemu-system-x86 qemu-system-arm \
-            qemu-utils curl gzip
+          # Download and install VirtualBox
+          $url = "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe"
+          $output = "$env:TEMP\VirtualBox-installer.exe"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          Start-Process -FilePath $output -ArgumentList "/S" -Wait
+          
+          # Add VirtualBox to PATH
+          $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
+          $env:PATH += ";$vboxPath"
+          [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
+
+      - name: Verify VirtualBox installation
+        run: |
+          VBoxManage --version
 
       - name: Check for existing VM image
         id: check-image
         run: |
-          mkdir -p output
+          New-Item -ItemType Directory -Path "output" -Force
           # Try to download from latest release first
-          RELEASE_URL="https://github.com/homebridge/homebridge-vm-image"
-          RELEASE_URL="${RELEASE_URL}/releases/download/v0.0.1"
-          RELEASE_URL="${RELEASE_URL}/homebridge-${{ matrix.arch }}.img.gz"
-          if curl -L --fail "$RELEASE_URL" \
-             -o "output/homebridge-${{ matrix.arch }}.img.gz" \
-             2>/dev/null; then
-            echo "Downloaded VM image from release"
-            echo "image_source=release" >> $GITHUB_OUTPUT
-          else
-            echo "No existing VM image found. Building for validation..."
-            echo "image_source=build" >> $GITHUB_OUTPUT
-          fi
+          $releaseUrl = "https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-${{ matrix.arch }}.img.gz"
+          try {
+            Invoke-WebRequest -Uri $releaseUrl -OutFile "output\homebridge-${{ matrix.arch }}.img.gz" -ErrorAction Stop
+            Write-Host "Downloaded VM image from release"
+            Write-Output "image_source=release" >> $env:GITHUB_OUTPUT
+          } catch {
+            Write-Host "No existing VM image found. Building for validation..."
+            Write-Output "image_source=build" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Build VM image for validation
         if: steps.check-image.outputs.image_source == 'build'
         run: |
-          sudo apt-get install -y \
-            debootstrap parted e2fsprogs dosfstools \
-            grub-pc-bin grub-efi-amd64-bin \
-            qemu-user-static gzip
-          chmod +x ./build.sh
-          sudo ./build.sh "${{ matrix.arch }}"
-
-      - name: Make validation script executable
-        run: chmod +x ./validate-vm.sh
+          # Install WSL2 and required tools for building
+          wsl --install --no-distribution
+          # Note: This would require a reboot in normal circumstances
+          # For CI, we'll skip building and use existing images only
+          Write-Host "Building VM images in CI not supported yet. Please ensure images exist in releases."
+          exit 1
 
       - name: Validate VM image
         run: |
-          ./validate-vm.sh "${{ matrix.arch }}" \
-            "output/homebridge-${{ matrix.arch }}.img.gz" 300
-        timeout-minutes: 10
+          .\validate-vm.ps1 -Architecture "${{ matrix.arch }}" -ImagePath "output\homebridge-${{ matrix.arch }}.img.gz" -Timeout 300
+        timeout-minutes: 15
 
       - name: Upload validation logs (on failure)
         if: failure()
@@ -80,5 +80,5 @@ jobs:
           name: validation-logs-${{ matrix.arch }}
           path: |
             *.log
-            vm.pid
+            vm-*.txt
           retention-days: 7

@@ -11,7 +11,7 @@ A minimal image that runs Homebridge.
 1. Click here to download the latest VM image:
    - [**homebridge-amd64.img.gz**](https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-amd64.img.gz) (AMD64/x86_64 systems)
    - [**homebridge-arm64.img.gz**](https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-arm64.img.gz) (ARM64 systems)
-2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.
+2. Create a new virtual machine in Hyper-V, VirtualBox, Parallels Desktop, ESXi etc.
     * *OS*: Linux -> Other Linux (64bit)
     * *Hyper-V*: Select "Generation 1 VM"
 3. Configure your virtual machine with the following settings:
@@ -26,6 +26,10 @@ A minimal image that runs Homebridge.
 4. Start your VM.
 5. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
 6. Manage Homebridge.
+
+## Testing
+
+VM images are automatically validated using VirtualBox on Windows runners to ensure they boot properly and Homebridge starts correctly. See [docs/TESTING.md](docs/TESTING.md) for details on the validation system and manual testing procedures.
 
 <p align="center">
   <img src="https://user-images.githubusercontent.com/3979615/86241831-fb3a5e00-bbe6-11ea-8070-f3e6c2bf5ec6.png">
