@@ -2,17 +2,11 @@
 name: Validate VM Images
 
 on:
-  push:
-    branches:
-      - main
-      - beta
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
   validate:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
