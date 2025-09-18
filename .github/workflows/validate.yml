@@ -1,6 +1,5 @@
 ---
 name: Validate VM Images
- 
 
 on:
   push:
@@ -14,35 +13,55 @@ on:
 
 jobs:
   validate:
-    runs-on: windows-latest
-
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64]  # ARM64 validation requires dedicated ARM64 runners or manual testing
-        # Note: ARM64 VMs are not well-supported on GitHub Actions Windows runners
-        # ARM64 validation should be done manually or on self-hosted ARM64 runners
+        include:
+          - arch: amd64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install VirtualBox
+      - name: Install VirtualBox or Hyper-V (architecture-specific)
         run: |
-          # Download and install VirtualBox
-          $url = "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe"
-          $output = "$env:TEMP\VirtualBox-installer.exe"
-          Invoke-WebRequest -Uri $url -OutFile $output
-          Start-Process -FilePath $output -ArgumentList "/S" -Wait
-          
-          # Add VirtualBox to PATH
-          $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
-          $env:PATH += ";$vboxPath"
-          [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
+          if ("${{ matrix.arch }}" -eq "amd64") {
+            # Download and install VirtualBox for AMD64
+            $url = "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe"
+            $output = "$env:TEMP\VirtualBox-installer.exe"
+            Invoke-WebRequest -Uri $url -OutFile $output
+            Start-Process -FilePath $output -ArgumentList "/S" -Wait
+            
+            # Add VirtualBox to PATH
+            $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
+            $env:PATH += ";$vboxPath"
+            [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Machine")
+            Write-Host "Installed VirtualBox for AMD64"
+          } else {
+            # For ARM64, enable Hyper-V (VirtualBox has limited ARM64 support)
+            Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -All -NoRestart
+            Write-Host "Enabled Hyper-V for ARM64"
+          }
 
-      - name: Verify VirtualBox installation
+      - name: Install additional tools for ARM64 (if needed)
+        if: matrix.arch == 'arm64'
         run: |
-          VBoxManage --version
+          # Install disk conversion tools for Hyper-V
+          # Note: For ARM64, we might need to convert raw disk images to VHD format
+          Write-Host "Installing additional tools for ARM64 validation..."
+
+      - name: Verify virtualization platform
+        run: |
+          if ("${{ matrix.arch }}" -eq "amd64") {
+            VBoxManage --version
+          } else {
+            Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
+          }
 
       - name: Check for existing VM image
         id: check-image
