@@ -113,17 +113,25 @@ The workflow runs automatically on:
 
 ### Workflow Behavior
 
-1. **Windows Runner**: The workflow runs on `windows-latest` runners to support actual VM platforms.
+1. **Multi-Platform Runners**: The workflow runs on:
+   - `windows-latest` for AMD64 architecture with VirtualBox
+   - `windows-11-arm` for ARM64 architecture with Hyper-V
 
-2. **VirtualBox Installation**: Automatically installs VirtualBox on the runner.
+2. **Platform-Specific Installation**: 
+   - VirtualBox for AMD64 (x86_64) testing
+   - Hyper-V for ARM64 testing
 
 3. **Image Download**: The workflow tries to download VM images from the latest release. Building images in CI is not currently supported due to the complexity of setting up Linux build tools on Windows.
 
-4. **VM Platform Testing**: Uses VirtualBox to create and boot actual VMs, testing the real user experience.
+4. **VM Platform Testing**: 
+   - AMD64: Uses VirtualBox to create and boot actual VMs with full validation
+   - ARM64: Uses Hyper-V for VM framework testing (disk conversion pending)
 
-5. **Architecture Support**: Currently supports AMD64/x86_64 only, as ARM64 VMs are not well-supported on GitHub Actions Windows runners.
+5. **Architecture Support**: 
+   - AMD64: Complete validation including boot testing and web interface validation
+   - ARM64: VM framework validation (VM creation, configuration, resource allocation)
 
-6. **Validation**: Each image runs through the complete validation process with a 15-minute timeout to account for VM startup time.
+6. **Extended Timeout**: 15-minute timeout to accommodate VM startup time across different platforms.
 
 7. **Artifact Collection**: If validation fails, console logs and debugging information are uploaded as artifacts.
 
@@ -222,10 +230,16 @@ For detailed debugging, you can:
 ## Architecture Support
 
 The validation system supports:
-- **AMD64/x86_64**: Full support with VirtualBox on Windows runners
-- **ARM64/AArch64**: Not currently supported in GitHub Actions due to platform limitations
+- **AMD64/x86_64**: Full support with VirtualBox on Windows runners, including complete boot testing and web interface validation
+- **ARM64/AArch64**: Framework support with Hyper-V on Windows 11 ARM runners
+  - VM creation and configuration works
+  - Disk format conversion from raw .img to VHD requires additional tooling
+  - Full boot testing pending disk conversion implementation
 
-For ARM64 testing, manual validation using supported platforms like:
-- Apple Silicon Macs with Parallels Desktop or VMware Fusion
-- ARM64 Windows devices with Hyper-V
-- ARM64 Linux systems with KVM/QEMU
+### ARM64 Current Status
+The ARM64 validation framework is in place and functional for:
+- ✅ VM creation with Hyper-V
+- ✅ VM configuration and resource allocation  
+- ✅ Network setup preparation
+- 🔧 Disk image conversion (requires additional tools)
+- 🔧 Complete boot testing (pending disk conversion)
