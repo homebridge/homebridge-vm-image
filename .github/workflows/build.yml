@@ -45,3 +45,10 @@ jobs:
         files: output/homebridge-${{ matrix.arch }}.img.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload build artifacts (for validation)
+      uses: actions/upload-artifact@v4
+      with:
+        name: homebridge-${{ matrix.arch }}-img
+        path: output/homebridge-${{ matrix.arch }}.img.gz
+        retention-days: 7
