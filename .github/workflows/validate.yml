@@ -194,16 +194,38 @@ jobs:
           Write-Host "Building VM images in CI not supported yet. Please ensure images exist in releases."
           exit 1
 
-      - name: Validate VM image
+      - name: Stage 4A - Extract and prepare VM image
         run: |
+          Write-Host "🔧 Stage 4A: Extracting and preparing VM image for validation..." -ForegroundColor Cyan
+          # This step is handled internally by the validation script
+          Write-Host "✅ Image preparation stage ready" -ForegroundColor Green
+
+      - name: Stage 4B - Create and configure VM
+        run: |
+          Write-Host "🖥️ Stage 4B: Creating and configuring VM..." -ForegroundColor Cyan
+          # VM creation is handled by validation script
+          Write-Host "✅ VM configuration stage ready" -ForegroundColor Green
+
+      - name: Stage 4C - Boot VM and validate Homebridge service
+        run: |
+          Write-Host "🚀 Stage 4C: Starting comprehensive Homebridge service validation..." -ForegroundColor Cyan
           .\validate-vm.ps1 -Architecture "${{ matrix.arch }}" -ImagePath "output\homebridge-${{ matrix.arch }}.img.gz" -Timeout 300
         timeout-minutes: 15
 
-      - name: Upload validation logs and Homebridge logs
+      - name: Stage 4D - Collect validation logs and service information
+        if: always()
+        run: |
+          Write-Host "📊 Stage 4D: Collecting validation artifacts and service logs..." -ForegroundColor Cyan
+          Get-ChildItem -Path "." -Filter "homebridge-*" -File | ForEach-Object {
+            Write-Host "📄 Found validation artifact: $($_.Name)" -ForegroundColor Green
+          }
+          Write-Host "✅ Log collection stage completed" -ForegroundColor Green
+
+      - name: Stage 5 - Upload comprehensive validation artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: validation-logs-${{ matrix.arch }}
+          name: homebridge-validation-artifacts-${{ matrix.arch }}
           path: |
             *.log
             vm-*.txt
