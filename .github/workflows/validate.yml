@@ -133,9 +133,38 @@ jobs:
           Write-Host "Installing additional tools for ARM64 validation..."
 
       - name: Verify virtualization platform
+        shell: pwsh
         run: |
           if ("${{ matrix.arch }}" -eq "amd64") {
-            VBoxManage --version
+            # Re-verify VBoxManage is accessible and add to GitHub PATH
+            $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
+            if (-not (Test-Path $vboxPath)) {
+              $altPaths = @(
+                "${env:ProgramFiles(x86)}\Oracle\VirtualBox",
+                "C:\Program Files\Oracle\VirtualBox",
+                "C:\Program Files (x86)\Oracle\VirtualBox"
+              )
+              foreach ($altPath in $altPaths) {
+                if (Test-Path $altPath) {
+                  $vboxPath = $altPath
+                  break
+                }
+              }
+            }
+            
+            Write-Host "Final VirtualBox path: $vboxPath"
+            # Add to GitHub PATH for subsequent steps
+            echo "$vboxPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            
+            # Verify VBoxManage works
+            $vboxManagePath = Join-Path $vboxPath "VBoxManage.exe"
+            if (Test-Path $vboxManagePath) {
+              $version = & "$vboxManagePath" --version
+              Write-Host "VBoxManage version: $version"
+            } else {
+              Write-Host "ERROR: VBoxManage.exe not found at $vboxManagePath"
+              exit 1
+            }
           } else {
             Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
           }

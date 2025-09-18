@@ -297,10 +297,6 @@ To enable full log collection in future validations:
 3. View logs: sudo hb-service view
 4. Verify plugins and configuration
 "@
-# 3. Adding log collection commands via SSH
-
-# Web interface response indicates Homebridge is running properly
-"@
             
             $logContent | Out-File -FilePath "homebridge-validation-$Architecture.log" -Encoding UTF8
             Write-Host "✅ Created validation log file: homebridge-validation-$Architecture.log" -ForegroundColor Green
