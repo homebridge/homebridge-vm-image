@@ -112,9 +112,11 @@ jobs:
         }
         Write-Output "Downloading image from: $url to $outputPath"
         Invoke-WebRequest -Uri $url -OutFile $outputPath
-        write-Output "Download complete: $outputPath, starting decompression..."
         $decompressedPath = $outputPath -replace '\.gz$', ''
-        & gzip -d $outputPath -c | Out-File -FilePath $decompressedPath -Encoding Bytes
+        # Decompress the .gz file using gzip and write bytes directly
+        Write-Output "Decompressing $outputPath to $decompressedPath"
+        $decompressedBytes = & gzip -d $outputPath -c
+        [System.IO.File]::WriteAllBytes($decompressedPath, $decompressedBytes)
         Write-Output "Image decompressed to: $decompressedPath"
         echo "IMAGE_PATH=$decompressedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
