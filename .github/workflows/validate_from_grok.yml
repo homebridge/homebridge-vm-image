@@ -100,6 +100,8 @@ jobs:
         }
         $outputDir = $env:GITHUB_WORKSPACE
         $outputPath = Join-Path $outputDir $imageName
+        Write-Output "Output directory: $outputDir"
+        Write-Output "Output path: $outputPath"
         # Ensure the output directory exists
         New-Item -ItemType Directory -Path $outputDir -Force
         Write-Output "Downloading image from: $url to $outputPath"
