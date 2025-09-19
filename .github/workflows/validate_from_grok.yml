@@ -87,13 +87,7 @@ jobs:
         } else {
           ""
         }
-        $imageName = if ($env:download_image_name) {
-          $env:download_image_name
-        } elseif ($env:custom_image_image_name) {
-          $env:custom_image_image_name
-        } else {
-          ""
-        }
+        $imageName = $env:image_name
         if (-not $url) {
           Write-Error "No valid URL found. Ensure either the 'download' or 'custom_image' step sets the URL."
           exit 1
@@ -105,6 +99,7 @@ jobs:
         $outputDir = $env:GITHUB_WORKSPACE
         $outputPath = Join-Path $outputDir $imageName
         # Debug output
+        Write-Output "Debug: GITHUB_WORKSPACE = $env:GITHUB_WORKSPACE"
         Write-Output "Debug: URL = $url"
         Write-Output "Debug: Image Name = $imageName"
         Write-Output "Debug: Output Directory = $outputDir"
