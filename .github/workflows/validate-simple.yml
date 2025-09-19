@@ -85,8 +85,8 @@ jobs:
 
     - name: Run validation script
       run: |
-        Write-Host "Starting VM validation..."
-        .\scripts\validate-vm-simple.ps1 -Architecture "arm64"
+        Write-Host "Starting VM validation with Hyper-V..."
+        .\scripts\validate-vm-hyperv.ps1 -Architecture "arm64"
       timeout-minutes: 15
 
     - name: Upload logs
