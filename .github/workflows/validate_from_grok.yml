@@ -12,22 +12,43 @@ permissions:
   contents: read  # Grants read access to repository contents, including releases
 
 jobs:
-
   validate:
-    timeout-minutes: 30
     runs-on: windows-latest  # x64 runner, supports x86 VMs via Hyper-V
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Log runner architecture
+    - name: Cache QEMU and gzip
+      id: cache-tools
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\ProgramData\chocolatey\lib\qemu
+          C:\ProgramData\chocolatey\lib\gzip
+        key: ${{ runner.os }}-tools-qemu-gzip-${{ hashFiles('**/validate_from_grok.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-qemu-gzip-
+
+    - name: Install QEMU and gzip
       shell: powershell
       run: |
-        $arch = Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty OSArchitecture
-        Write-Output "Runner architecture: $arch (validating x86 VM image)"
-
-
+        $qemuInstalled = Test-Path "C:\ProgramData\chocolatey\bin\qemu-img.exe"
+        $gzipInstalled = Test-Path "C:\ProgramData\chocolatey\bin\gzip.exe"
+        Write-Output "Debug: QEMU installed = $qemuInstalled"
+        Write-Output "Debug: gzip installed = $gzipInstalled"
+        Write-Output "Debug: Cache hit for tools = ${{ steps.cache-tools.outputs.cache-hit }}"
+        if ($qemuInstalled -and $gzipInstalled) {
+          Write-Output "QEMU and gzip found in cache, skipping installation"
+        } else {
+          Write-Output "Installing QEMU and gzip via Chocolatey"
+          choco install qemu --no-progress -y
+          if (-not $?) { throw "Failed to install QEMU" }
+          choco install gzip --no-progress -y
+          if (-not $?) { throw "Failed to install gzip" }
+        }
+        Write-Output "QEMU version: $(& qemu-img --version)"
+        Write-Output "gzip version: $(& gzip --version)"
 
     - name: Determine latest image URL from releases
       id: download
@@ -45,6 +66,7 @@ jobs:
           Write-Output "Found x86 asset: $($asset.name) at $($asset.browser_download_url)"
           echo "download_url=$($asset.browser_download_url)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "image_name=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "release_tag=$($response.tag_name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         } catch {
           if ($_.Exception.Response.StatusCode -eq 404) {
             Write-Error "No releases found in the repository"
@@ -74,8 +96,18 @@ jobs:
         }
         echo "download_url=$url" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "image_name=$imageName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-    
-    - name: Download and decompress image
+        echo "release_tag=custom-$($url.GetHashCode())" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Cache downloaded image
+      id: cache-image
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.GITHUB_WORKSPACE }}\${{ env.image_name }}
+        key: ${{ runner.os }}-image-${{ env.image_name }}-${{ env.release_tag }}
+        restore-keys: |
+          ${{ runner.os }}-image-${{ env.image_name }}-
+
+    - name: Download image
       shell: powershell
       run: |
         $url = if ($env:download_url) {
@@ -102,6 +134,7 @@ jobs:
         Write-Output "Debug: Image Name = $imageName"
         Write-Output "Debug: Output Directory = $outputDir"
         Write-Output "Debug: Output Path = $outputPath"
+        Write-Output "Debug: Cache hit = ${{ steps.cache-image.outputs.cache-hit }}"
         # Ensure the output directory exists
         New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
         Write-Output "Ensured directory exists: $outputDir"
@@ -110,16 +143,54 @@ jobs:
           Write-Error "Output path ends with a backslash: $outputPath"
           exit 1
         }
-        Write-Output "Downloading image from: $url to $outputPath"
-        Invoke-WebRequest -Uri $url -OutFile $outputPath
-        # Verify downloaded file size
-        $fileSize = (Get-Item $outputPath).Length
-        Write-Output "Downloaded file size: $fileSize bytes"
-        if ($fileSize -eq 0) {
-          Write-Error "Downloaded file is empty"
+        # Check if file exists from cache
+        if (Test-Path $outputPath) {
+          Write-Output "Found cached image at: $outputPath"
+          $fileSize = (Get-Item $outputPath).Length
+          Write-Output "Cached file size: $fileSize bytes"
+          if ($fileSize -eq 0) {
+            Write-Error "Cached file is empty"
+            exit 1
+          }
+        } else {
+          Write-Output "No cached image found, downloading from: $url to $outputPath"
+          $maxRetries = 3
+          $retryCount = 0
+          do {
+            try {
+              Write-Output "Download attempt $($retryCount + 1) of $maxRetries"
+              Invoke-WebRequest -Uri $url -OutFile $outputPath -ErrorAction Stop
+              break
+            } catch {
+              $retryCount++
+              if ($retryCount -ge $maxRetries) {
+                Write-Error "Failed to download after $maxRetries attempts: $($_.Exception.Message)"
+                exit 1
+              }
+              Start-Sleep -Seconds 5
+            }
+          } while ($true)
+          $fileSize = (Get-Item $outputPath).Length
+          Write-Output "Downloaded file size: $fileSize bytes"
+          if ($fileSize -eq 0) {
+            Write-Error "Downloaded file is empty"
+            exit 1
+          }
+        }
+        echo "DOWNLOADED_IMAGE_PATH=$outputPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Decompress image
+      shell: powershell
+      run: |
+        $outputPath = $env:DOWNLOADED_IMAGE_PATH
+        if (-not $outputPath -or -not (Test-Path $outputPath)) {
+          Write-Error "Downloaded image path not found: $outputPath"
           exit 1
         }
         $decompressedPath = $outputPath -replace '\.gz$', ''
+        # Debug output
+        Write-Output "Debug: Downloaded Image Path = $outputPath"
+        Write-Output "Debug: Decompressed Path = $decompressedPath"
         # Decompress the .gz file using gzip
         Write-Output "Decompressing $outputPath to $decompressedPath"
         $process = Start-Process -FilePath "gzip" -ArgumentList "-d", "-c", $outputPath -NoNewWindow -PassThru -RedirectStandardOutput $decompressedPath -Wait
@@ -146,12 +217,6 @@ jobs:
       run: |
         Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
         if (-not $?) { throw "Failed to enable Hyper-V" }
-
-    - name: Install QEMU for image conversion
-      shell: powershell
-      run: |
-        choco install qemu --no-progress -y
-        if (-not $?) { throw "Failed to install QEMU" }
 
     - name: Create and configure Hyper-V VM
       shell: powershell
