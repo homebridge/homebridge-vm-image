@@ -86,17 +86,29 @@ jobs:
     - name: Enable Hyper-V
       shell: pwsh
       run: |
-        Write-Host "Checking and enabling Hyper-V..."
-        $hyperv = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
-        if ($hyperv.State -ne "Enabled") {
-            Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart
-            Write-Host "Hyper-V features enabled"
-        } else {
-            Write-Host "Hyper-V already enabled"
-        }
+        Write-Host "Checking Hyper-V availability..."
 
-        # Ensure Hyper-V management tools are available
-        Import-Module Hyper-V -ErrorAction SilentlyContinue
+        # GitHub Actions Windows runners have Hyper-V pre-installed
+        # Just verify the Hyper-V module is available
+        try {
+            Import-Module Hyper-V -ErrorAction Stop
+            Write-Host "✅ Hyper-V PowerShell module loaded successfully"
+
+            # Check if Hyper-V services are running
+            $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue
+            if ($vmms) {
+                if ($vmms.Status -ne 'Running') {
+                    Write-Host "Starting Hyper-V Virtual Machine Management Service..."
+                    Start-Service -Name vmms
+                }
+                Write-Host "✅ Hyper-V services are running"
+            } else {
+                Write-Host "⚠️ Hyper-V services not found - may need manual configuration"
+            }
+        } catch {
+            Write-Host "⚠️ Hyper-V module not available: $_"
+            Write-Host "Attempting to continue anyway..."
+        }
 
     - name: Run validation script
       shell: pwsh
