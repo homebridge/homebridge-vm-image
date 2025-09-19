@@ -34,7 +34,7 @@ jobs:
         Invoke-WebRequest -Uri $url -OutFile $installer
 
         # Install silently
-        Start-Process -FilePath $installer -ArgumentList "--silent", "--suppress-message" -Wait -NoNewWindow
+        Start-Process -FilePath $installer -ArgumentList "--silent" -Wait -NoNewWindow
 
         # Add to PATH
         $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
