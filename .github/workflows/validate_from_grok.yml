@@ -112,12 +112,33 @@ jobs:
         }
         Write-Output "Downloading image from: $url to $outputPath"
         Invoke-WebRequest -Uri $url -OutFile $outputPath
+        # Verify downloaded file size
+        $fileSize = (Get-Item $outputPath).Length
+        Write-Output "Downloaded file size: $fileSize bytes"
+        if ($fileSize -eq 0) {
+          Write-Error "Downloaded file is empty"
+          exit 1
+        }
         $decompressedPath = $outputPath -replace '\.gz$', ''
-        # Decompress the .gz file using gzip and write bytes directly
+        # Decompress the .gz file using gzip
         Write-Output "Decompressing $outputPath to $decompressedPath"
-        $decompressedBytes = & gzip -d $outputPath -c
-        [System.IO.File]::WriteAllBytes($decompressedPath, $decompressedBytes)
+        $process = Start-Process -FilePath "gzip" -ArgumentList "-d", "-c", $outputPath -NoNewWindow -PassThru -RedirectStandardOutput $decompressedPath -Wait
+        if ($process.ExitCode -ne 0) {
+          Write-Error "Failed to decompress $outputPath. gzip exit code: $($process.ExitCode)"
+          exit 1
+        }
         Write-Output "Image decompressed to: $decompressedPath"
+        # Verify decompressed file exists and is non-empty
+        if (-not (Test-Path $decompressedPath)) {
+          Write-Error "Decompressed file $decompressedPath does not exist"
+          exit 1
+        }
+        $decompressedSize = (Get-Item $decompressedPath).Length
+        Write-Output "Decompressed file size: $decompressedSize bytes"
+        if ($decompressedSize -eq 0) {
+          Write-Error "Decompressed file is empty"
+          exit 1
+        }
         echo "IMAGE_PATH=$decompressedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: Enable Hyper-V
