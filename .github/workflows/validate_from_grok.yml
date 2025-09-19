@@ -26,6 +26,7 @@ jobs:
         path: |
           C:\ProgramData\chocolatey\lib\qemu
           C:\ProgramData\chocolatey\lib\gzip
+          C:\Program Files\qemu
         key: ${{ runner.os }}-tools-qemu-gzip-${{ hashFiles('**/validate_from_grok.yml') }}
         restore-keys: |
           ${{ runner.os }}-tools-qemu-gzip-
@@ -33,7 +34,7 @@ jobs:
     - name: Install QEMU and gzip
       shell: powershell
       run: |
-        $qemuInstalled = Test-Path "C:\ProgramData\chocolatey\bin\qemu-img.exe"
+        $qemuInstalled = Test-Path "C:\ProgramData\chocolatey\bin\qemu-img.exe" -or Test-Path "C:\Program Files\qemu\qemu-img.exe"
         $gzipInstalled = Test-Path "C:\ProgramData\chocolatey\bin\gzip.exe"
         Write-Output "Debug: QEMU installed = $qemuInstalled"
         Write-Output "Debug: gzip installed = $gzipInstalled"
@@ -46,6 +47,29 @@ jobs:
           if (-not $?) { throw "Failed to install QEMU" }
           choco install gzip --no-progress -y
           if (-not $?) { throw "Failed to install gzip" }
+        }
+        # Ensure QEMU is in PATH
+        $qemuPath = if (Test-Path "C:\Program Files\qemu\qemu-img.exe") { "C:\Program Files\qemu" } elseif (Test-Path "C:\ProgramData\chocolatey\bin\qemu-img.exe") { "C:\ProgramData\chocolatey\bin" } else { $null }
+        if ($qemuPath) {
+          Write-Output "Adding QEMU path to PATH: $qemuPath"
+          $env:PATH = "$qemuPath;$env:PATH"
+          [System.Environment]::SetEnvironmentVariable("PATH", "$qemuPath;$env:PATH", [System.EnvironmentVariableTarget]::Process)
+        } else {
+          Write-Error "qemu-img.exe not found in expected locations"
+          exit 1
+        }
+        # Debug QEMU and gzip locations
+        $qemuImgPath = Get-Command qemu-img -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+        $gzipPath = Get-Command gzip -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+        Write-Output "Debug: qemu-img path = $qemuImgPath"
+        Write-Output "Debug: gzip path = $gzipPath"
+        if (-not $qemuImgPath) {
+          Write-Error "qemu-img not found in PATH"
+          exit 1
+        }
+        if (-not $gzipPath) {
+          Write-Error "gzip not found in PATH"
+          exit 1
         }
         Write-Output "QEMU version: $(& qemu-img --version)"
         Write-Output "gzip version: $(& gzip --version)"
@@ -193,9 +217,10 @@ jobs:
         Write-Output "Debug: Decompressed Path = $decompressedPath"
         # Decompress the .gz file using gzip
         Write-Output "Decompressing $outputPath to $decompressedPath"
-        $process = Start-Process -FilePath "gzip" -ArgumentList "-d", "-c", $outputPath -NoNewWindow -PassThru -RedirectStandardOutput $decompressedPath -Wait
+        $process = Start-Process -FilePath "gzip" -ArgumentList "-d", "-c", $outputPath -NoNewWindow -PassThru -RedirectStandardOutput $decompressedPath -RedirectStandardError "gzip-error.log" -Wait
         if ($process.ExitCode -ne 0) {
-          Write-Error "Failed to decompress $outputPath. gzip exit code: $($process.ExitCode)"
+          $errorLog = if (Test-Path "gzip-error.log") { Get-Content "gzip-error.log" -Raw } else { "No error log available" }
+          Write-Error "Failed to decompress $outputPath. gzip exit code: $($process.ExitCode). Error: $errorLog"
           exit 1
         }
         Write-Output "Image decompressed to: $decompressedPath"
