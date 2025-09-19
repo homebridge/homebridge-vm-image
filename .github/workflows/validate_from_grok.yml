@@ -98,7 +98,10 @@ jobs:
           Write-Error "No valid URL found. Ensure either the 'download' or 'custom_image' step sets the URL."
           exit 1
         }
-        $outputPath = Join-Path $env:GITHUB_WORKSPACE $imageName
+        $outputDir = $env:GITHUB_WORKSPACE
+        $outputPath = Join-Path $outputDir $imageName
+        # Ensure the output directory exists
+        New-Item -ItemType Directory -Path $outputDir -Force
         Write-Output "Downloading image from: $url to $outputPath"
         Invoke-WebRequest -Uri $url -OutFile $outputPath
         $decompressedPath = $outputPath -replace '\.gz$', ''
