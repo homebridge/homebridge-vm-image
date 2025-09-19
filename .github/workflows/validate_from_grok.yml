@@ -98,12 +98,25 @@ jobs:
           Write-Error "No valid URL found. Ensure either the 'download' or 'custom_image' step sets the URL."
           exit 1
         }
+        if (-not $imageName) {
+          Write-Error "No valid image name found. Ensure either the 'download' or 'custom_image' step sets the image name."
+          exit 1
+        }
         $outputDir = $env:GITHUB_WORKSPACE
         $outputPath = Join-Path $outputDir $imageName
-        Write-Output "Output directory: $outputDir"
-        Write-Output "Output path: $outputPath"
+        # Debug output
+        Write-Output "Debug: URL = $url"
+        Write-Output "Debug: Image Name = $imageName"
+        Write-Output "Debug: Output Directory = $outputDir"
+        Write-Output "Debug: Output Path = $outputPath"
         # Ensure the output directory exists
-        New-Item -ItemType Directory -Path $outputDir -Force
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+        Write-Output "Ensured directory exists: $outputDir"
+        # Verify output path is a file, not a directory
+        if ($outputPath -match '\\$') {
+          Write-Error "Output path ends with a backslash: $outputPath"
+          exit 1
+        }
         Write-Output "Downloading image from: $url to $outputPath"
         Invoke-WebRequest -Uri $url -OutFile $outputPath
         $decompressedPath = $outputPath -replace '\.gz$', ''
