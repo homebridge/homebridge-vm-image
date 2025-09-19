@@ -1,10 +1,10 @@
-name: Validate Homebridge VM Image on ARM64 Windows
+name: Validate Homebridge x86 VM Image on Windows
 
 on:
   workflow_dispatch:
     inputs:
       image_url:
-        description: 'Optional URL to a specific .img.gz image (overrides latest release)'
+        description: 'Optional URL to a specific x86 .img.gz image (overrides latest release)'
         required: false
         type: string
 
@@ -13,20 +13,25 @@ permissions:
 
 jobs:
   validate:
-    runs-on: windows-latest  # ARM64-native runner
+    runs-on: windows-latest  # x64 runner, supports x86 VMs via Hyper-V
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Verify ARM64 runner
+    - name: Log runner architecture
       shell: powershell
       run: |
         $arch = Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty OSArchitecture
-        if ($arch -ne "ARM64") { throw "Runner is not ARM64" }
-        Write-Output "Confirmed ARM64 runner: $arch"
+        Write-Output "Runner architecture: $arch (validating x86 VM image)"
 
-    - name: Download latest image
+    - name: Install QEMU for image conversion
+      shell: powershell
+      run: |
+        choco install qemu --no-progress -y
+        if (-not $?) { throw "Failed to install QEMU" }
+
+    - name: Download latest x86 image
       id: download
       if: ${{ !inputs.image_url }}
       shell: powershell
@@ -36,11 +41,11 @@ jobs:
         $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN" }
         try {
           $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/latest" -Headers $headers
-          $asset = $response.assets | Where-Object { $_.name -like "*.img.gz" }
-          if (-not $asset) { Write-Error "No .img.gz found in latest release"; exit 1 }
-          Write-Output "Found asset: $($asset.name)"
-          echo "download_url=$($asset.browser_download_url)" | Out-File -FilePath $env:GITHUB_ENV -Encoding UTF8 -Append
-          echo "image_name=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding UTF8 -Append
+          $asset = $response.assets | Where-Object { $_.name -like "*x86*.img.gz" -or $_.name -like "*i386*.img.gz" }
+          if (-not $asset) { Write-Error "No x86 .img.gz found in latest release"; exit 1 }
+          Write-Output "Found x86 asset: $($asset.name)"
+          echo "download_url=$($asset.browser_download_url)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "image_name=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         } catch {
           if ($_.Exception.Response.StatusCode -eq 404) {
             Write-Error "No releases found in the repository"
@@ -65,8 +70,11 @@ jobs:
           Write-Error "Provided URL must point to a .img.gz file"
           exit 1
         }
-        echo "download_url=$url" | Out-File -FilePath $env:GITHUB_ENV -Encoding UTF8 -Append
-        echo "image_name=$imageName" | Out-File -FilePath $env:GITHUB_ENV -Encoding UTF8 -Append
+        if ($imageName -notlike "*x86*" -and $imageName -notlike "*i386*") {
+          Write-Warning "Provided image URL may not be x86; proceeding with validation"
+        }
+        echo "download_url=$url" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "image_name=$imageName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: Download and decompress image
       shell: powershell
@@ -78,31 +86,31 @@ jobs:
         $decompressedPath = $outputPath -replace '\.gz$', ''
         & gzip -d $outputPath -c | Out-File -FilePath $decompressedPath -Encoding Bytes
         Write-Output "Image decompressed to: $decompressedPath"
-        echo "IMAGE_PATH=$decompressedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding UTF8 -Append
+        echo "IMAGE_PATH=$decompressedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: Enable Hyper-V
       shell: powershell
       run: |
         Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
+        if (-not $?) { throw "Failed to enable Hyper-V" }
 
     - name: Create and configure Hyper-V VM
       shell: powershell
       run: |
         $imagePath = $env:IMAGE_PATH
         $vmName = "HomebridgeTestVM"
-        $vhdPath = Join-Path $env:TEMP "homebridge.vhd"
+        $vhdPath = Join-Path $env:TEMP "homebridge.vhdx"
         
-        # Convert .img to .vhd (simplified; assumes raw disk)
-        $null = New-VHD -Path $vhdPath -Fixed -SizeBytes (10GB)
-        Mount-DiskImage -ImagePath $imagePath
-        $driveLetter = (Get-DiskImage -ImagePath $imagePath | Get-Volume).DriveLetter
-        if (-not $driveLetter) { throw "Failed to mount disk image" }
-        Copy-Item -Path "$driveLetter\*" -Destination $vhdPath -Recurse -Force
-        Dismount-DiskImage -ImagePath $imagePath
+        # Convert .img to .vhdx for x86 VM
+        & qemu-img convert -f raw -O vhdx -o subformat=dynamic $imagePath $vhdPath
+        if (-not $?) { throw "Failed to convert image to VHDX" }
         
+        # Create x86 VM (Generation 1 for x86 compatibility)
         New-VM -Name $vmName -MemoryStartupBytes 1GB -Generation 1 -VHDPath $vhdPath -SwitchName "Default Switch"
+        if (-not $?) { throw "Failed to create VM" }
         Set-VMProcessor -VMName $vmName -Count 1
         Enable-VMIntegrationService -VMName $vmName -Name "Guest Service Interface"
+        Write-Output "Created x86 VM: $vmName"
 
     - name: Start VM and validate
       shell: powershell
@@ -110,6 +118,7 @@ jobs:
       run: |
         $vmName = "HomebridgeTestVM"
         Start-VM -Name $vmName
+        if (-not $?) { throw "Failed to start VM" }
         
         $timeout = 300
         $elapsed = 0
@@ -120,7 +129,7 @@ jobs:
             Start-Sleep -Seconds $interval
             $elapsed += $interval
             if (Test-NetConnection -ComputerName "localhost" -Port 8581 -InformationLevel Quiet) {
-              Write-Output "Homebridge UI accessible!"
+              Write-Output "Homebridge UI accessible on port 8581"
               break
             }
           } else {
@@ -133,9 +142,7 @@ jobs:
           Stop-VM -Name $vmName -Force
           throw "VM validation timed out"
         }
-        # Skip Invoke-Command for now due to credential prompt issue in CI
-        # Add back once VM is configured with default credentials
-        Write-Output "Basic VM validation complete"
+        Write-Output "x86 VM validation complete"
 
     - name: Cleanup
       if: always()
@@ -145,3 +152,4 @@ jobs:
         Stop-VM -Name $vmName -Force -ErrorAction SilentlyContinue
         Remove-VM -Name $vmName -Force -ErrorAction SilentlyContinue
         Remove-Item -Path $env:IMAGE_PATH -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path $env:TEMP "homebridge.vhdx") -Force -ErrorAction SilentlyContinue
