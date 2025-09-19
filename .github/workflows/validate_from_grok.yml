@@ -42,8 +42,8 @@ jobs:
         try {
           Write-Output "Downloading latest release info from https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/latest"
           $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/latest" -Headers $headers
-          $asset = $response.assets | Where-Object { $_.name -like "*x86*.img.gz" -or $_.name -like "*i386*.img.gz" }
-          if (-not $asset) { Write-Error "No x86 .img.gz found in latest release"; exit 1 }
+          $asset = $response.assets | Where-Object { $_.name -like "*amd64.img.gz" }
+          if (-not $asset) { Write-Error "No *.amd64.img.gz found in latest release"; exit 1 }
           Write-Output "Found x86 asset: $($asset.name)"
           echo "download_url=$($asset.browser_download_url)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "image_name=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
