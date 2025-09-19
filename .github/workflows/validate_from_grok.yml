@@ -34,7 +34,7 @@ jobs:
     - name: Install QEMU and gzip
       shell: powershell
       run: |
-        $qemuInstalled = Test-Path "C:\ProgramData\chocolatey\bin\qemu-img.exe" -or Test-Path "C:\Program Files\qemu\qemu-img.exe"
+        $qemuInstalled = (Test-Path "C:\ProgramData\chocolatey\bin\qemu-img.exe") -or (Test-Path "C:\Program Files\qemu\qemu-img.exe")
         $gzipInstalled = Test-Path "C:\ProgramData\chocolatey\bin\gzip.exe"
         Write-Output "Debug: QEMU installed = $qemuInstalled"
         Write-Output "Debug: gzip installed = $gzipInstalled"
@@ -55,6 +55,8 @@ jobs:
           $env:PATH = "$qemuPath;$env:PATH"
           [System.Environment]::SetEnvironmentVariable("PATH", "$qemuPath;$env:PATH", [System.EnvironmentVariableTarget]::Process)
         } else {
+          Write-Output "Searching for qemu-img.exe in C:\Program Files\qemu"
+          Get-ChildItem -Path "C:\Program Files\qemu" -Recurse -Include "qemu-img.exe" -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "Found qemu-img.exe at: $($_.FullName)" }
           Write-Error "qemu-img.exe not found in expected locations"
           exit 1
         }
