@@ -12,7 +12,9 @@ permissions:
   contents: read  # Grants read access to repository contents, including releases
 
 jobs:
+
   validate:
+    timeout-minutes: 30
     runs-on: windows-latest  # x64 runner, supports x86 VMs via Hyper-V
 
     steps:
@@ -25,11 +27,7 @@ jobs:
         $arch = Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty OSArchitecture
         Write-Output "Runner architecture: $arch (validating x86 VM image)"
 
-    - name: Install QEMU for image conversion
-      shell: powershell
-      run: |
-        choco install qemu --no-progress -y
-        if (-not $?) { throw "Failed to install QEMU" }
+
 
     - name: Determine latest image URL from releases
       id: download
@@ -114,6 +112,7 @@ jobs:
         }
         Write-Output "Downloading image from: $url to $outputPath"
         Invoke-WebRequest -Uri $url -OutFile $outputPath
+        write-Output "Download complete: $outputPath, starting decompression..."
         $decompressedPath = $outputPath -replace '\.gz$', ''
         & gzip -d $outputPath -c | Out-File -FilePath $decompressedPath -Encoding Bytes
         Write-Output "Image decompressed to: $decompressedPath"
@@ -124,6 +123,12 @@ jobs:
       run: |
         Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
         if (-not $?) { throw "Failed to enable Hyper-V" }
+
+    - name: Install QEMU for image conversion
+      shell: powershell
+      run: |
+        choco install qemu --no-progress -y
+        if (-not $?) { throw "Failed to install QEMU" }
 
     - name: Create and configure Hyper-V VM
       shell: powershell
