@@ -76,12 +76,28 @@ jobs:
         }
         echo "download_url=$url" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "image_name=$imageName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
+    
     - name: Download and decompress image
       shell: powershell
       run: |
-        $url = "${{ steps.download.outputs.download_url || steps.custom_image.outputs.download_url }}"
-        $imageName = "${{ steps.download.outputs.image_name || steps.custom_image.outputs.image_name }}"
+        $url = if ($env:download_url) {
+          $env:download_url
+        } elseif ($env:custom_image_download_url) {
+          $env:custom_image_download_url
+        } else {
+          ""
+        }
+        $imageName = if ($env:download_image_name) {
+          $env:download_image_name
+        } elseif ($env:custom_image_image_name) {
+          $env:custom_image_image_name
+        } else {
+          ""
+        }
+        if (-not $url) {
+          Write-Error "No valid URL found. Ensure either the 'download' or 'custom_image' step sets the URL."
+          exit 1
+        }
         $outputPath = Join-Path $env:GITHUB_WORKSPACE $imageName
         Write-Output "Downloading image from: $url to $outputPath"
         Invoke-WebRequest -Uri $url -OutFile $outputPath
