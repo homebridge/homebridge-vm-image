@@ -75,7 +75,8 @@ apt-get install -y \
   procps net-tools avahi-daemon libavahi-compat-libdnssd-dev \
   ca-certificates \
   build-essential python3 python3-dev python3-setuptools \
-  pkg-config git
+  pkg-config git \
+  hyperv-daemons
 
 # Add Homebridge APT repo
 curl -fsSL https://repo.homebridge.io/KEY.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/homebridge.gpg

@@ -15,10 +15,6 @@ function New-ValidationVM {
     } else {
         $vmName = New-HyperVVM -VmName $vmName -ImagePath $ImagePath -VmRam $VmRam
         Start-HyperVVM -VmName $vmName
-        
-        # For ARM64, skip full boot test for now
-        Write-Host "✅ ARM64 validation framework completed successfully!" -ForegroundColor Green
-        return $vmName
     }
     
     $script:VmCreated = $true
@@ -33,21 +29,59 @@ function Test-HomebridgeService {
     )
     
     Write-Host "🔍 Starting comprehensive Homebridge service validation..." -ForegroundColor Cyan
-    
-    # For ARM64, return framework validation result
+
+    # For ARM64 with Hyper-V, we need to wait for IP and then test via direct connection
     if ($Architecture -eq "arm64") {
-        Write-Host "⚠️ ARM64: Limited to framework validation (full boot testing requires disk conversion)" -ForegroundColor Yellow
-        $validationResult = @{
-            BootSuccess = $true
-            NetworkSuccess = $true
-            ServiceSuccess = $true
-            ServiceDetails = "ARM64 framework validation - VM creation successful, Hyper-V Generation 2 configured"
-            HomebridgeStatus = "Framework validated - requires SSH for full service testing"
-            LogCollection = Get-HomebridgeLogCollectionInfo -Architecture $Architecture
-            Recommendations = Get-ValidationRecommendations
+        Write-Host "🎯 ARM64: Waiting for VM to boot and obtain IP address..." -ForegroundColor Yellow
+
+        # Get VM IP address
+        $vmIP = Get-HyperVVMIP -VmName $VmName -Timeout $Timeout
+
+        if ($vmIP) {
+            Write-Host "✅ VM is running with IP: $vmIP" -ForegroundColor Green
+            Write-Host "🌐 Testing Homebridge service on http://${vmIP}:8581..." -ForegroundColor Yellow
+
+            # Test Homebridge directly on VM IP
+            $serviceSuccess = $false
+            $serviceDetails = ""
+
+            # Wait for Homebridge to start
+            for ($i = 0; $i -lt 60; $i++) {
+                try {
+                    $response = Invoke-WebRequest -Uri "http://${vmIP}:8581" -TimeoutSec 5 -ErrorAction Stop
+                    if ($response.StatusCode -eq 200) {
+                        $serviceSuccess = $true
+                        $serviceDetails = "Homebridge web interface accessible at http://${vmIP}:8581"
+                        Write-Host "✅ Homebridge service is running and accessible!" -ForegroundColor Green
+                        break
+                    }
+                } catch {
+                    Write-Host "Waiting for Homebridge to start... ($i/60)" -ForegroundColor Yellow
+                    Start-Sleep -Seconds 2
+                }
+            }
+
+            $validationResult = @{
+                BootSuccess = $true
+                NetworkSuccess = $true
+                ServiceSuccess = $serviceSuccess
+                ServiceDetails = if ($serviceSuccess) { $serviceDetails } else { "Homebridge service did not respond within timeout" }
+                HomebridgeStatus = if ($serviceSuccess) { "Service Running" } else { "Service Timeout" }
+                LogCollection = Get-HomebridgeLogCollectionInfo -Architecture $Architecture
+                Recommendations = Get-ValidationRecommendations
+            }
+
+            if ($serviceSuccess) {
+                Write-Host "🎉 ARM64 validation completed successfully!" -ForegroundColor Green
+            } else {
+                Write-Host "⚠️ ARM64 VM booted but Homebridge service not accessible" -ForegroundColor Yellow
+            }
+
+            return $validationResult
+        } else {
+            # VM didn't get IP - likely boot issue
+            throw "ARM64 VM failed to obtain IP address within ${Timeout}s - possible boot failure"
         }
-        Write-Host "✅ ARM64 validation framework completed successfully!" -ForegroundColor Green
-        return $validationResult
     }
     
     Write-Host "⏳ Waiting for VM to boot and Homebridge service to start..." -ForegroundColor Yellow
