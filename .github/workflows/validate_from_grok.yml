@@ -40,6 +40,7 @@ jobs:
       run: |
         $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN" }
         try {
+          Write-Output "Downloading latest release info from https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/latest"
           $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/latest" -Headers $headers
           $asset = $response.assets | Where-Object { $_.name -like "*x86*.img.gz" -or $_.name -like "*i386*.img.gz" }
           if (-not $asset) { Write-Error "No x86 .img.gz found in latest release"; exit 1 }
