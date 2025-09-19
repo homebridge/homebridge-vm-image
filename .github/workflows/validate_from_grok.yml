@@ -9,7 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: read  # Sufficient for accessing releases and assets
+  contents: read  # Grants read access to repository contents, including releases
 
 jobs:
   validate:
@@ -19,20 +19,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Debug GITHUB_TOKEN permissions
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const { Octokit } = require("@octokit/rest");
-          const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-          try {
-            const { data: { permissions } } = await octokit.rest.apps.getAuthenticated();
-            console.log('GITHUB_TOKEN permissions:', JSON.stringify(permissions, null, 2));
-          } catch (error) {
-            core.warning(`Permission check failed: ${error.message}`);
-          }
-
-    - name: Download latest image
+    - name: Check permissions and download latest image
       id: download
       if: ${{ !inputs.image_url }}  # Skip if image_url provided
       uses: actions/github-script@v7
@@ -40,6 +27,16 @@ jobs:
         script: |
           const { Octokit } = require("@octokit/rest");
           const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+
+          // Debug: Log GITHUB_TOKEN permissions
+          try {
+            const { data: { permissions } } = await octokit.rest.apps.getAuthenticated();
+            console.log('GITHUB_TOKEN permissions:', JSON.stringify(permissions, null, 2));
+          } catch (error) {
+            core.warning(`Permission check failed: ${error.message}`);
+          }
+
+          // Fetch latest release
           try {
             const response = await octokit.repos.getLatestRelease({
               owner: context.repo.owner,
