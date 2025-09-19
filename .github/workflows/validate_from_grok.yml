@@ -2,6 +2,14 @@ name: Validate Homebridge VM Image on ARM64 Windows
 
 on:
   workflow_dispatch:
+    inputs:
+      image_url:
+        description: 'Optional URL to a specific .img.gz image (overrides latest release)'
+        required: false
+        type: string
+
+permissions:
+  contents: read  # Sufficient for accessing releases and assets
 
 jobs:
   validate:
@@ -11,29 +19,69 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Download latest image
-      id: download
+    - name: Debug GITHUB_TOKEN permissions
       uses: actions/github-script@v7
       with:
         script: |
-          const response = await github.rest.releases.getLatest({
-            owner: context.repo.owner,
-            repo: context.repo.repo
-          });
-          const assets = response.data.assets;
-          const imgAsset = assets.find(asset => asset.name.endsWith('.img.gz'));
-          if (!imgAsset) {
-            core.setFailed('No .img.gz image found in latest release');
-            return;
+          const { Octokit } = require("@octokit/rest");
+          const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+          try {
+            const { data: { permissions } } = await octokit.rest.apps.getAuthenticated();
+            console.log('GITHUB_TOKEN permissions:', JSON.stringify(permissions, null, 2));
+          } catch (error) {
+            core.warning(`Permission check failed: ${error.message}`);
           }
-          core.setOutput('download_url', imgAsset.browser_download_url);
-          core.setOutput('image_name', imgAsset.name);
+
+    - name: Download latest image
+      id: download
+      if: ${{ !inputs.image_url }}  # Skip if image_url provided
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { Octokit } = require("@octokit/rest");
+          const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+          try {
+            const response = await octokit.repos.getLatestRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            const assets = response.data.assets;
+            const imgAsset = assets.find(asset => asset.name.endsWith('.img.gz'));
+            if (!imgAsset) {
+              core.setFailed('No .img.gz image found in latest release');
+              return;
+            }
+            core.setOutput('download_url', imgAsset.browser_download_url);
+            core.setOutput('image_name', imgAsset.name);
+          } catch (error) {
+            if (error.status === 404) {
+              core.setFailed('No releases found in the repository');
+            } else if (error.status === 403 || error.status === 401) {
+              core.setFailed(`Permission denied accessing releases: Ensure 'contents: read' is set. Error: ${error.message}`);
+            } else {
+              core.setFailed(`Failed to fetch latest release: ${error.message}`);
+            }
+          }
+
+    - name: Use provided image URL
+      id: custom_image
+      if: ${{ inputs.image_url }}
+      shell: powershell
+      run: |
+        $url = "${{ inputs.image_url }}"
+        $imageName = [System.IO.Path]::GetFileName($url)
+        if (-not $imageName.EndsWith('.img.gz')) {
+          Write-Error "Provided URL must point to a .img.gz file"
+          exit 1
+        }
+        echo "download_url=$url" | Out-File -FilePath $env:GITHUB_ENV -Encoding UTF8 -Append
+        echo "image_name=$imageName" | Out-File -FilePath $env:GITHUB_ENV -Encoding UTF8 -Append
 
     - name: Download and decompress image
       shell: powershell
       run: |
-        $url = "${{ steps.download.outputs.download_url }}"
-        $imageName = "${{ steps.download.outputs.image_name }}"
+        $url = "${{ steps.download.outputs.download_url || steps.custom_image.outputs.download_url }}"
+        $imageName = "${{ steps.download.outputs.image_name || steps.custom_image.outputs.image_name }}"
         $outputPath = Join-Path $env:GITHUB_WORKSPACE $imageName
         Invoke-WebRequest -Uri $url -OutFile $outputPath
         $decompressedPath = $outputPath -replace '\.gz$', ''
@@ -45,7 +93,6 @@ jobs:
       shell: powershell
       run: |
         Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
-        # Note: Runner may require restart, but in GH Actions, we proceed assuming it's pre-enabled
 
     - name: Create and configure Hyper-V VM
       shell: powershell
@@ -54,16 +101,13 @@ jobs:
         $vmName = "HomebridgeTestVM"
         $vhdPath = Join-Path $env:TEMP "homebridge.vhd"
         
-        # Convert .img to .vhd (using qemu-img if available, or simple copy for raw disk)
-        # Assuming .img is raw; for VHDX, adjust accordingly
-        $null = New-VHD -Path $vhdPath -Fixed -SizeBytes (10GB)  # 10GB fixed VHD
-        # Mount and copy image contents (simplified; in prod, use disk2vhd or dd equivalent)
+        # Convert .img to .vhd (simplified; assumes raw disk)
+        $null = New-VHD -Path $vhdPath -Fixed -SizeBytes (10GB)
         Mount-DiskImage -ImagePath $imagePath
         $driveLetter = (Get-DiskImage -ImagePath $imagePath | Get-Volume).DriveLetter
         Copy-Item -Path "$driveLetter\*" -Destination $vhdPath -Recurse -Force
         Dismount-DiskImage -ImagePath $imagePath
         
-        # Create VM
         New-VM -Name $vmName -MemoryStartupBytes 1GB -Generation 1 -VHDPath $vhdPath -SwitchName "Default Switch"
         Set-VMProcessor -VMName $vmName -Count 1
         Enable-VMIntegrationService -VMName $vmName -Name "Guest Service Interface"
@@ -75,22 +119,14 @@ jobs:
         $vmName = "HomebridgeTestVM"
         Start-VM -Name $vmName
         
-        # Wait for boot (poll for IP or heartbeat)
-        $timeout = 300  # 5 min
+        $timeout = 300
         $elapsed = 0
         $interval = 10
-        $vmIp = $null
-        
         while ($elapsed -lt $timeout) {
           $vmState = Get-VM -Name $vmName | Select-Object -ExpandProperty State
           if ($vmState -eq "Running") {
-            # Poll for network/IP (simplified; use Get-VMNetworkAdapter)
             Start-Sleep -Seconds $interval
             $elapsed += $interval
-            
-            # Assume bridged network gets IP; check if Homebridge UI is responsive
-            # For real validation, use Invoke-WebRequest to http://VM_IP:8581
-            # Here, simulate with a placeholder check (extend with actual IP fetch)
             if (Test-NetConnection -ComputerName "localhost" -Port 8581 -InformationLevel Quiet) {
               Write-Output "Homebridge UI accessible!"
               break
@@ -101,20 +137,17 @@ jobs:
             $elapsed += $interval
           }
         }
-        
         if ($elapsed -ge $timeout) {
           Stop-VM -Name $vmName -Force
           throw "VM validation timed out"
         }
-        
-        # Additional checks: e.g., run custom script inside VM via PowerShell Direct
         Invoke-Command -VMName $vmName -ScriptBlock { 
           if (Get-Service -Name "homebridge" -ErrorAction SilentlyContinue) { 
             Write-Output "Homebridge service running" 
           } else { 
             throw "Homebridge service not found" 
           } 
-        } -Credential (Get-Credential)  # May need default creds or setup
+        } -Credential (Get-Credential)
 
     - name: Cleanup
       if: always()
