@@ -77,13 +77,29 @@ jobs:
         Invoke-WebRequest -Uri $url -OutFile "output\homebridge-arm64.img.gz" -ErrorAction Stop
         Write-Host "Downloaded image successfully"
 
-    - name: Enable Hyper-V
+    - name: Install qemu-img for disk conversion
       run: |
-        Write-Host "Checking Hyper-V status..."
-        Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
-        Write-Host "Hyper-V features enabled"
+        Write-Host "Installing qemu-img..."
+        choco install qemu-img -y --no-progress
+        Write-Host "qemu-img installed"
+
+    - name: Enable Hyper-V
+      shell: pwsh
+      run: |
+        Write-Host "Checking and enabling Hyper-V..."
+        $hyperv = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
+        if ($hyperv.State -ne "Enabled") {
+            Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart
+            Write-Host "Hyper-V features enabled"
+        } else {
+            Write-Host "Hyper-V already enabled"
+        }
+
+        # Ensure Hyper-V management tools are available
+        Import-Module Hyper-V -ErrorAction SilentlyContinue
 
     - name: Run validation script
+      shell: pwsh
       run: |
         Write-Host "Starting VM validation with Hyper-V..."
         .\scripts\validate-vm-hyperv.ps1 -Architecture "arm64"

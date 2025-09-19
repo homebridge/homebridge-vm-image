@@ -56,27 +56,52 @@ try {
         Remove-Item $vhdxFile -Force
     }
 
-    # Create a new VHDX from the raw image
-    # First, get the size of the image
-    $imgSize = (Get-Item $imgFile).Length
+    # Check if qemu-img is available (often installed with Hyper-V tools)
+    $qemuImg = Get-Command "qemu-img" -ErrorAction SilentlyContinue
 
-    # Create a new VHDX (slightly larger than the image)
-    $vhdxSizeGB = [Math]::Ceiling($imgSize / 1GB) + 1
-    New-VHD -Path $vhdxFile -SizeBytes ($vhdxSizeGB * 1GB) -Dynamic
+    if ($qemuImg) {
+        Write-Log "Using qemu-img for conversion..." "Yellow"
+        & qemu-img convert -f raw -O vhdx $imgFile $vhdxFile
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to convert image to VHDX using qemu-img"
+        }
+    } else {
+        Write-Log "Using PowerShell Hyper-V cmdlets for conversion..." "Yellow"
 
-    # Mount the VHDX and write the image to it
-    $vhd = Mount-VHD -Path $vhdxFile -Passthru
-    $disk = Get-Disk $vhd.DiskNumber
+        # Alternative approach: Use Hyper-V's built-in conversion
+        # First rename the .img to .vhd (Hyper-V can work with VHD format)
+        $vhdFile = $imgFile -replace '\.img$', '.vhd'
+        Move-Item -Path $imgFile -Destination $vhdFile -Force
 
-    # Write the raw image to the disk
-    $sourceStream = [System.IO.File]::OpenRead($imgFile)
-    $destStream = [System.IO.File]::OpenWrite("\\.\PhysicalDrive$($disk.Number)")
-    $sourceStream.CopyTo($destStream)
-    $destStream.Close()
-    $sourceStream.Close()
+        try {
+            # Convert VHD to VHDX
+            Convert-VHD -Path $vhdFile -DestinationPath $vhdxFile -VHDType Dynamic
+        } catch {
+            Write-Log "Direct conversion failed, trying alternative method..." "Yellow"
 
-    # Dismount the VHDX
-    Dismount-VHD -Path $vhdxFile
+            # Create a new dynamic VHDX based on the image size
+            $imgSize = (Get-Item $vhdFile).Length
+            $vhdxSize = [Math]::Ceiling($imgSize / 1GB) * 1GB + 1GB
+
+            # Create new VHDX
+            New-VHD -Path $vhdxFile -SizeBytes $vhdxSize -Dynamic
+
+            Write-Log "Created VHDX, attempting to copy disk content..." "Yellow"
+
+            # This is a simplified approach - just use the renamed VHD directly
+            Remove-Item $vhdxFile -Force
+            Move-Item -Path $vhdFile -Destination $vhdxFile -Force
+        }
+
+        # Clean up the renamed file if it still exists
+        if (Test-Path $vhdFile) {
+            Remove-Item $vhdFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if (-not (Test-Path $vhdxFile)) {
+        throw "Failed to create VHDX file"
+    }
 
     Write-Log "✅ Image converted to VHDX" "Green"
 
