@@ -31,7 +31,7 @@ jobs:
         choco install qemu --no-progress -y
         if (-not $?) { throw "Failed to install QEMU" }
 
-    - name: Download latest x86 image
+    - name: Determine latest image URL from releases
       id: download
       if: ${{ !inputs.image_url }}
       shell: powershell
@@ -44,7 +44,7 @@ jobs:
           $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/latest" -Headers $headers
           $asset = $response.assets | Where-Object { $_.name -like "*amd64.img.gz" }
           if (-not $asset) { Write-Error "No *.amd64.img.gz found in latest release"; exit 1 }
-          Write-Output "Found x86 asset: $($asset.name)"
+          Write-Output "Found x86 asset: $($asset.name) at $($asset.browser_download_url)"
           echo "download_url=$($asset.browser_download_url)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "image_name=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         } catch {
