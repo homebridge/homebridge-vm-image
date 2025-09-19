@@ -60,3 +60,41 @@ jobs:
           *.log
           validation-*.txt
         retention-days: 7
+
+  validate-arm64:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download VM image
+      run: |
+        Write-Host "Downloading ARM64 image..."
+        $url = "https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-arm64.img.gz"
+        New-Item -ItemType Directory -Path "output" -Force
+        Invoke-WebRequest -Uri $url -OutFile "output\homebridge-arm64.img.gz" -ErrorAction Stop
+        Write-Host "Downloaded image successfully"
+
+    - name: Enable Hyper-V
+      run: |
+        Write-Host "Checking Hyper-V status..."
+        Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
+        Write-Host "Hyper-V features enabled"
+
+    - name: Run validation script
+      run: |
+        Write-Host "Starting VM validation..."
+        .\scripts\validate-vm-simple.ps1 -Architecture "arm64"
+      timeout-minutes: 15
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: validation-logs-arm64
+        path: |
+          *.log
+          validation-*.txt
+        retention-days: 7
