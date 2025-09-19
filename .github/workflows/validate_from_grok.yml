@@ -83,6 +83,7 @@ jobs:
         $url = "${{ steps.download.outputs.download_url || steps.custom_image.outputs.download_url }}"
         $imageName = "${{ steps.download.outputs.image_name || steps.custom_image.outputs.image_name }}"
         $outputPath = Join-Path $env:GITHUB_WORKSPACE $imageName
+        Write-Output "Downloading image from: $url to $outputPath"
         Invoke-WebRequest -Uri $url -OutFile $outputPath
         $decompressedPath = $outputPath -replace '\.gz$', ''
         & gzip -d $outputPath -c | Out-File -FilePath $decompressedPath -Encoding Bytes
