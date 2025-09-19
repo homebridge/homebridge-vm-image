@@ -1,0 +1,62 @@
+name: Validate Homebridge VM Images
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, beta]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-amd64:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download VM image
+      run: |
+        Write-Host "Downloading AMD64 image..."
+        $url = "https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-amd64.img.gz"
+        New-Item -ItemType Directory -Path "output" -Force
+        Invoke-WebRequest -Uri $url -OutFile "output\homebridge-amd64.img.gz" -ErrorAction Stop
+        Write-Host "Downloaded image successfully"
+
+    - name: Install and configure VirtualBox
+      run: |
+        Write-Host "Installing VirtualBox..."
+        $url = "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe"
+        $installer = "$env:TEMP\VirtualBox-installer.exe"
+
+        # Download installer
+        Invoke-WebRequest -Uri $url -OutFile $installer
+
+        # Install silently
+        Start-Process -FilePath $installer -ArgumentList "--silent", "--suppress-message" -Wait -NoNewWindow
+
+        # Add to PATH
+        $vboxPath = "${env:ProgramFiles}\Oracle\VirtualBox"
+        $env:PATH = "$vboxPath;$env:PATH"
+        echo "$vboxPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+        # Verify installation
+        & "$vboxPath\VBoxManage.exe" --version
+        Write-Host "VirtualBox installed successfully"
+
+    - name: Run validation script
+      run: |
+        Write-Host "Starting VM validation..."
+        .\scripts\validate-vm-simple.ps1 -Architecture "amd64"
+      timeout-minutes: 15
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: validation-logs-amd64
+        path: |
+          *.log
+          validation-*.txt
+        retention-days: 7
