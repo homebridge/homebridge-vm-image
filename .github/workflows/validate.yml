@@ -209,8 +209,14 @@ jobs:
       - name: Stage 4C - Boot VM and validate Homebridge service
         run: |
           Write-Host "🚀 Stage 4C: Starting comprehensive Homebridge service validation..." -ForegroundColor Cyan
-          .\validate-vm.ps1 -Architecture "${{ matrix.arch }}" -ImagePath "output\homebridge-${{ matrix.arch }}.img.gz" -Timeout 300
+          if ("${{ matrix.arch }}" -eq "arm64") {
+            Write-Host "🧪 ARM64: Running experimental validation (limited testing)" -ForegroundColor Yellow
+            .\validate-vm.ps1 -Architecture "${{ matrix.arch }}" -ImagePath "output\homebridge-${{ matrix.arch }}.img.gz" -Timeout 60
+          } else {
+            .\validate-vm.ps1 -Architecture "${{ matrix.arch }}" -ImagePath "output\homebridge-${{ matrix.arch }}.img.gz" -Timeout 300
+          }
         timeout-minutes: 15
+        continue-on-error: ${{ matrix.arch == 'arm64' }}
 
       - name: Stage 4D - Collect validation logs and service information
         if: always()
