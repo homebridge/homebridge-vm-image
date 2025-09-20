@@ -9,72 +9,115 @@ function New-HyperVVM {
 
     Write-Host "🖥️ Creating Hyper-V VM for ARM64..." -ForegroundColor Cyan
 
-    # Convert raw image to VHDX for Hyper-V
-    Write-Host "🔄 Converting raw image to VHDX format..." -ForegroundColor Yellow
+    # For ARM64, we need special handling
+    Write-Host "🔄 Preparing disk image for ARM64 Hyper-V..." -ForegroundColor Yellow
     $vhdxPath = $ImagePath -replace '\.img$', '.vhdx'
 
     try {
-        # Method 1: Use Hyper-V's Convert-VHD if available (simplest approach)
-        Write-Host "📦 Using simplified VHDX conversion..." -ForegroundColor Yellow
+        # Check if qemu-img is available (best option for conversion)
+        $qemuPath = "C:\Program Files\qemu\qemu-img.exe"
+        if (-not (Test-Path $qemuPath)) {
+            # Try to download qemu-img for Windows
+            Write-Host "📥 Downloading qemu-img for proper disk conversion..." -ForegroundColor Yellow
+            $qemuUrl = "https://qemu.weilnetz.de/w64/qemu-w64-setup-20231224.exe"
+            $installerPath = "$env:TEMP\qemu-installer.exe"
 
-        # Get the size of the raw image
-        $imageInfo = Get-Item $ImagePath
-        $imageSizeGB = [Math]::Ceiling($imageInfo.Length / 1GB)
-        Write-Host "Image size: $imageSizeGB GB" -ForegroundColor Cyan
-
-        # Create a dynamic VHDX (more efficient than fixed)
-        Write-Host "💾 Creating dynamic VHDX..." -ForegroundColor Yellow
-        $vhd = New-VHD -Path $vhdxPath -SizeBytes ($imageSizeGB * 1GB) -Dynamic
-
-        # Mount the VHDX
-        Write-Host "🔧 Mounting VHDX..." -ForegroundColor Yellow
-        $mountedVhd = Mount-VHD -Path $vhdxPath -Passthru
-        $disk = Get-Disk | Where-Object { $_.Location -eq $vhdxPath }
-        $diskNumber = $disk.Number
-
-        Write-Host "📋 Copying raw image to disk $diskNumber..." -ForegroundColor Yellow
-
-        # Use direct disk write (faster than stream copy)
-        $destPath = "\\\\.\\PhysicalDrive$diskNumber"
-
-        # Copy the raw image data directly to the physical disk
-        $copyCommand = "cmd /c type `"$ImagePath`" > `"$destPath`""
-
-        # Alternative: Use PowerShell streaming
-        $source = [System.IO.File]::OpenRead($ImagePath)
-        $dest = [System.IO.File]::OpenWrite($destPath)
-
-        try {
-            Write-Host "Copying image data (this may take a few minutes)..." -ForegroundColor Yellow
-            $buffer = New-Object byte[] (64MB)  # Larger buffer for faster copy
-            $totalBytes = $source.Length
-            $copiedBytes = 0
-            $lastPercent = 0
-
-            while ($copiedBytes -lt $totalBytes) {
-                $bytesRead = $source.Read($buffer, 0, $buffer.Length)
-                if ($bytesRead -eq 0) { break }
-                $dest.Write($buffer, 0, $bytesRead)
-                $copiedBytes += $bytesRead
-
-                $percentComplete = [Math]::Floor(($copiedBytes / $totalBytes) * 100)
-                if ($percentComplete -ne $lastPercent -and $percentComplete % 10 -eq 0) {
-                    Write-Host "  Progress: $percentComplete%" -ForegroundColor Cyan
-                    $lastPercent = $percentComplete
-                }
+            try {
+                Invoke-WebRequest -Uri $qemuUrl -OutFile $installerPath -ErrorAction Stop
+                Write-Host "📦 Installing qemu-img..." -ForegroundColor Yellow
+                Start-Process -FilePath $installerPath -ArgumentList "/S", "/D=C:\Program Files\qemu" -Wait
+            } catch {
+                Write-Host "⚠️ Could not install qemu-img, using fallback method" -ForegroundColor Yellow
             }
-            Write-Host "  Progress: 100%" -ForegroundColor Green
-        } finally {
-            $source.Close()
-            $dest.Close()
         }
 
-        # Dismount the VHDX
-        Write-Host "🔓 Dismounting VHDX..." -ForegroundColor Yellow
-        Dismount-VHD -Path $vhdxPath
+        if (Test-Path $qemuPath) {
+            # Use qemu-img for proper conversion
+            Write-Host "🎉 Using qemu-img for conversion (best method)..." -ForegroundColor Green
+            $process = Start-Process -FilePath $qemuPath -ArgumentList "convert", "-f", "raw", "-O", "vhdx", "`"$ImagePath`"", "`"$vhdxPath`"" -Wait -PassThru -NoNewWindow
+            if ($process.ExitCode -ne 0) {
+                throw "qemu-img conversion failed with exit code $($process.ExitCode)"
+            }
+            Write-Host "✅ Successfully converted using qemu-img" -ForegroundColor Green
+        } else {
+            # Fallback: Simple raw copy to VHDX
+            Write-Host "🔧 Using fallback conversion method..." -ForegroundColor Yellow
+
+            # Get image info
+            $imageInfo = Get-Item $ImagePath
+            $imageSize = $imageInfo.Length
+
+            # For ARM64, we need to ensure the VHDX is properly formatted
+            # Create a slightly larger VHDX to ensure all data fits
+            $vhdSize = [Math]::Ceiling($imageSize * 1.1 / 1GB) * 1GB
+            if ($vhdSize -lt 4GB) { $vhdSize = 4GB }  # Minimum 4GB
+
+            Write-Host "📦 Creating VHDX with size: $($vhdSize / 1GB) GB" -ForegroundColor Yellow
+
+            # Create a fixed VHDX (more compatible with ARM64)
+            New-VHD -Path $vhdxPath -SizeBytes $vhdSize -Fixed | Out-Null
+
+            # Direct binary copy
+            Write-Host "📋 Performing direct binary copy..." -ForegroundColor Yellow
+
+            # Use certutil for binary copy (built into Windows)
+            $tempBin = "$env:TEMP\temp_img.bin"
+
+            # First ensure the image is accessible
+            Copy-Item -Path $ImagePath -Destination $tempBin -Force
+
+            # Mount VHD and get disk number
+            $vhd = Mount-VHD -Path $vhdxPath -Passthru
+            $diskNumber = $vhd.DiskNumber
+
+            try {
+                # Initialize the disk without creating partitions (keep raw)
+                Write-Host "🗑️ Keeping disk raw for Linux boot..." -ForegroundColor Yellow
+
+                # Get disk path for raw write
+                $diskPath = "\\\\.\\PhysicalDrive$diskNumber"
+
+                # Use PowerShell to copy
+                Write-Host "📝 Writing image data to disk $diskNumber..." -ForegroundColor Yellow
+
+                $sourceFile = [System.IO.File]::OpenRead($tempBin)
+                $destFile = [System.IO.FileStream]::new($diskPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+
+                try {
+                    $buffer = New-Object byte[] (1MB)
+                    $totalBytes = $sourceFile.Length
+                    $copiedBytes = 0
+                    $lastPercent = -1
+
+                    while ($copiedBytes -lt $totalBytes) {
+                        $bytesRead = $sourceFile.Read($buffer, 0, $buffer.Length)
+                        if ($bytesRead -eq 0) { break }
+                        $destFile.Write($buffer, 0, $bytesRead)
+                        $copiedBytes += $bytesRead
+
+                        $percent = [Math]::Floor(($copiedBytes / $totalBytes) * 100)
+                        if ($percent -ne $lastPercent -and $percent % 5 -eq 0) {
+                            Write-Host "  Progress: $percent%" -ForegroundColor Cyan
+                            $lastPercent = $percent
+                        }
+                    }
+
+                    Write-Host "  Progress: 100%" -ForegroundColor Green
+                    $destFile.Flush()
+                } finally {
+                    $sourceFile.Close()
+                    $destFile.Close()
+                }
+
+            } finally {
+                # Dismount the VHD
+                Dismount-VHD -Path $vhdxPath
+                Remove-Item $tempBin -Force -ErrorAction SilentlyContinue
+            }
+        }
 
     } catch {
-        Write-Host "❌ Failed to convert image to VHDX: $_" -ForegroundColor Red
+        Write-Host "❌ Failed to prepare disk: $_" -ForegroundColor Red
         if (Test-Path $vhdxPath) {
             try { Dismount-VHD -Path $vhdxPath -ErrorAction SilentlyContinue } catch {}
             Remove-Item $vhdxPath -Force -ErrorAction SilentlyContinue
@@ -82,40 +125,85 @@ function New-HyperVVM {
         throw
     }
 
-    Write-Host "✅ Successfully converted image to VHDX" -ForegroundColor Green
+    Write-Host "✅ Disk preparation complete" -ForegroundColor Green
 
-    # Create VM - ARM64 Hyper-V requires Generation 2 VMs
-    Write-Host "🔧 Creating Generation 2 VM for ARM64..." -ForegroundColor Yellow
-    $vm = New-VM -Name $VmName -MemoryStartupBytes ($VmRam * 1MB) -Generation 2 -BootDevice VHD
+    # Create VM - Try Generation 1 first for better compatibility
+    Write-Host "🔧 Creating VM for ARM64..." -ForegroundColor Yellow
 
-    # Attach the VHDX to the VM
-    Write-Host "💾 Attaching VHDX to VM..." -ForegroundColor Yellow
-    Add-VMHardDiskDrive -VMName $VmName -Path $vhdxPath
+    # For ARM64 Windows, we still need Gen 2, but configure it differently
+    try {
+        # Create Generation 2 VM (required for ARM64)
+        $vm = New-VM -Name $VmName -MemoryStartupBytes ($VmRam * 1MB) -Generation 2 -NoVHD
 
-    # Configure VM settings
-    Set-VM -Name $VmName -ProcessorCount 2
-    Set-VMFirmware -VMName $VmName -EnableSecureBoot Off  # Disable secure boot for custom Linux image
-    Set-VMProcessor -VMName $VmName -ExposeVirtualizationExtensions $false
+        # Attach the VHDX as SCSI (required for Gen 2)
+        Write-Host "💾 Attaching VHDX to VM (SCSI)..." -ForegroundColor Yellow
+        Add-VMHardDiskDrive -VMName $VmName -Path $vhdxPath -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0
 
-    # Add network adapter
-    Write-Host "🌐 Configuring network adapter..." -ForegroundColor Yellow
-    $switch = Get-VMSwitch | Where-Object { $_.SwitchType -eq "External" } | Select-Object -First 1
-    if (-not $switch) {
-        # Try to find or create a Default Switch
-        $switch = Get-VMSwitch -Name "Default Switch" -ErrorAction SilentlyContinue
-        if (-not $switch) {
-            Write-Host "⚠️ No external virtual switch found, creating Default Switch..." -ForegroundColor Yellow
-            New-VMSwitch -Name "Default Switch" -SwitchType Internal
-            $switch = Get-VMSwitch -Name "Default Switch"
-        }
+        # Configure firmware settings for Linux boot
+        Write-Host "🔧 Configuring firmware for Linux boot..." -ForegroundColor Yellow
+        $bootDisk = Get-VMHardDiskDrive -VMName $VmName | Where-Object {$_.Path -eq $vhdxPath}
+        Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
+        Set-VMFirmware -VMName $VmName -FirstBootDevice $bootDisk
+
+        # Configure VM
+        Set-VM -Name $VmName -ProcessorCount 2 -DynamicMemory -MemoryMinimumBytes (512MB) -MemoryMaximumBytes (2GB)
+        Set-VMProcessor -VMName $VmName -ExposeVirtualizationExtensions $false
+
+    } catch {
+        Write-Host "❌ Failed to create VM: $_" -ForegroundColor Red
+        throw
     }
 
-    # Remove default network adapter and add a new one
-    Get-VMNetworkAdapter -VMName $VmName | Remove-VMNetworkAdapter
-    Add-VMNetworkAdapter -VMName $VmName -SwitchName $switch.Name
+    # Network configuration
+    Write-Host "🌐 Configuring network..." -ForegroundColor Yellow
 
-    Write-Host "✅ ARM64 VM created and configured successfully!" -ForegroundColor Green
+    # First, check for Default Switch (best for NAT)
+    $switch = Get-VMSwitch -Name "Default Switch" -ErrorAction SilentlyContinue
+
+    if (-not $switch) {
+        # Look for any External switch
+        $switch = Get-VMSwitch | Where-Object { $_.SwitchType -eq "External" } | Select-Object -First 1
+    }
+
+    if (-not $switch) {
+        # Create an Internal switch with NAT
+        Write-Host "🌐 Creating NAT switch for VM..." -ForegroundColor Yellow
+        New-VMSwitch -Name "NATSwitch" -SwitchType Internal
+
+        # Configure NAT
+        $natIP = "192.168.200.1"
+        $natPrefix = "192.168.200.0/24"
+
+        # Add IP to the switch
+        $adapter = Get-NetAdapter | Where-Object {$_.Name -like "*NATSwitch*"}
+        if ($adapter) {
+            New-NetIPAddress -IPAddress $natIP -PrefixLength 24 -InterfaceIndex $adapter.InterfaceIndex -ErrorAction SilentlyContinue
+            New-NetNat -Name "VMNat" -InternalIPInterfaceAddressPrefix $natPrefix -ErrorAction SilentlyContinue
+        }
+
+        $switch = Get-VMSwitch -Name "NATSwitch"
+    }
+
+    Write-Host "📡 Using switch: $($switch.Name) (Type: $($switch.SwitchType))" -ForegroundColor Cyan
+
+    # Add network adapter
+    Add-VMNetworkAdapter -VMName $VmName -SwitchName $switch.Name
+    Set-VMNetworkAdapter -VMName $VmName -MacAddressSpoofing On
+
+    # Enable guest services for better integration
+    Enable-VMIntegrationService -VMName $VmName -Name "Guest Service Interface" -ErrorAction SilentlyContinue
+
+    Write-Host "✅ VM created and configured!" -ForegroundColor Green
     Write-Host "📁 VHDX Path: $vhdxPath" -ForegroundColor Cyan
+
+    # Show VM details
+    $vm = Get-VM -Name $VmName
+    Write-Host "📊 VM Configuration:" -ForegroundColor Cyan
+    Write-Host "  - Generation: $($vm.Generation)" -ForegroundColor Gray
+    Write-Host "  - Processors: $($vm.ProcessorCount)" -ForegroundColor Gray
+    Write-Host "  - Memory: $($vm.MemoryStartup / 1MB) MB" -ForegroundColor Gray
+    Write-Host "  - Network: $($switch.Name)" -ForegroundColor Gray
+
     return $VmName
 }
 
