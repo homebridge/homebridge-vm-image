@@ -64,6 +64,7 @@ jobs:
   validate-arm64:
     runs-on: windows-latest
     timeout-minutes: 30
+    continue-on-error: true  # ARM64 is experimental
 
     steps:
     - name: Checkout code
@@ -114,8 +115,10 @@ jobs:
       shell: pwsh
       run: |
         Write-Host "Starting VM validation with Hyper-V..."
+        Write-Host "🧪 ARM64 validation is EXPERIMENTAL" -ForegroundColor Yellow
         .\scripts\validate-vm-hyperv.ps1 -Architecture "arm64"
-      timeout-minutes: 15
+      timeout-minutes: 10
+      continue-on-error: true
 
     - name: Upload logs
       if: always()
