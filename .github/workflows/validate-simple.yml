@@ -2,7 +2,7 @@ name: Validate Homebridge VM Images - 3rd try
 
 on:
   workflow_dispatch:
-    
+
 jobs:
   validate-amd64:
     runs-on: windows-latest
@@ -154,7 +154,7 @@ jobs:
         # Wait for Homebridge to start
         Write-Host "⏳ Waiting for Homebridge service to start (timeout: 5 minutes)..." -ForegroundColor Yellow
 
-        $timeout = 300  # 5 minutes
+        $timeout = 60  # 1 minutes
         $elapsed = 0
         $checkInterval = 10
         $serviceLive = $false
