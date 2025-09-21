@@ -123,14 +123,98 @@ jobs:
         Write-Host "▶️ Starting VM..." -ForegroundColor Yellow
         & $vboxManage startvm $vmName --type headless
         if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Failed to start VM, collecting VirtualBox logs..." -ForegroundColor Red
+            
+            # Collect VirtualBox logs on startup failure
+            try {
+                $vboxLogPath = "$env:USERPROFILE\VirtualBox VMs\$vmName\Logs"
+                if (Test-Path $vboxLogPath) {
+                    Copy-Item "$vboxLogPath\*" -Destination "." -Recurse -Force
+                    Write-Host "✅ VirtualBox logs collected from $vboxLogPath" -ForegroundColor Yellow
+                } else {
+                    Write-Host "⚠️ VirtualBox log path not found: $vboxLogPath" -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Host "⚠️ Could not collect VirtualBox logs: $_" -ForegroundColor Yellow
+            }
+            
             throw "Failed to start VM"
         }
-        Write-Host "✅ VM started" -ForegroundColor Green
+        Write-Host "✅ VM start command executed successfully" -ForegroundColor Green
+
+        # Wait for VM to actually start (maximum 60 seconds)
+        Write-Host "⏳ Waiting for VM to be running (timeout: 60 seconds)..." -ForegroundColor Yellow
+        $vmStartTimeout = 60
+        $vmStartElapsed = 0
+        $vmStartInterval = 2
+        $vmRunning = $false
+        
+        while ($vmStartElapsed -lt $vmStartTimeout) {
+            Start-Sleep -Seconds $vmStartInterval
+            $vmStartElapsed += $vmStartInterval
+            
+            # Check VM state
+            $vmInfo = & $vboxManage showvminfo $vmName --machinereadable 2>$null | Select-String "VMState="
+            if ($vmInfo -match 'VMState="running"') {
+                $vmRunning = $true
+                Write-Host "✅ VM is now running (took ${vmStartElapsed}s)" -ForegroundColor Green
+                break
+            } elseif ($vmInfo -match 'VMState="aborted"') {
+                Write-Host "❌ VM aborted during startup" -ForegroundColor Red
+                break
+            }
+            
+            if ($vmStartElapsed % 10 -eq 0) {
+                Write-Host "  ⏱️ Still waiting for VM to start... (${vmStartElapsed}/${vmStartTimeout}s)" -ForegroundColor Gray
+            }
+        }
+        
+        if (-not $vmRunning) {
+            Write-Host "❌ VM failed to start within 60 seconds" -ForegroundColor Red
+            
+            # Collect VirtualBox logs on startup timeout
+            Write-Host "📋 Collecting VirtualBox logs for debugging..." -ForegroundColor Yellow
+            try {
+                $vboxLogPath = "$env:USERPROFILE\VirtualBox VMs\$vmName\Logs"
+                if (Test-Path $vboxLogPath) {
+                    Copy-Item "$vboxLogPath\*" -Destination "." -Recurse -Force
+                    Write-Host "✅ VirtualBox logs collected from $vboxLogPath" -ForegroundColor Green
+                    
+                    # List collected log files
+                    Get-ChildItem -Path "." -Filter "*.log" | ForEach-Object {
+                        Write-Host "  📄 Collected: $($_.Name) ($($_.Length) bytes)" -ForegroundColor Gray
+                    }
+                } else {
+                    Write-Host "⚠️ VirtualBox log path not found: $vboxLogPath" -ForegroundColor Yellow
+                    
+                    # Try alternative log locations
+                    $altLogPaths = @(
+                        "$env:USERPROFILE\.VirtualBox\$vmName\Logs",
+                        "${env:ProgramData}\Oracle\VirtualBox\$vmName\Logs"
+                    )
+                    foreach ($altPath in $altLogPaths) {
+                        if (Test-Path $altPath) {
+                            Copy-Item "$altPath\*" -Destination "." -Recurse -Force
+                            Write-Host "✅ Found logs at alternative location: $altPath" -ForegroundColor Green
+                            break
+                        }
+                    }
+                }
+            } catch {
+                Write-Host "⚠️ Could not collect VirtualBox logs: $_" -ForegroundColor Yellow
+            }
+            
+            # Get VM info for debugging
+            Write-Host "🔍 VM debugging information:" -ForegroundColor Yellow
+            & $vboxManage showvminfo $vmName 2>&1 | Add-Content -Path "vm-debug-info.log"
+            
+            throw "VM startup failed - logs collected for debugging"
+        }
 
         # Monitor console output during boot
         Write-Host "👁️ Monitoring VM console output during boot..." -ForegroundColor Cyan
         $consoleOutputFile = "vm-console-output.log"
-        for ($i = 1; $i -le 30; $i++) {
+        for ($i = 1; $i -le 15; $i++) {
             Start-Sleep -Seconds 2
             try {
                 # Capture console screenshot and try to get any console output
@@ -142,8 +226,8 @@ jobs:
                     $guestProps | Add-Content -Path $consoleOutputFile
                 }
                 
-                if ($i % 10 -eq 0) {
-                    Write-Host "  📺 Boot monitoring: ${i}/30 iterations (${i*2}s elapsed)" -ForegroundColor Gray
+                if ($i % 5 -eq 0) {
+                    Write-Host "  📺 Boot monitoring: ${i}/15 iterations (${i*2}s elapsed)" -ForegroundColor Gray
                 }
             } catch {
                 # Continue monitoring even if screenshot fails
@@ -152,9 +236,9 @@ jobs:
         Write-Host "✅ Console monitoring completed" -ForegroundColor Green
 
         # Wait for Homebridge to start
-        Write-Host "⏳ Waiting for Homebridge service to start (timeout: 5 minutes)..." -ForegroundColor Yellow
+        Write-Host "⏳ Waiting for Homebridge service to start (timeout: 3 minutes)..." -ForegroundColor Yellow
 
-        $timeout = 60  # 1 minutes
+        $timeout = 180  # 3 minutes (reduced from 5 minutes since we now wait for VM startup)
         $elapsed = 0
         $checkInterval = 10
         $serviceLive = $false
@@ -367,6 +451,7 @@ jobs:
           vm-screenshot.png
           vm-boot-screenshot-*.png
           vm-console-output.log
+          vm-debug-info.log
           homebridge-service.log
           homebridge-status.log
           homebridge-directory.log
