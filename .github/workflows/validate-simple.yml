@@ -3,6 +3,8 @@ name: Validate Homebridge VM Images - 3rd try
 on:
   workflow_dispatch:
 
+#
+
 jobs:
   validate-amd64:
     runs-on: windows-latest
@@ -97,7 +99,7 @@ jobs:
             throw "Failed to create VM"
         }
 
-        # Configure VM
+        # Configure VM with enhanced settings for better compatibility
         & $vboxManage modifyvm $vmName `
             --memory 1024 `
             --cpus 1 `
@@ -105,11 +107,31 @@ jobs:
             --boot1 disk `
             --nic1 nat `
             --natpf1 "ssh,tcp,,2222,,22" `
-            --natpf1 "homebridge,tcp,,8581,,8581"
+            --natpf1 "homebridge,tcp,,8581,,8581" `
+            --acpi on `
+            --apic on `
+            --pae on `
+            --longmode on `
+            --chipset piix3 `
+            --rtcuseutc on
 
-        # Attach storage controller and disk
-        & $vboxManage storagectl $vmName --name "SATA" --add sata --controller IntelAhci
-        & $vboxManage storageattach $vmName --storagectl "SATA" --port 0 --device 0 --type hdd --medium $vdiFile
+        # Attach storage controller and disk with enhanced settings
+        & $vboxManage storagectl $vmName --name "SATA" --add sata --controller IntelAhci --portcount 2 --bootable on
+        & $vboxManage storageattach $vmName --storagectl "SATA" --port 0 --device 0 --type hdd --medium $vdiFile --nonrotational on
+        
+        # Verify disk attachment
+        Write-Host "🔍 Verifying VM configuration..." -ForegroundColor Yellow
+        $vmConfig = & $vboxManage showvminfo $vmName --details
+        $vmConfig | Out-String | Add-Content -Path "vm-configuration.log"
+        
+        # Check if disk image is properly attached
+        $diskInfo = $vmConfig | Select-String -Pattern "SATA|Storage|IDE"
+        if ($diskInfo) {
+            Write-Host "✅ Disk attachment verified:" -ForegroundColor Green
+            $diskInfo | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+        } else {
+            Write-Host "⚠️ Disk attachment verification failed" -ForegroundColor Yellow
+        }
 
         Write-Host "✅ VM created and configured" -ForegroundColor Green
 
@@ -212,33 +234,69 @@ jobs:
         }
 
         # Monitor console output during boot
-        Write-Host "👁️ Monitoring VM console output during boot..." -ForegroundColor Cyan
+        Write-Host "👁️ Monitoring VM console output and messages during boot..." -ForegroundColor Cyan
         $consoleOutputFile = "vm-console-output.log"
+        $consoleTextFile = "vm-console-messages.log"
+        
         for ($i = 1; $i -le 15; $i++) {
             Start-Sleep -Seconds 2
             try {
-                # Capture console screenshot and try to get any console output
+                # Capture console screenshot for visual reference
                 & $vboxManage controlvm $vmName screenshotpng "vm-boot-screenshot-$i.png" 2>$null
+                
+                # Try to get console text output using VBoxManage debugvm
+                try {
+                    $consoleText = & $vboxManage debugvm $vmName dumpvmcore --filename nul 2>&1
+                    if ($consoleText) {
+                        "=== Console Output Iteration $i ($(Get-Date -Format 'HH:mm:ss')) ===" | Add-Content -Path $consoleTextFile
+                        $consoleText | Add-Content -Path $consoleTextFile
+                    }
+                } catch {
+                    # debugvm might not be available, try alternative methods
+                }
                 
                 # Try to get guest properties that might contain boot information
                 $guestProps = & $vboxManage guestproperty enumerate $vmName 2>$null
                 if ($guestProps) {
+                    "=== Guest Properties Iteration $i ($(Get-Date -Format 'HH:mm:ss')) ===" | Add-Content -Path $consoleOutputFile
                     $guestProps | Add-Content -Path $consoleOutputFile
+                }
+                
+                # Try to get VM information that might contain console/error messages
+                $vmInfo = & $vboxManage showvminfo $vmName --details 2>&1
+                if ($vmInfo -match "error|fail|warn") {
+                    "=== VM Info Errors/Warnings Iteration $i ($(Get-Date -Format 'HH:mm:ss')) ===" | Add-Content -Path $consoleTextFile
+                    ($vmInfo | Where-Object { $_ -match "error|fail|warn" }) | Add-Content -Path $consoleTextFile
+                }
+                
+                # Get metrics that might show boot progress
+                try {
+                    $metrics = & $vboxManage metrics collect --period 1 --samples 1 $vmName 2>$null
+                    if ($metrics) {
+                        "=== VM Metrics Iteration $i ($(Get-Date -Format 'HH:mm:ss')) ===" | Add-Content -Path $consoleOutputFile
+                        $metrics | Add-Content -Path $consoleOutputFile
+                    }
+                } catch {
+                    # Metrics might not be available
                 }
                 
                 if ($i % 5 -eq 0) {
                     Write-Host "  📺 Boot monitoring: ${i}/15 iterations (${i*2}s elapsed)" -ForegroundColor Gray
+                    
+                    # Check VM state to see if there are issues
+                    $vmState = & $vboxManage showvminfo $vmName --machinereadable | Select-String "VMState="
+                    Write-Host "  🔍 VM State: $vmState" -ForegroundColor Gray
                 }
             } catch {
-                # Continue monitoring even if screenshot fails
+                Write-Host "  ⚠️ Monitoring iteration $i failed: $_" -ForegroundColor Yellow
             }
         }
         Write-Host "✅ Console monitoring completed" -ForegroundColor Green
 
         # Wait for Homebridge to start
-        Write-Host "⏳ Waiting for Homebridge service to start (timeout: 3 minutes)..." -ForegroundColor Yellow
+        Write-Host "⏳ Waiting for Homebridge service to start (timeout: 60 seconds)..." -ForegroundColor Yellow
 
-        $timeout = 180  # 3 minutes (reduced from 5 minutes since we now wait for VM startup)
+        $timeout = 60  # 1 minute as requested
         $elapsed = 0
         $checkInterval = 10
         $serviceLive = $false
@@ -451,6 +509,8 @@ jobs:
           vm-screenshot.png
           vm-boot-screenshot-*.png
           vm-console-output.log
+          vm-console-messages.log
+          vm-configuration.log
           vm-debug-info.log
           homebridge-service.log
           homebridge-status.log
