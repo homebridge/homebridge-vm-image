@@ -131,6 +131,30 @@ jobs:
         }
         Write-Host "✅ VM started" -ForegroundColor Green
 
+        # Monitor console output during boot
+        Write-Host "👁️ Monitoring VM console output during boot..." -ForegroundColor Cyan
+        $consoleOutputFile = "vm-console-output.log"
+        for ($i = 1; $i -le 30; $i++) {
+            Start-Sleep -Seconds 2
+            try {
+                # Capture console screenshot and try to get any console output
+                & $vboxManage controlvm $vmName screenshotpng "vm-boot-screenshot-$i.png" 2>$null
+                
+                # Try to get guest properties that might contain boot information
+                $guestProps = & $vboxManage guestproperty enumerate $vmName 2>$null
+                if ($guestProps) {
+                    $guestProps | Add-Content -Path $consoleOutputFile
+                }
+                
+                if ($i % 10 -eq 0) {
+                    Write-Host "  📺 Boot monitoring: ${i}/30 iterations (${i*2}s elapsed)" -ForegroundColor Gray
+                }
+            } catch {
+                # Continue monitoring even if screenshot fails
+            }
+        }
+        Write-Host "✅ Console monitoring completed" -ForegroundColor Green
+
         # Wait for Homebridge to start
         Write-Host "⏳ Waiting for Homebridge service to start (timeout: 5 minutes)..." -ForegroundColor Yellow
 
@@ -178,13 +202,121 @@ jobs:
             throw "Homebridge service validation failed - service did not start"
         }
 
-        # Additional validation
-        Write-Host "🔍 Performing additional validation..." -ForegroundColor Yellow
+        # Additional validation and log collection
+        Write-Host "🔍 Performing additional validation and log collection..." -ForegroundColor Yellow
 
         # Check SSH is accessible
         $sshPort = Test-NetConnection -ComputerName localhost -Port 2222 -InformationLevel Quiet -WarningAction SilentlyContinue
         if ($sshPort) {
             Write-Host "✅ SSH port (2222) is accessible" -ForegroundColor Green
+            
+            # Collect Homebridge logs via SSH
+            Write-Host "📋 Collecting Homebridge logs via SSH..." -ForegroundColor Cyan
+            try {
+                # Wait a moment for SSH service to be fully ready
+                Start-Sleep -Seconds 5
+                
+                # Use plink (PuTTY's SSH client) or ssh if available
+                $sshClient = $null
+                if (Get-Command "ssh" -ErrorAction SilentlyContinue) {
+                    $sshClient = "ssh"
+                } elseif (Get-Command "plink" -ErrorAction SilentlyContinue) {
+                    $sshClient = "plink"
+                } else {
+                    Write-Host "⚠️ No SSH client found (ssh or plink), attempting PowerShell SSH..." -ForegroundColor Yellow
+                    
+                    # Try to use PowerShell SSH module if available
+                    try {
+                        Import-Module Posh-SSH -ErrorAction Stop
+                        $sshSession = New-SSHSession -ComputerName localhost -Port 2222 -Credential (New-Object System.Management.Automation.PSCredential("root", (ConvertTo-SecureString "root" -AsPlainText -Force))) -AcceptKey
+                        
+                        if ($sshSession) {
+                            Write-Host "✅ SSH session established via PowerShell" -ForegroundColor Green
+                            
+                            # Collect Homebridge log
+                            $logContent = Invoke-SSHCommand -SessionId $sshSession.SessionId -Command "cat /var/lib/homebridge/homebridge.log 2>/dev/null || echo 'Log file not found or not accessible'"
+                            if ($logContent.Output) {
+                                $logContent.Output | Out-File -FilePath "homebridge-service.log" -Encoding UTF8
+                                Write-Host "✅ Homebridge log collected ($(($logContent.Output | Measure-Object -Line).Lines) lines)" -ForegroundColor Green
+                            }
+                            
+                            # Collect system status
+                            $statusContent = Invoke-SSHCommand -SessionId $sshSession.SessionId -Command "systemctl status homebridge --no-pager -l"
+                            if ($statusContent.Output) {
+                                $statusContent.Output | Out-File -FilePath "homebridge-status.log" -Encoding UTF8
+                                Write-Host "✅ Homebridge service status collected" -ForegroundColor Green
+                            }
+                            
+                            # Collect directory listing
+                            $dirContent = Invoke-SSHCommand -SessionId $sshSession.SessionId -Command "ls -la /var/lib/homebridge/ 2>/dev/null || echo 'Directory not accessible'"
+                            if ($dirContent.Output) {
+                                $dirContent.Output | Out-File -FilePath "homebridge-directory.log" -Encoding UTF8
+                                Write-Host "✅ Homebridge directory listing collected" -ForegroundColor Green
+                            }
+                            
+                            Remove-SSHSession -SessionId $sshSession.SessionId
+                        }
+                    } catch {
+                        Write-Host "⚠️ PowerShell SSH module not available: $_" -ForegroundColor Yellow
+                        Write-Host "💡 Consider installing: Install-Module -Name Posh-SSH" -ForegroundColor Yellow
+                    }
+                }
+                
+                # If we have a command-line SSH client, use it
+                if ($sshClient) {
+                    Write-Host "✅ Using $sshClient for log collection" -ForegroundColor Green
+                    
+                    $sshOptions = if ($sshClient -eq "ssh") {
+                        @("-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-p", "2222", "root@localhost")
+                    } else {
+                        @("-ssh", "-batch", "-P", "2222", "-pw", "root", "root@localhost")
+                    }
+                    
+                    # Collect Homebridge log
+                    Write-Host "  📄 Collecting homebridge.log..." -ForegroundColor Gray
+                    $logCommand = "cat /var/lib/homebridge/homebridge.log 2>/dev/null || echo 'Log file not found'"
+                    if ($sshClient -eq "ssh") {
+                        & $sshClient @sshOptions $logCommand > homebridge-service.log 2>$null
+                    } else {
+                        & $sshClient @sshOptions $logCommand | Out-File -FilePath "homebridge-service.log" -Encoding UTF8
+                    }
+                    
+                    # Collect service status
+                    Write-Host "  📊 Collecting service status..." -ForegroundColor Gray
+                    $statusCommand = "systemctl status homebridge --no-pager -l"
+                    if ($sshClient -eq "ssh") {
+                        & $sshClient @sshOptions $statusCommand > homebridge-status.log 2>$null
+                    } else {
+                        & $sshClient @sshOptions $statusCommand | Out-File -FilePath "homebridge-status.log" -Encoding UTF8
+                    }
+                    
+                    # Collect directory listing
+                    Write-Host "  📁 Collecting directory listing..." -ForegroundColor Gray
+                    $dirCommand = "ls -la /var/lib/homebridge/"
+                    if ($sshClient -eq "ssh") {
+                        & $sshClient @sshOptions $dirCommand > homebridge-directory.log 2>$null
+                    } else {
+                        & $sshClient @sshOptions $dirCommand | Out-File -FilePath "homebridge-directory.log" -Encoding UTF8
+                    }
+                    
+                    Write-Host "✅ Log collection completed via $sshClient" -ForegroundColor Green
+                }
+                
+                # Verify collected files
+                $collectedFiles = @("homebridge-service.log", "homebridge-status.log", "homebridge-directory.log")
+                foreach ($file in $collectedFiles) {
+                    if (Test-Path $file) {
+                        $size = (Get-Item $file).Length
+                        Write-Host "  📄 $file - $size bytes" -ForegroundColor Green
+                    } else {
+                        Write-Host "  ❌ $file - not collected" -ForegroundColor Yellow
+                    }
+                }
+                
+            } catch {
+                Write-Host "⚠️ SSH log collection failed: $_" -ForegroundColor Yellow
+                Write-Host "💡 Logs may not be available, but validation can continue" -ForegroundColor Yellow
+            }
         } else {
             Write-Host "⚠️ SSH port not accessible (this may be expected)" -ForegroundColor Yellow
         }
@@ -237,6 +369,11 @@ jobs:
           *.log
           validation-*.txt
           vm-screenshot.png
+          vm-boot-screenshot-*.png
+          vm-console-output.log
+          homebridge-service.log
+          homebridge-status.log
+          homebridge-directory.log
         retention-days: 7
 
   validate-arm64:
@@ -444,10 +581,27 @@ jobs:
         $vmName = "homebridge-test-vm"
         $logFile = "validation-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 
-        # Give VM a moment to start
-        Start-Sleep -Seconds 10
+        # Monitor VM state and collect basic information
+        Write-Host "👁️ Monitoring ARM64 VM state..." -ForegroundColor Cyan
+        for ($i = 1; $i -le 15; $i++) {
+            Start-Sleep -Seconds 2
+            $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+            if ($vm) {
+                $vmState = $vm.State
+                $uptime = $vm.Uptime
+                Write-Host "  📊 VM State: $vmState, Uptime: $uptime" -ForegroundColor Gray
+                
+                # Try to get VM information
+                $vmInfo = Get-VM -Name $vmName | Select-Object Name, State, Status, Uptime, ProcessorCount, MemoryAssigned, MemoryDemand, MemoryStatus
+                $vmInfo | Out-String | Add-Content -Path "arm64-vm-monitoring.log"
+                
+                if ($i % 5 -eq 0) {
+                    Write-Host "  📺 ARM64 monitoring: ${i}/15 iterations (${i*2}s elapsed)" -ForegroundColor Gray
+                }
+            }
+        }
 
-        # Check VM state
+        # Check final VM state
         $vm = Get-VM -Name $vmName
         if ($vm.State -eq "Running") {
             Write-Host "✅ VM framework test successful (VM is running)" -ForegroundColor Green
@@ -512,4 +666,5 @@ jobs:
         path: |
           *.log
           validation-*.txt
+          arm64-vm-monitoring.log
         retention-days: 7
