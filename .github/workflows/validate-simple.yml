@@ -2,10 +2,6 @@ name: Validate Homebridge VM Images
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, beta]
-  pull_request:
-    branches: [main]
 
 jobs:
   validate-amd64:
