@@ -1,0 +1,27 @@
+# Build and output directories
+work-*/
+output/
+
+# VM validation artifacts
+*.log
+validation-*.txt
+vm-screenshot.png
+*.img
+*.vdi
+*.vhd
+*.vhdx
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
