@@ -1,0 +1,2 @@
+[2025-09-22 22:42:38] ❌ Unsupported architecture: invalid_arch. Use 'amd64' or 'arm64'
+[2025-09-22 22:42:38] 💡 Run './scripts/validate-vm-macos.sh --help' for usage information
