@@ -12,11 +12,16 @@ Validates the Homebridge VM image on macOS using VirtualBox.
 **Usage:**
 ```bash
 chmod +x validate-vm-macos.sh
+
+# Auto-detect architecture (recommended)
+./validate-vm-macos.sh
+
+# Force specific architecture
 ./validate-vm-macos.sh [architecture]
 ```
 
 **Arguments:**
-- `architecture`: `amd64` or `arm64` (default: `amd64`)
+- `architecture`: `amd64` or `arm64` (auto-detected if not specified)
 
 **Requirements:**
 - macOS
@@ -35,10 +40,13 @@ chmod +x validate-vm-macos.sh
 
 **Example:**
 ```bash
-# Validate AMD64 image
+# Auto-detect architecture (Intel or Apple Silicon)
+./validate-vm-macos.sh
+
+# Force AMD64 image (Intel Macs)
 ./validate-vm-macos.sh amd64
 
-# Validate ARM64 image (for Apple Silicon Macs)
+# Force ARM64 image (Apple Silicon Macs)
 ./validate-vm-macos.sh arm64
 ```
 
