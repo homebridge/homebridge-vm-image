@@ -31,7 +31,24 @@
 set -euo pipefail
 
 # Configuration
-ARCHITECTURE="${1:-amd64}"  # Default to amd64 if not specified
+ARCHITECTURE="${1:-}"  # Get from command line argument
+
+# Auto-detect architecture if not specified
+if [[ -z "$ARCHITECTURE" ]]; then
+    case "$(uname -m)" in
+        "x86_64"|"amd64")
+            ARCHITECTURE="amd64"
+            ;;
+        "arm64"|"aarch64")
+            ARCHITECTURE="arm64"
+            ;;
+        *)
+            log "⚠️ Unknown architecture $(uname -m), defaulting to amd64" "$YELLOW"
+            ARCHITECTURE="amd64"
+            ;;
+    esac
+    log "🔍 Auto-detected architecture: $ARCHITECTURE" "$BLUE"
+fi
 VM_NAME="homebridge-test-vm"
 LOG_FILE="validation-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT=300  # 5 minutes timeout for Homebridge to start
@@ -82,11 +99,12 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
     echo "Usage: $0 [architecture]"
     echo ""
     echo "Arguments:"
-    echo "  architecture    'amd64' or 'arm64' (default: amd64)"
+    echo "  architecture    'amd64' or 'arm64' (auto-detected if not specified)"
     echo ""
     echo "Examples:"
-    echo "  $0 amd64        # Validate AMD64 image"
-    echo "  $0 arm64        # Validate ARM64 image"
+    echo "  $0              # Auto-detect architecture"
+    echo "  $0 amd64        # Force AMD64 image"
+    echo "  $0 arm64        # Force ARM64 image"
     echo ""
     echo "This script will download and validate a Homebridge VM image using VirtualBox."
     exit 0
@@ -127,16 +145,34 @@ fi
 
 # Step 2: Install required utilities
 log "🔧 Installing required utilities..." "$YELLOW"
-if ! command -v curl >/dev/null 2>&1; then
-    brew install curl
+
+# Check and install utilities one by one with better error handling
+utilities_needed=("curl" "gzip" "jq")
+utilities_missing=()
+
+for util in "${utilities_needed[@]}"; do
+    if ! command -v "$util" >/dev/null 2>&1; then
+        utilities_missing+=("$util")
+    fi
+done
+
+if [[ ${#utilities_missing[@]} -gt 0 ]]; then
+    log "📥 Installing missing utilities: ${utilities_missing[*]}" "$YELLOW"
+    if ! brew install "${utilities_missing[@]}"; then
+        log "❌ Failed to install required utilities. Please install manually:" "$RED"
+        for util in "${utilities_missing[@]}"; do
+            log "   brew install $util" "$GRAY"
+        done
+        exit 1
+    fi
 fi
-if ! command -v gzip >/dev/null 2>&1; then
-    brew install gzip
-fi
-if ! command -v jq >/dev/null 2>&1; then
-    brew install jq
-fi
+
 log "✅ Required utilities installed" "$GREEN"
+
+# Check for nc (netcat) availability - usually built into macOS
+if ! command -v nc >/dev/null 2>&1; then
+    log "⚠️ netcat (nc) not found - port checking will rely on curl only" "$YELLOW"
+fi
 
 # Step 3: Download latest VM image
 log "⬇️ Downloading latest VM image..." "$YELLOW"
@@ -251,11 +287,13 @@ while [[ $elapsed -lt $TIMEOUT ]]; do
         break
     fi
     
-    # Alternative: Check if port is listening using nc (netcat)
-    if command -v nc >/dev/null 2>&1 && nc -z localhost 8581 2>/dev/null; then
-        log "✅ Port 8581 is open" "$GREEN"
-        service_live=true
-        break
+    # Alternative: Check if port is listening using nc (netcat) if available
+    if command -v nc >/dev/null 2>&1; then
+        if nc -z localhost 8581 2>/dev/null; then
+            log "✅ Port 8581 is open (detected via netcat)" "$GREEN"
+            service_live=true
+            break
+        fi
     fi
     
     if [[ $((elapsed % 30)) -eq 0 ]]; then
