@@ -86,6 +86,7 @@ check_dependencies() {
   local img_gz_file="$OUTPUT_DIR/homebridge-$ARCH.img.gz"
   local raw_file="$OUTPUT_DIR/homebridge-$ARCH.raw"
   local efi_img_file="$OUTPUT_DIR/homebridge-$ARCH-efi.img"
+  local bios_img_file="$OUTPUT_DIR/homebridge-$ARCH-bios.img"
   
   if [[ -f "$vmdk_file" ]]; then
     log "✅ VMDK image found: $vmdk_file"
@@ -98,6 +99,9 @@ check_dependencies() {
   elif [[ -f "$efi_img_file" ]]; then
     warn "VMDK not found, but EFI IMG found. Converting..."
     convert_efi_img_to_vmdk
+  elif [[ -f "$bios_img_file" ]]; then
+    warn "VMDK not found, but BIOS IMG found. Converting..."
+    convert_bios_img_to_vmdk
   else
     error "No compatible VM image found in $OUTPUT_DIR/"
     echo "Expected one of:"
@@ -105,6 +109,7 @@ check_dependencies() {
     echo "  - $img_gz_file" 
     echo "  - $raw_file"
     echo "  - $efi_img_file"
+    echo "  - $bios_img_file"
     echo "Please run build-linuxkit.sh first"
     exit 1
   fi
@@ -159,6 +164,22 @@ convert_efi_img_to_vmdk() {
     fi
     
     log "✅ EFI IMG to VMDK conversion completed"
+  fi
+}
+
+convert_bios_img_to_vmdk() {
+  local bios_img_file="$OUTPUT_DIR/homebridge-$ARCH-bios.img"
+  local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
+  
+  if [[ -f "$bios_img_file" && ! -f "$vmdk_file" ]]; then
+    log "🔄 Converting BIOS IMG to VMDK..."
+    if command -v qemu-img &> /dev/null; then
+      qemu-img convert -f raw -O vmdk "$bios_img_file" "$vmdk_file"
+    else
+      VBoxManage convertfromraw "$bios_img_file" "$vmdk_file" --format VMDK
+    fi
+    
+    log "✅ BIOS IMG to VMDK conversion completed"
   fi
 }
 

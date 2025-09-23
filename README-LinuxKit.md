@@ -53,15 +53,18 @@ LinuxKit creates lightweight, secure, and portable Linux subsystems. This implem
 
 The build creates multiple formats suitable for different hypervisors:
 
-- **homebridge-{arch}-efi.img** - EFI-bootable raw disk image (universal compatibility, mountable on macOS)
+- **homebridge-{arch}-efi.img** - EFI-bootable raw disk image (modern systems, mountable on macOS)
+- **homebridge-{arch}-bios.img** - BIOS-bootable raw disk image (legacy compatibility)  
 - **homebridge-{arch}.img.gz** - Compressed raw disk image for distribution
 - **homebridge-{arch}.vmdk** - VMware disk format (created using qemu-img if available)
 - **homebridge-{arch}-efi.qcow2** - QEMU/KVM disk format with EFI support
 
 **Note**: 
-- The `-efi.img` file is mountable on macOS using DiskImageMounter for inspection
-- VMDK format is created using `qemu-img` to avoid SYSLINUX dependency issues with LinuxKit's built-in VMDK converter
-- If `qemu-img` is not available, only RAW and QCOW2 formats will be created
+- The build creates both EFI and BIOS formats for maximum compatibility
+- EFI format works best with modern hypervisors and VirtualBox with EFI enabled
+- BIOS format provides better compatibility with older systems and legacy boot modes
+- IMG files are mountable on macOS using DiskImageMounter for inspection
+- VMDK format is created using `qemu-img` (auto-installed on macOS via Homebrew)
 
 ### Build Time
 
@@ -165,13 +168,15 @@ To customize the Homebridge configuration:
 - **LinuxKit not found**: Will be installed automatically
 - **Permission denied**: Ensure Docker can run without sudo (macOS/Linux)
 - **Docker Hub rate limits**: The configuration uses `alpine:3.18` base image and avoids `--pull` flag to minimize rate limit issues
-- **VMDK creation failed**: Install `qemu-utils` package for VMDK support
+- **VMDK creation failed**: 
+  - **macOS**: qemu will be installed automatically via Homebrew if available
+  - **Linux**: Install qemu-utils package manually
   ```bash
   # Ubuntu/Debian
   sudo apt-get install qemu-utils
   
-  # macOS
-  brew install qemu
+  # RHEL/CentOS/Fedora
+  sudo yum install qemu-img
   
   # Alpine
   apk add qemu-img
@@ -179,15 +184,17 @@ To customize the Homebridge configuration:
 
 ### VM Boot Issues
 
-- **VM won't start**: Ensure EFI firmware is enabled
+- **VM stops at GRUB**: Try using BIOS format instead of EFI, or ensure EFI is enabled in VM settings
+- **VM won't start**: Ensure EFI firmware is enabled for EFI images, or use BIOS format for legacy boot
+- **LinuxKitISO Image error**: Use the disk image formats (.img, .vmdk) instead of ISO; LinuxKit creates disk images, not bootable ISOs
 - **Network not working**: Use bridged networking for best results
-- **Services not starting**: Check VM has at least 1GB RAM
+- **Services not starting**: Check VM has at least 1GB RAM and give it time to fully boot (2-3 minutes)
 
 ### Validation Issues
 
 - **VirtualBox not found**: Install VirtualBox from https://www.virtualbox.org/
 - **VM creation fails**: Ensure no existing VM with the same name
-- **Image not found**: The validation script supports multiple formats (VMDK, compressed IMG, RAW, EFI IMG) and will auto-convert as needed. Ensure the build completed successfully and produced at least one supported format.
+- **Image not found**: The validation script supports multiple formats (VMDK, compressed IMG, RAW, EFI IMG, BIOS IMG) and will auto-convert as needed. Ensure the build completed successfully and produced at least one supported format.
 - **Timeout during validation**: Increase timeout or check VM console
 
 ## Development

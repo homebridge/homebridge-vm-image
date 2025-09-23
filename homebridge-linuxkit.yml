@@ -1,6 +1,6 @@
 kernel:
   image: linuxkit/kernel:6.6.71
-  cmdline: "console=tty0 console=ttyS0 console=ttyAMA0"
+  cmdline: "console=tty0 console=ttyS0 console=ttyAMA0 quiet splash"
 
 init:
   - linuxkit/init:680da6e6f79bb8236a095147d532cd2160e23c9f

@@ -74,8 +74,36 @@ check_dependencies() {
   if command -v qemu-img &> /dev/null; then
     echo "✅ qemu-img found - VMDK format will be available"
   else
-    echo "⚠️  qemu-img not found - VMDK format will be skipped"
-    echo "💡 Install qemu-utils to enable VMDK format creation"
+    case "$(uname -s)" in
+      Darwin*)
+        echo "⚠️  qemu-img not found - attempting to install via Homebrew..."
+        if command -v brew &> /dev/null; then
+          echo "📥 Installing qemu via Homebrew..."
+          brew install qemu
+          if command -v qemu-img &> /dev/null; then
+            echo "✅ qemu-img installed successfully - VMDK format will be available"
+          else
+            echo "⚠️  qemu-img installation failed - VMDK format will be skipped"
+            echo "💡 Try manually installing: brew install qemu"
+          fi
+        else
+          echo "⚠️  Homebrew not found - VMDK format will be skipped"
+          echo "💡 Install Homebrew first: https://brew.sh/"
+          echo "💡 Then install qemu: brew install qemu"
+        fi
+        ;;
+      Linux*)
+        echo "⚠️  qemu-img not found - VMDK format will be skipped"
+        echo "💡 Install qemu-utils to enable VMDK format creation:"
+        echo "   Ubuntu/Debian: sudo apt-get install qemu-utils"
+        echo "   RHEL/CentOS: sudo yum install qemu-img"
+        echo "   Alpine: apk add qemu-img"
+        ;;
+      *)
+        echo "⚠️  qemu-img not found - VMDK format will be skipped"
+        echo "💡 Install qemu-utils for your OS to enable VMDK format creation"
+        ;;
+    esac
   fi
   
   echo "✅ All dependencies are available"
@@ -159,9 +187,11 @@ build_image() {
   # Note: Removed --format vmdk due to SYSLINUX dependency issues
   # We'll create VMDK format manually using qemu-img if available
   # Removed --pull flag to avoid unnecessary Docker pulls and rate limits
+  # Building both EFI and BIOS formats for maximum compatibility
   linuxkit build \
     --arch "$ARCH" \
     --format raw-efi \
+    --format raw-bios \
     --format qcow2-efi \
     --name "$image_name" \
     --dir "$OUTPUT_DIR" \
@@ -169,37 +199,26 @@ build_image() {
   
   # Check if build was successful
   # LinuxKit with raw-efi format creates files with -efi suffix
+  # LinuxKit with raw-bios format creates files with -bios suffix
+  local built_image=""
+  
   if [[ -f "$OUTPUT_DIR/$image_name-efi.img" ]]; then
-    echo "✅ EFI Raw image created: $OUTPUT_DIR/$image_name-efi.img"
-    
-    # Create standard .raw and .img files for compatibility
-    echo "🔄 Creating compatibility formats..."
-    cp "$OUTPUT_DIR/$image_name-efi.img" "$OUTPUT_DIR/$image_name.raw"
-    cp "$OUTPUT_DIR/$image_name-efi.img" "$OUTPUT_DIR/$image_name.img"
-    
-    # Create VMDK format manually using qemu-img if available
-    echo "🔄 Creating VMDK format..."
-    if command -v qemu-img &> /dev/null; then
-      qemu-img convert -f raw -O vmdk "$OUTPUT_DIR/$image_name.raw" "$OUTPUT_DIR/$image_name.vmdk"
-      echo "✅ VMDK image created: $OUTPUT_DIR/$image_name.vmdk"
-    else
-      echo "⚠️  qemu-img not found, skipping VMDK creation"
-      echo "💡 To create VMDK format manually, install qemu-utils and run:"
-      echo "   qemu-img convert -f raw -O vmdk $OUTPUT_DIR/$image_name.raw $OUTPUT_DIR/$image_name.vmdk"
-    fi
-    
-    # Compress the image
-    echo "📦 Compressing image..."
-    gzip -f "$OUTPUT_DIR/$image_name.img"
-    
-    echo "✅ Compressed image: $OUTPUT_DIR/$image_name.img.gz"
+    built_image="$OUTPUT_DIR/$image_name-efi.img"
+    echo "✅ EFI Raw image created: $built_image"
+  elif [[ -f "$OUTPUT_DIR/$image_name-bios.img" ]]; then
+    built_image="$OUTPUT_DIR/$image_name-bios.img"
+    echo "✅ BIOS Raw image created: $built_image"
   elif [[ -f "$OUTPUT_DIR/$image_name.raw" ]]; then
     # Fallback for older LinuxKit versions or different formats
-    echo "✅ Raw image created: $OUTPUT_DIR/$image_name.raw"
-    
-    # Convert to IMG format for compatibility
-    echo "🔄 Converting to IMG format..."
-    cp "$OUTPUT_DIR/$image_name.raw" "$OUTPUT_DIR/$image_name.img"
+    built_image="$OUTPUT_DIR/$image_name.raw"
+    echo "✅ Raw image created: $built_image"
+  fi
+  
+  if [[ -n "$built_image" ]]; then
+    # Create standard .raw and .img files for compatibility
+    echo "🔄 Creating compatibility formats..."
+    cp "$built_image" "$OUTPUT_DIR/$image_name.raw"
+    cp "$built_image" "$OUTPUT_DIR/$image_name.img"
     
     # Create VMDK format manually using qemu-img if available
     echo "🔄 Creating VMDK format..."
