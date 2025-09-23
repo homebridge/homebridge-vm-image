@@ -98,7 +98,7 @@ The `homebridge-linuxkit.yml` file defines:
 - **Networking**: DHCP client for automatic IP assignment
 - **Services**:
   - **Getty**: Console access with insecure mode for development
-  - **Homebridge**: Node.js 18 with Homebridge and Config UI X
+  - **Homebridge**: Alpine 3.18 with Node.js, Homebridge and Config UI X (avoids Docker Hub rate limits)
   - **Avahi**: mDNS/Bonjour for HomeKit discovery
 - **Files**: Avahi service configuration for HomeKit advertising
 
@@ -151,6 +151,7 @@ To customize the Homebridge configuration:
 - **Docker not running**: Start Docker Desktop
 - **LinuxKit not found**: Will be installed automatically
 - **Permission denied**: Ensure Docker can run without sudo (macOS/Linux)
+- **Docker Hub rate limits**: The configuration uses `alpine:3.18` base image to minimize rate limit issues
 - **VMDK creation failed**: Install `qemu-utils` package for VMDK support
   ```bash
   # Ubuntu/Debian
