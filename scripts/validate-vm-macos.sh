@@ -250,7 +250,7 @@ VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
 
 # Determine OS type based on architecture
 if [[ "$ARCHITECTURE" == "arm64" ]]; then
-    OSTYPE="Linux_64"  # Use generic Linux 64-bit for ARM64
+    OSTYPE="Debian12_arm64"  # Use generic Linux 64-bit for ARM64
 else
     OSTYPE="Debian_64"  # Use Debian 64-bit for AMD64
 fi
