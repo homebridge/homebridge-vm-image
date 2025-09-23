@@ -85,10 +85,11 @@ cleanup_vm() {
         log "✅ VM cleanup completed" "$GREEN"
     fi
     
-    # Clean up downloaded files
+    # Clean up downloaded files and logs
     [[ -f "homebridge-${ARCHITECTURE}.img.gz" ]] && rm -f "homebridge-${ARCHITECTURE}.img.gz"
     [[ -f "homebridge-${ARCHITECTURE}.img" ]] && rm -f "homebridge-${ARCHITECTURE}.img"
     [[ -f "homebridge-${ARCHITECTURE}.vdi" ]] && rm -f "homebridge-${ARCHITECTURE}.vdi"
+    [[ -f "vm-console-${ARCHITECTURE}.log" ]] && rm -f "vm-console-${ARCHITECTURE}.log"
 }
 
 trap cleanup_vm EXIT
@@ -250,7 +251,7 @@ VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
 
 # Determine OS type based on architecture
 if [[ "$ARCHITECTURE" == "arm64" ]]; then
-    OSTYPE="Debian_arm64"  # Use Linux ARM64 for Apple Silicon
+    OSTYPE="Debian12_arm64"  # Use Debian 12 ARM64 for Apple Silicon
 else
     OSTYPE="Debian_64"  # Use Debian 64-bit for Intel
 fi
@@ -270,6 +271,8 @@ VBoxManage modifyvm "$VM_NAME" \
     --graphicscontroller none \
     --audio none \
     --usb off \
+    --uart1 0x3F8 4 \
+    --uartmode1 file "vm-console-${ARCHITECTURE}.log" \
     --nic1 nat \
     --natpf1 "ssh,tcp,,2222,,22" \
     --natpf1 "homebridge,tcp,,8581,,8581"
@@ -295,6 +298,7 @@ log "   Architecture: $ARCHITECTURE" "$GRAY"
 log "   Memory: ${VM_RAM}MB" "$GRAY"
 log "   Firmware: EFI (with BIOS fallback)" "$GRAY"
 log "   Graphics: Disabled (headless mode)" "$GRAY"
+log "   Console: Logged to vm-console-${ARCHITECTURE}.log" "$GRAY"
 
 # Step 7: Start VM
 log "▶️ Starting VM..." "$YELLOW"
@@ -385,6 +389,12 @@ if [[ "$service_live" != "true" ]]; then
     log "Attempting to retrieve VM console output..." "$YELLOW"
     VBoxManage controlvm "$VM_NAME" screenshotpng "vm-screenshot.png" 2>/dev/null || true
     
+    # Show console log information
+    if [[ -f "vm-console-${ARCHITECTURE}.log" ]]; then
+        log "📋 VM console log available at: vm-console-${ARCHITECTURE}.log" "$BLUE"
+        log "💡 Check the console log for boot errors and kernel messages" "$GRAY"
+    fi
+    
     exit 1
 fi
 
@@ -444,6 +454,7 @@ log "✅ Homebridge service is running and accessible on port 8581" "$GREEN"
 log "🌐 Web interface: http://localhost:8581" "$GREEN"
 log "📊 Results saved to validation-results.json" "$GREEN"
 log "📋 Log file: $LOG_FILE" "$GRAY"
+log "🖥️ VM console log: vm-console-${ARCHITECTURE}.log" "$GRAY"
 
 log "🔧 Next steps for full SSH validation:" "$BLUE"
 log "   1. Enable SSH server in VM image build process (add openssh-server)" "$GRAY"
