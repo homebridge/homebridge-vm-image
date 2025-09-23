@@ -70,6 +70,14 @@ check_dependencies() {
     install_linuxkit
   fi
   
+  # Check qemu-img for VMDK conversion (optional)
+  if command -v qemu-img &> /dev/null; then
+    echo "✅ qemu-img found - VMDK format will be available"
+  else
+    echo "⚠️  qemu-img not found - VMDK format will be skipped"
+    echo "💡 Install qemu-utils to enable VMDK format creation"
+  fi
+  
   echo "✅ All dependencies are available"
 }
 
@@ -148,10 +156,11 @@ build_image() {
   local image_name="homebridge-$ARCH"
   
   echo "🔨 Running LinuxKit build..."
+  # Note: Removed --format vmdk due to SYSLINUX dependency issues
+  # We'll create VMDK format manually using qemu-img if available
   linuxkit build \
     --arch "$ARCH" \
     --format raw-efi \
-    --format vmdk \
     --format qcow2-efi \
     --name "$image_name" \
     --dir "$OUTPUT_DIR" \
@@ -166,15 +175,22 @@ build_image() {
     echo "🔄 Converting to IMG format..."
     cp "$OUTPUT_DIR/$image_name.raw" "$OUTPUT_DIR/$image_name.img"
     
+    # Create VMDK format manually using qemu-img if available
+    echo "🔄 Creating VMDK format..."
+    if command -v qemu-img &> /dev/null; then
+      qemu-img convert -f raw -O vmdk "$OUTPUT_DIR/$image_name.raw" "$OUTPUT_DIR/$image_name.vmdk"
+      echo "✅ VMDK image created: $OUTPUT_DIR/$image_name.vmdk"
+    else
+      echo "⚠️  qemu-img not found, skipping VMDK creation"
+      echo "💡 To create VMDK format manually, install qemu-utils and run:"
+      echo "   qemu-img convert -f raw -O vmdk $OUTPUT_DIR/$image_name.raw $OUTPUT_DIR/$image_name.vmdk"
+    fi
+    
     # Compress the image
     echo "📦 Compressing image..."
     gzip -f "$OUTPUT_DIR/$image_name.img"
     
     echo "✅ Compressed image: $OUTPUT_DIR/$image_name.img.gz"
-  fi
-  
-  if [[ -f "$OUTPUT_DIR/$image_name.vmdk" ]]; then
-    echo "✅ VMDK image created: $OUTPUT_DIR/$image_name.vmdk"
   fi
   
   if [[ -f "$OUTPUT_DIR/$image_name-efi.iso" ]]; then

@@ -18,6 +18,7 @@ LinuxKit creates lightweight, secure, and portable Linux subsystems. This implem
 
 - **Docker Desktop**: Required for building images
 - **LinuxKit**: Will be installed automatically by the build script
+- **qemu-img**: Optional, for VMDK format creation (install via `qemu-utils` on Ubuntu/Debian)
 - **VirtualBox**: Required for validation (validation script only)
 
 ### Installation on macOS/M1
@@ -53,8 +54,10 @@ LinuxKit creates lightweight, secure, and portable Linux subsystems. This implem
 The build creates multiple formats suitable for different hypervisors:
 
 - **homebridge-{arch}.img.gz** - Compressed raw disk image (universal compatibility)
-- **homebridge-{arch}.vmdk** - VMware disk format
+- **homebridge-{arch}.vmdk** - VMware disk format (created using qemu-img if available)
 - **homebridge-{arch}.qcow2** - QEMU/KVM disk format
+
+**Note**: VMDK format is created using `qemu-img` to avoid SYSLINUX dependency issues with LinuxKit's built-in VMDK converter. If `qemu-img` is not available, only RAW and QCOW2 formats will be created.
 
 ### Build Time
 
@@ -148,6 +151,17 @@ To customize the Homebridge configuration:
 - **Docker not running**: Start Docker Desktop
 - **LinuxKit not found**: Will be installed automatically
 - **Permission denied**: Ensure Docker can run without sudo (macOS/Linux)
+- **VMDK creation failed**: Install `qemu-utils` package for VMDK support
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install qemu-utils
+  
+  # macOS
+  brew install qemu
+  
+  # Alpine
+  apk add qemu-img
+  ```
 
 ### VM Boot Issues
 
