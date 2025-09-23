@@ -250,9 +250,9 @@ VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
 
 # Determine OS type based on architecture
 if [[ "$ARCHITECTURE" == "arm64" ]]; then
-    OSTYPE="Debian12_arm64"  # Use generic Linux 64-bit for ARM64
+    OSTYPE="Linux_arm64"  # Use Linux ARM64 for Apple Silicon
 else
-    OSTYPE="Debian_64"  # Use Debian 64-bit for AMD64
+    OSTYPE="Debian_64"  # Use Debian 64-bit for Intel
 fi
 
 log "🔧 Using OS type: $OSTYPE for $ARCHITECTURE architecture" "$GRAY"
@@ -268,7 +268,6 @@ VBoxManage modifyvm "$VM_NAME" \
     --firmware efi \
     --boot1 disk \
     --graphicscontroller none \
-    --vram 1 \
     --audio none \
     --usb off \
     --nic1 nat \
