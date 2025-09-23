@@ -81,18 +81,27 @@ check_dependencies() {
   vbox_version=$(VBoxManage --version 2>/dev/null || echo "unknown")
   log "✅ VirtualBox version: $vbox_version"
   
-  # Check if VM image exists
-  local image_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
-  if [[ ! -f "$image_file" ]]; then
-    # Try other formats
-    if [[ -f "$OUTPUT_DIR/homebridge-$ARCH.img.gz" ]]; then
-      warn "VMDK not found, but compressed IMG found. Converting..."
-      convert_image_format
-    else
-      error "VM image not found: $image_file"
-      echo "Please run build-linuxkit.sh first"
-      exit 1
-    fi
+  # Check if VM image exists in any supported format
+  local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
+  local img_gz_file="$OUTPUT_DIR/homebridge-$ARCH.img.gz"
+  local raw_file="$OUTPUT_DIR/homebridge-$ARCH.raw"
+  
+  if [[ -f "$vmdk_file" ]]; then
+    log "✅ VMDK image found: $vmdk_file"
+  elif [[ -f "$img_gz_file" ]]; then
+    warn "VMDK not found, but compressed IMG found. Converting..."
+    convert_image_format
+  elif [[ -f "$raw_file" ]]; then
+    warn "VMDK not found, but RAW image found. Converting..."
+    convert_raw_to_vmdk
+  else
+    error "No compatible VM image found in $OUTPUT_DIR/"
+    echo "Expected one of:"
+    echo "  - $vmdk_file"
+    echo "  - $img_gz_file" 
+    echo "  - $raw_file"
+    echo "Please run build-linuxkit.sh first"
+    exit 1
   fi
 }
 
@@ -106,9 +115,29 @@ convert_image_format() {
     gunzip -k "$img_gz"
     
     log "🔄 Converting IMG to VMDK..."
-    VBoxManage convertfromraw "$img_file" "$vmdk_file" --format VMDK
+    if command -v qemu-img &> /dev/null; then
+      qemu-img convert -f raw -O vmdk "$img_file" "$vmdk_file"
+    else
+      VBoxManage convertfromraw "$img_file" "$vmdk_file" --format VMDK
+    fi
     
     log "✅ Conversion completed"
+  fi
+}
+
+convert_raw_to_vmdk() {
+  local raw_file="$OUTPUT_DIR/homebridge-$ARCH.raw"
+  local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
+  
+  if [[ -f "$raw_file" && ! -f "$vmdk_file" ]]; then
+    log "🔄 Converting RAW to VMDK..."
+    if command -v qemu-img &> /dev/null; then
+      qemu-img convert -f raw -O vmdk "$raw_file" "$vmdk_file"
+    else
+      VBoxManage convertfromraw "$raw_file" "$vmdk_file" --format VMDK
+    fi
+    
+    log "✅ RAW to VMDK conversion completed"
   fi
 }
 

@@ -158,13 +158,13 @@ build_image() {
   echo "🔨 Running LinuxKit build..."
   # Note: Removed --format vmdk due to SYSLINUX dependency issues
   # We'll create VMDK format manually using qemu-img if available
+  # Removed --pull flag to avoid unnecessary Docker pulls and rate limits
   linuxkit build \
     --arch "$ARCH" \
     --format raw-efi \
     --format qcow2-efi \
     --name "$image_name" \
     --dir "$OUTPUT_DIR" \
-    --pull \
     "$LINUXKIT_CONFIG"
   
   # Check if build was successful
