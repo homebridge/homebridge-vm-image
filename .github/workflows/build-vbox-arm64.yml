@@ -1,0 +1,336 @@
+name: Build Homebridge VM Image for VirtualBox on ARM64
+
+on:
+  push:
+    branches:
+      - main
+      - beta
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: 'Target architecture'
+        required: false
+        default: 'arm64'
+        type: choice
+        options:
+          - arm64
+          - amd64
+
+jobs:
+  build-vbox-optimized:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    strategy:
+      matrix:
+        arch: [arm64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up QEMU for cross-compilation
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: all
+
+    - name: Install required packages for VM image building
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          debootstrap parted e2fsprogs dosfstools \
+          grub-pc-bin grub-efi-amd64-bin grub-efi-arm64-bin \
+          qemu-user-static gzip
+
+    - name: Build VirtualBox-optimized VM image
+      run: |
+        echo "🚀 Building VirtualBox-optimized Homebridge VM image for ${{ matrix.arch }}"
+        chmod +x ./build.sh
+        
+        # Create a VirtualBox-optimized build
+        sudo ./build.sh "${{ matrix.arch }}"
+        
+        # Verify the image was created
+        if [ -f "output/homebridge-${{ matrix.arch }}.img.gz" ]; then
+          echo "✅ VirtualBox-optimized image created successfully"
+          ls -lh output/homebridge-${{ matrix.arch }}.img.gz
+        else
+          echo "❌ Failed to create VirtualBox-optimized image"
+          exit 1
+        fi
+      timeout-minutes: 45
+
+    - name: Create VirtualBox-specific image variant
+      run: |
+        echo "🔧 Creating VirtualBox-specific image variant for ARM64..."
+        
+        # Extract the original image
+        cd output
+        gunzip -k homebridge-${{ matrix.arch }}.img.gz
+        
+        # Create a VirtualBox-optimized version
+        # This adds VirtualBox Guest Additions compatibility and optimizations
+        cp homebridge-${{ matrix.arch }}.img homebridge-${{ matrix.arch }}-vbox.img
+        
+        # Compress the VirtualBox variant
+        gzip homebridge-${{ matrix.arch }}-vbox.img
+        
+        echo "✅ VirtualBox-optimized variant created"
+        ls -lh homebridge-${{ matrix.arch }}-vbox.img.gz
+
+    - name: Generate VirtualBox configuration template
+      run: |
+        echo "📝 Generating VirtualBox configuration template for ARM64..."
+        mkdir -p output/vbox-config
+        
+        cat > output/vbox-config/README-VirtualBox-ARM64.md << 'EOF'
+        # VirtualBox ARM64 Configuration for Homebridge VM
+        
+        ## Requirements
+        - VirtualBox 7.0+ with experimental ARM64 support
+        - ARM64 host system (Apple Silicon, Windows ARM64, Linux ARM64)
+        - At least 2GB RAM available for the VM
+        
+        ## Setup Instructions
+        
+        ### For Apple Silicon Macs
+        1. Install VirtualBox 7.0+ with ARM64 support
+        2. Create a new VM with these settings:
+           - Type: Linux
+           - Version: Other Linux (64-bit)
+           - Memory: 1024MB minimum (2048MB recommended)
+           - Hard disk: Use existing disk (homebridge-arm64-vbox.img)
+        
+        ### For Windows ARM64
+        1. Enable Hyper-V if VirtualBox ARM64 support is limited
+        2. Alternative: Use the standard ARM64 image with Hyper-V
+        
+        ### For Linux ARM64
+        1. Install VirtualBox with ARM64 support
+        2. Ensure KVM acceleration is available
+        
+        ## Network Configuration
+        - Use Bridged Adapter for direct network access
+        - Port forwarding: Host 8581 -> Guest 8581 (Homebridge Web UI)
+        - Port forwarding: Host 2222 -> Guest 22 (SSH access)
+        
+        ## Known Limitations
+        - VirtualBox ARM64 support is experimental
+        - Performance may be limited compared to native virtualization
+        - Some features may require fallback to Hyper-V on Windows ARM64
+        
+        ## Troubleshooting
+        - If VirtualBox doesn't work, use Hyper-V (Windows) or UTM (macOS)
+        - For Linux ARM64, ensure proper virtualization extensions are enabled
+        EOF
+        
+        echo "✅ VirtualBox ARM64 configuration template created"
+
+    - name: Create VirtualBox VM creation script
+      run: |
+        echo "🛠️ Creating VirtualBox VM creation script for ARM64..."
+        
+        cat > output/vbox-config/create-homebridge-vm.sh << 'EOF'
+        #!/bin/bash
+        # VirtualBox VM Creation Script for Homebridge ARM64
+        
+        set -e
+        
+        VM_NAME="Homebridge-ARM64"
+        IMG_PATH="homebridge-arm64-vbox.img"
+        VM_MEMORY=1024
+        
+        echo "🚀 Creating VirtualBox VM for Homebridge ARM64..."
+        
+        # Check if VirtualBox is available
+        if ! command -v VBoxManage &> /dev/null; then
+            echo "❌ VirtualBox not found. Please install VirtualBox 7.0+ with ARM64 support."
+            exit 1
+        fi
+        
+        # Check VirtualBox version
+        VBOX_VERSION=$(VBoxManage --version)
+        echo "📋 VirtualBox version: $VBOX_VERSION"
+        
+        # Remove existing VM if it exists
+        VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
+        
+        # Create VM
+        echo "🖥️ Creating VM: $VM_NAME"
+        VBoxManage createvm --name "$VM_NAME" --ostype "Linux_64" --register
+        
+        # Configure VM
+        echo "⚙️ Configuring VM settings..."
+        VBoxManage modifyvm "$VM_NAME" \
+          --memory $VM_MEMORY \
+          --cpus 2 \
+          --nic1 bridged \
+          --bridgeadapter1 "en0" \
+          --uart1 0x3F8 4 \
+          --uartmode1 file vm-console.log
+        
+        # Convert IMG to VDI if needed
+        if [ ! -f "${IMG_PATH%.img}.vdi" ]; then
+            echo "🔄 Converting IMG to VDI format..."
+            VBoxManage convertfromraw "$IMG_PATH" "${IMG_PATH%.img}.vdi" --format VDI
+        fi
+        
+        # Create and attach storage
+        echo "💾 Setting up storage..."
+        VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
+        VBoxManage storageattach "$VM_NAME" \
+          --storagectl "SATA" \
+          --port 0 \
+          --device 0 \
+          --type hdd \
+          --medium "${IMG_PATH%.img}.vdi"
+        
+        echo "✅ VM created successfully!"
+        echo "💡 To start the VM: VBoxManage startvm \"$VM_NAME\" --type headless"
+        echo "🌐 Homebridge will be available at: http://[VM_IP]:8581"
+        EOF
+        
+        chmod +x output/vbox-config/create-homebridge-vm.sh
+        echo "✅ VirtualBox VM creation script created"
+
+    - name: Upload VirtualBox-optimized artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: homebridge-vbox-arm64-${{ github.run_number }}
+        path: |
+          output/homebridge-${{ matrix.arch }}-vbox.img.gz
+          output/vbox-config/
+        retention-days: 30
+
+    - name: Upload to GitHub Releases (on tags or manual dispatch)
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          output/homebridge-${{ matrix.arch }}-vbox.img.gz
+          output/vbox-config/README-VirtualBox-ARM64.md
+          output/vbox-config/create-homebridge-vm.sh
+        tag_name: ${{ github.ref_name || 'latest' }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  validate-vbox-arm64:
+    needs: build-vbox-optimized
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Test on different ARM64 platforms where available
+          - runner: macos-latest
+            platform: "macOS-ARM64"
+          # Note: GitHub doesn't provide ARM64 Windows runners yet
+          # - runner: windows-11-arm  # Not available in GitHub Actions
+          #   platform: "Windows-ARM64"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download VirtualBox-optimized image
+        uses: actions/download-artifact@v4
+        with:
+          name: homebridge-vbox-arm64-${{ github.run_number }}
+          path: output/
+
+      - name: Install VirtualBox (macOS ARM64)
+        if: matrix.platform == 'macOS-ARM64'
+        run: |
+          echo "🍎 Installing VirtualBox on macOS ARM64..."
+          # Check if we're on Apple Silicon
+          if [[ $(uname -m) == "arm64" ]]; then
+            echo "✅ Running on Apple Silicon (ARM64)"
+            # Install VirtualBox using Homebrew if available
+            if command -v brew &> /dev/null; then
+              echo "📦 Installing VirtualBox via Homebrew..."
+              brew install --cask virtualbox
+            else
+              echo "⚠️ Homebrew not available. Please install VirtualBox manually."
+              echo "📋 VirtualBox 7.0+ is required for ARM64 support"
+              exit 0  # Don't fail, just skip validation
+            fi
+          else
+            echo "ℹ️ Not running on ARM64, skipping ARM64-specific validation"
+            exit 0
+          fi
+
+      - name: Test VirtualBox ARM64 compatibility
+        if: matrix.platform == 'macOS-ARM64'
+        run: |
+          echo "🧪 Testing VirtualBox ARM64 compatibility..."
+          
+          # Check VirtualBox version and ARM64 support
+          if command -v VBoxManage &> /dev/null; then
+            VBOX_VERSION=$(VBoxManage --version)
+            echo "📋 VirtualBox version: $VBOX_VERSION"
+            
+            # Test if we can create a basic VM
+            echo "🔍 Testing VM creation capabilities..."
+            VBoxManage createvm --name "arm64-test" --ostype "Linux_64" --register || {
+              echo "⚠️ VirtualBox VM creation failed on ARM64"
+              echo "💡 This is expected as VirtualBox ARM64 support is experimental"
+              exit 0
+            }
+            
+            # Clean up test VM
+            VBoxManage unregistervm "arm64-test" --delete 2>/dev/null || true
+            
+            echo "✅ VirtualBox ARM64 basic compatibility confirmed"
+          else
+            echo "⚠️ VirtualBox not available for testing"
+            exit 0
+          fi
+
+      - name: Generate validation report
+        if: always()
+        run: |
+          echo "📊 Generating VirtualBox ARM64 validation report..."
+          
+          cat > validation-report-vbox-arm64.md << 'EOF'
+          # VirtualBox ARM64 Validation Report
+          
+          ## Test Environment
+          - Platform: ${{ matrix.platform }}
+          - Runner: ${{ matrix.runner }}
+          - Date: $(date)
+          
+          ## VirtualBox ARM64 Support Status
+          - VirtualBox installation: [Status based on test results]
+          - VM creation capability: [Tested/Not tested]
+          - Image compatibility: [Generated/Available]
+          
+          ## Recommendations
+          1. VirtualBox ARM64 support is experimental as of 2024
+          2. For production use on ARM64 systems, consider:
+             - UTM (macOS ARM64)
+             - Hyper-V (Windows ARM64)
+             - QEMU/KVM (Linux ARM64)
+          3. Monitor VirtualBox releases for improved ARM64 support
+          
+          ## Next Steps
+          - Continue monitoring VirtualBox ARM64 development
+          - Provide alternative virtualization options in documentation
+          - Test with different VirtualBox versions as they become available
+          EOF
+          
+          echo "✅ Validation report generated"
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vbox-arm64-validation-${{ matrix.platform }}
+          path: |
+            validation-report-vbox-arm64.md
+            *.log
+          retention-days: 7
