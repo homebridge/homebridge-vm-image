@@ -98,6 +98,52 @@ The validation script:
 4. Tests HTTP connectivity to Homebridge UI (port 8581)
 5. Tests HomeKit service availability (port 51826)
 6. Reports validation results
+7. Leaves VM running for re-testing or manual inspection
+
+**Note**: The VM is left running after successful validation to allow for re-testing and manual inspection. Use the cleanup script when done.
+
+## Cleanup
+
+### Cleanup Script
+
+Use `cleanup-linuxkit.sh` to remove VMs and temporary files:
+
+```bash
+# Clean up current architecture VM (auto-detected)
+./cleanup-linuxkit.sh
+
+# Clean up specific architecture VM
+./cleanup-linuxkit.sh amd64
+./cleanup-linuxkit.sh arm64
+
+# Clean up all LinuxKit test VMs
+./cleanup-linuxkit.sh all
+
+# Get help
+./cleanup-linuxkit.sh --help
+```
+
+### What the Cleanup Script Does
+
+- Stops any running LinuxKit test VMs gracefully
+- Removes VM configurations from VirtualBox completely
+- Cleans up temporary files (converted VMDK files, etc.)
+- Provides confirmation before removing multiple VMs
+
+### Manual VM Management
+
+If you prefer manual control:
+
+```bash
+# Start VM in GUI mode
+VBoxManage startvm "homebridge-linuxkit-test" --type gui
+
+# Stop VM gracefully
+VBoxManage controlvm "homebridge-linuxkit-test" acpipowerbutton
+
+# Remove VM completely
+VBoxManage unregistervm "homebridge-linuxkit-test" --delete
+```
 
 ## LinuxKit Configuration
 

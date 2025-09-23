@@ -16,6 +16,8 @@ detect_default_arch() {
 # Handle help flag first
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   print_usage() {
+    local default_arch
+    default_arch=$(detect_default_arch)
     echo "Usage: $0 [ARCHITECTURE]"
     echo ""
     echo "Validate Homebridge LinuxKit VM images using VirtualBox"
@@ -24,7 +26,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "  ARCHITECTURE    Target architecture (amd64|arm64) [default: auto-detect from host]"
     echo ""
     echo "Examples:"
-    echo "  $0              # Validate host architecture image ($(detect_default_arch))"
+    echo "  $0              # Validate host architecture image ($default_arch)"
     echo "  $0 amd64        # Validate AMD64 image"
     echo "  $0 arm64        # Validate ARM64 image"
     echo ""
@@ -33,6 +35,11 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "  - VM image built with build-linuxkit.sh"
     echo "  - curl (for testing HTTP endpoints)"
     echo "  - nc/netcat (for testing ports)"
+    echo ""
+    echo "Cleanup:"
+    echo "  - VMs are left running after validation for re-testing"
+    echo "  - Use cleanup-linuxkit.sh to remove VMs when done"
+    echo "  - Example: ./cleanup-linuxkit.sh $default_arch"
     echo ""
     echo "Architecture Notes:"
     echo "  - Apple Silicon (M1/M2): Use arm64 architecture only with VirtualBox"
@@ -359,14 +366,6 @@ stop_vm() {
 cleanup_and_exit() {
   local exit_code=$1
   
-  log "🧹 Performing cleanup..."
-  
-  # Stop VM
-  stop_vm || true
-  
-  # Optionally remove VM (uncomment if you want to clean up completely)
-  # cleanup_vm || true
-  
   if [[ $exit_code -eq 0 ]]; then
     log "🎉 Validation completed successfully!"
     echo ""
@@ -377,17 +376,26 @@ cleanup_and_exit() {
     echo "  Homebridge UI: http://localhost:8581"
     echo "  HomeKit Port: 51826"
     echo ""
-    echo "💡 The VM has been stopped but not removed."
-    echo "   You can start it again with: VBoxManage startvm \"$VM_NAME\" --type gui"
-    echo "   Or remove it with: VBoxManage unregistervm \"$VM_NAME\" --delete"
+    echo "💡 The VM is left running for re-testing or manual inspection."
+    echo "   Start GUI: VBoxManage startvm \"$VM_NAME\" --type gui"
+    echo "   Stop VM: VBoxManage controlvm \"$VM_NAME\" acpipowerbutton"
+    echo "   Clean up: ./cleanup-linuxkit.sh $ARCH"
   else
     error "Validation failed!"
+    log "🧹 Stopping VM due to validation failure..."
+    stop_vm || true
+    echo ""
+    echo "💡 VM has been stopped. Check logs above for errors."
+    echo "   Retry: ./validate-linuxkit.sh $ARCH"
+    echo "   Clean up: ./cleanup-linuxkit.sh $ARCH"
   fi
   
   exit $exit_code
 }
 
 print_usage() {
+  local default_arch
+  default_arch=$(detect_default_arch)
   echo "Usage: $0 [ARCHITECTURE]"
   echo ""
   echo "Validate Homebridge LinuxKit VM images using VirtualBox"
@@ -396,7 +404,7 @@ print_usage() {
   echo "  ARCHITECTURE    Target architecture (amd64|arm64) [default: auto-detect from host]"
   echo ""
   echo "Examples:"
-  echo "  $0              # Validate host architecture image ($(detect_default_arch))"
+  echo "  $0              # Validate host architecture image ($default_arch)"
   echo "  $0 amd64        # Validate AMD64 image"
   echo "  $0 arm64        # Validate ARM64 image"
   echo ""
@@ -405,6 +413,11 @@ print_usage() {
   echo "  - VM image built with build-linuxkit.sh"
   echo "  - curl (for testing HTTP endpoints)"
   echo "  - nc/netcat (for testing ports)"
+  echo ""
+  echo "Cleanup:"
+  echo "  - VMs are left running after validation for re-testing"
+  echo "  - Use cleanup-linuxkit.sh to remove VMs when done"
+  echo "  - Example: ./cleanup-linuxkit.sh $default_arch"
   echo ""
   echo "Architecture Notes:"
   echo "  - Apple Silicon (M1/M2): Use arm64 architecture only with VirtualBox"
@@ -416,12 +429,9 @@ main() {
   echo "🧪 Homebridge LinuxKit VM Validation"
   echo "====================================="
   
-  # Set up cleanup trap
-  trap 'cleanup_and_exit $?' EXIT
-  
   # Validation steps
   check_dependencies
-  cleanup_vm
+  cleanup_vm  # Clean up any existing VM before creating new one
   create_vm
   start_vm
   
