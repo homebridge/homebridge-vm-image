@@ -283,9 +283,10 @@ if ! VBoxManage showvminfo "$VM_NAME" --machinereadable | grep -q "name=\"$VM_NA
     exit 1
 fi
 
-# Add storage controller and attach disk
-VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
-VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI_FILE"
+# Add storage controller and attach disk as Live CD
+log "💾 Configuring VM for Live CD boot..." "$GRAY"
+VBoxManage storagectl "$VM_NAME" --name "IDE" --add ide --controller PIIX4
+VBoxManage storageattach "$VM_NAME" --storagectl "IDE" --port 0 --device 0 --type dvddrive --medium "$VDI_FILE"
 
 VM_CREATED=true
 log "✅ VM created and configured" "$GREEN"
@@ -298,6 +299,7 @@ log "   Architecture: $ARCHITECTURE" "$GRAY"
 log "   Memory: ${VM_RAM}MB" "$GRAY"
 log "   Firmware: EFI (with BIOS fallback)" "$GRAY"
 log "   Graphics: Disabled (headless mode)" "$GRAY"
+log "   Storage: Live CD mode (IDE DVD drive)" "$GRAY"
 log "   Console: Logged to vm-console-${ARCHITECTURE}.log" "$GRAY"
 
 # Step 7: Start VM
