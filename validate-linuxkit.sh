@@ -214,7 +214,7 @@ cleanup_vm() {
   # Remove existing VM
   if VBoxManage list vms | grep -q "\"$VM_NAME\""; then
     warn "Removing existing VM: $VM_NAME"
-    VBoxManage unregistervm "$VM_NAME" --delete || true
+    VBoxManage unregistervm "$VM_NAME" || true
   fi
 }
 
@@ -227,7 +227,7 @@ create_vm() {
   # Set OS type based on architecture
   case "$ARCH" in
     amd64) os_type="Linux_64" ;;
-    arm64) os_type="Linux_64" ;;  # VirtualBox uses same type for both
+    arm64) os_type="Debian12_arm64" ;;  # VirtualBox uses same type for both
     *) os_type="Linux_64" ;;
   esac
   
@@ -241,9 +241,13 @@ create_vm() {
     --firmware efi \
     --boot1 disk \
     --nic1 nat \
+    --audio-driver none \
+    --usb off \
     --natpf1 "homebridge,tcp,,8581,,8581" \
     --natpf1 "ssh,tcp,,2222,,22" \
-    --natpf1 "homekit,tcp,,51826,,51826"
+    --natpf1 "homekit,tcp,,51826,,51826" \
+#    --uart1 0x3F8 4 \
+#    --uartmode1 file "vm-console-${ARCH}.log" \
   
   # Add storage controller
   VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
