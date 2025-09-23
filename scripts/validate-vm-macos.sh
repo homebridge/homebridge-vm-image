@@ -144,6 +144,30 @@ else
     log "✅ VirtualBox is already installed" "$GREEN"
 fi
 
+# Check system requirements for VM
+log "🔍 Checking system requirements..." "$YELLOW"
+TOTAL_MEM=$(sysctl -n hw.memsize)
+TOTAL_MEM_GB=$((TOTAL_MEM / 1024 / 1024 / 1024))
+AVAILABLE_MEM=$(vm_stat | grep "Pages free" | awk '{print $3}' | sed 's/\.//')
+AVAILABLE_MEM_MB=$((AVAILABLE_MEM * 4096 / 1024 / 1024))
+
+log "💾 Total system memory: ${TOTAL_MEM_GB}GB" "$GRAY"
+log "💾 Available memory: ${AVAILABLE_MEM_MB}MB" "$GRAY"
+
+if [[ $AVAILABLE_MEM_MB -lt 2048 ]]; then
+    log "⚠️ Warning: Low available memory (${AVAILABLE_MEM_MB}MB). VM may fail to start." "$YELLOW"
+    log "💡 Close other applications to free up memory" "$GRAY"
+fi
+
+# Check virtualization support
+if sysctl -n machdep.cpu.features | grep -q VMX; then
+    log "✅ Intel VT-x virtualization supported" "$GREEN"
+elif sysctl -n machdep.cpu.features 2>/dev/null | grep -q "VT-x\|VMX"; then
+    log "✅ Virtualization supported" "$GREEN"
+else
+    log "⚠️ Warning: Could not detect virtualization support" "$YELLOW"
+fi
+
 # Step 2: Install required utilities
 log "🔧 Installing required utilities..." "$YELLOW"
 
@@ -224,18 +248,38 @@ log "🖥️ Creating VirtualBox VM..." "$YELLOW"
 # Remove existing VM if present
 VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
 
-# Create VM
-VBoxManage createvm --name "$VM_NAME" --ostype "Debian12_arm64" --register
+# Determine OS type based on architecture
+if [[ "$ARCHITECTURE" == "arm64" ]]; then
+    OSTYPE="Linux_64"  # Use generic Linux 64-bit for ARM64
+else
+    OSTYPE="Debian_64"  # Use Debian 64-bit for AMD64
+fi
 
-# Configure VM settings
+log "🔧 Using OS type: $OSTYPE for $ARCHITECTURE architecture" "$GRAY"
+
+# Create VM
+VBoxManage createvm --name "$VM_NAME" --ostype "$OSTYPE" --register
+
+# Configure VM settings for headless operation
+log "⚙️ Configuring VM for headless operation..." "$GRAY"
 VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
     --cpus 1 \
     --firmware efi \
     --boot1 disk \
+    --graphicscontroller none \
+    --vram 1 \
+    --audio none \
+    --usb off \
     --nic1 nat \
     --natpf1 "ssh,tcp,,2222,,22" \
     --natpf1 "homebridge,tcp,,8581,,8581"
+
+# Verify VM configuration succeeded
+if ! VBoxManage showvminfo "$VM_NAME" --machinereadable | grep -q "name=\"$VM_NAME\""; then
+    log "❌ VM configuration failed" "$RED"
+    exit 1
+fi
 
 # Add storage controller and attach disk
 VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
@@ -244,9 +288,42 @@ VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --ty
 VM_CREATED=true
 log "✅ VM created and configured" "$GREEN"
 
+# Debug: Show VM configuration
+log "🔍 VM Configuration Summary:" "$BLUE"
+log "   Name: $VM_NAME" "$GRAY"
+log "   OS Type: $OSTYPE" "$GRAY"
+log "   Architecture: $ARCHITECTURE" "$GRAY"
+log "   Memory: ${VM_RAM}MB" "$GRAY"
+log "   Firmware: EFI (with BIOS fallback)" "$GRAY"
+log "   Graphics: Disabled (headless mode)" "$GRAY"
+
 # Step 7: Start VM
 log "▶️ Starting VM..." "$YELLOW"
-VBoxManage startvm "$VM_NAME" --type headless
+if ! VBoxManage startvm "$VM_NAME" --type headless; then
+    log "⚠️ EFI firmware boot failed. Trying BIOS fallback..." "$YELLOW"
+    
+    # Stop any running VM instance
+    VBoxManage controlvm "$VM_NAME" poweroff 2>/dev/null || true
+    sleep 2
+    
+    # Try with BIOS firmware instead
+    VBoxManage modifyvm "$VM_NAME" --firmware bios
+    
+    if ! VBoxManage startvm "$VM_NAME" --type headless; then
+        log "❌ Failed to start VM with both EFI and BIOS firmware. Common issues:" "$RED"
+        log "   - VT-x/AMD-V virtualization not enabled in BIOS" "$GRAY"
+        log "   - Insufficient available memory (need at least 1GB free)" "$GRAY"
+        log "   - Conflicting virtualization software (Docker Desktop, VMware, etc.)" "$GRAY"
+        log "   - VirtualBox kernel extensions not loaded properly" "$GRAY"
+        log "💡 Try restarting VirtualBox services:" "$GRAY"
+        log "   sudo /Library/Application\\ Support/VirtualBox/LaunchDaemons/VirtualBoxStartup.sh restart" "$GRAY"
+        exit 1
+    else
+        log "✅ VM started successfully with BIOS firmware" "$GREEN"
+    fi
+else
+    log "✅ VM started successfully with EFI firmware" "$GREEN"
+fi
 
 # Verify VM started
 sleep 5
