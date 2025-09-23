@@ -66,8 +66,16 @@ check_dependencies() {
   
   # Check LinuxKit
   if ! command -v linuxkit &> /dev/null; then
-    echo "📥 LinuxKit not found, installing..."
-    install_linuxkit
+    # Also check the common install location
+    if [[ -x "$HOME/.local/bin/linuxkit" ]]; then
+      echo "✅ LinuxKit found in ~/.local/bin/linuxkit"
+      export PATH="$HOME/.local/bin:$PATH"
+    else
+      echo "📥 LinuxKit not found, installing..."
+      install_linuxkit
+    fi
+  else
+    echo "✅ LinuxKit found: $(command -v linuxkit)"
   fi
   
   # Check qemu-img for VMDK conversion (optional)
@@ -187,11 +195,11 @@ build_image() {
   # Note: Removed --format vmdk due to SYSLINUX dependency issues
   # We'll create VMDK format manually using qemu-img if available
   # Removed --pull flag to avoid unnecessary Docker pulls and rate limits
-  # Building both EFI and BIOS formats for maximum compatibility
+  # Removed raw-bios format due to Docker pull issues with linuxkit/mkimage-raw-bios
+  # Focusing on EFI format which works reliably
   linuxkit build \
     --arch "$ARCH" \
     --format raw-efi \
-    --format raw-bios \
     --format qcow2-efi \
     --name "$image_name" \
     --dir "$OUTPUT_DIR" \
@@ -199,15 +207,11 @@ build_image() {
   
   # Check if build was successful
   # LinuxKit with raw-efi format creates files with -efi suffix
-  # LinuxKit with raw-bios format creates files with -bios suffix
   local built_image=""
   
   if [[ -f "$OUTPUT_DIR/$image_name-efi.img" ]]; then
     built_image="$OUTPUT_DIR/$image_name-efi.img"
     echo "✅ EFI Raw image created: $built_image"
-  elif [[ -f "$OUTPUT_DIR/$image_name-bios.img" ]]; then
-    built_image="$OUTPUT_DIR/$image_name-bios.img"
-    echo "✅ BIOS Raw image created: $built_image"
   elif [[ -f "$OUTPUT_DIR/$image_name.raw" ]]; then
     # Fallback for older LinuxKit versions or different formats
     built_image="$OUTPUT_DIR/$image_name.raw"

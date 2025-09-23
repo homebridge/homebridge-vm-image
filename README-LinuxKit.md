@@ -54,17 +54,16 @@ LinuxKit creates lightweight, secure, and portable Linux subsystems. This implem
 The build creates multiple formats suitable for different hypervisors:
 
 - **homebridge-{arch}-efi.img** - EFI-bootable raw disk image (modern systems, mountable on macOS)
-- **homebridge-{arch}-bios.img** - BIOS-bootable raw disk image (legacy compatibility)  
 - **homebridge-{arch}.img.gz** - Compressed raw disk image for distribution
 - **homebridge-{arch}.vmdk** - VMware disk format (created using qemu-img if available)
 - **homebridge-{arch}-efi.qcow2** - QEMU/KVM disk format with EFI support
 
 **Note**: 
-- The build creates both EFI and BIOS formats for maximum compatibility
-- EFI format works best with modern hypervisors and VirtualBox with EFI enabled
-- BIOS format provides better compatibility with older systems and legacy boot modes
+- The build focuses on EFI format for modern hypervisors and best compatibility
+- EFI format works with VirtualBox (enable EFI in VM settings), VMware, and modern hypervisors
 - IMG files are mountable on macOS using DiskImageMounter for inspection
 - VMDK format is created using `qemu-img` (auto-installed on macOS via Homebrew)
+- For legacy BIOS compatibility, use VirtualBox's compatibility mode or other formats
 
 ### Build Time
 
@@ -184,17 +183,18 @@ To customize the Homebridge configuration:
 
 ### VM Boot Issues
 
-- **VM stops at GRUB**: Try using BIOS format instead of EFI, or ensure EFI is enabled in VM settings
-- **VM won't start**: Ensure EFI firmware is enabled for EFI images, or use BIOS format for legacy boot
+- **VM stops at GRUB**: Enable EFI firmware in VM settings for EFI images, or use legacy BIOS mode in hypervisor settings
+- **VM won't start**: Ensure EFI firmware is enabled for EFI images in VM settings
 - **LinuxKitISO Image error**: Use the disk image formats (.img, .vmdk) instead of ISO; LinuxKit creates disk images, not bootable ISOs
 - **Network not working**: Use bridged networking for best results
 - **Services not starting**: Check VM has at least 1GB RAM and give it time to fully boot (2-3 minutes)
+- **Legacy BIOS needed**: Use VirtualBox's compatibility mode or configure hypervisor for BIOS boot with EFI images
 
 ### Validation Issues
 
 - **VirtualBox not found**: Install VirtualBox from https://www.virtualbox.org/
 - **VM creation fails**: Ensure no existing VM with the same name
-- **Image not found**: The validation script supports multiple formats (VMDK, compressed IMG, RAW, EFI IMG, BIOS IMG) and will auto-convert as needed. Ensure the build completed successfully and produced at least one supported format.
+- **Image not found**: The validation script supports multiple formats (VMDK, compressed IMG, RAW, EFI IMG) and will auto-convert as needed. Ensure the build completed successfully and produced at least one supported format.
 - **Timeout during validation**: Increase timeout or check VM console
 
 ## Development
