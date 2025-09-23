@@ -85,6 +85,7 @@ check_dependencies() {
   local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
   local img_gz_file="$OUTPUT_DIR/homebridge-$ARCH.img.gz"
   local raw_file="$OUTPUT_DIR/homebridge-$ARCH.raw"
+  local efi_img_file="$OUTPUT_DIR/homebridge-$ARCH-efi.img"
   
   if [[ -f "$vmdk_file" ]]; then
     log "✅ VMDK image found: $vmdk_file"
@@ -94,12 +95,16 @@ check_dependencies() {
   elif [[ -f "$raw_file" ]]; then
     warn "VMDK not found, but RAW image found. Converting..."
     convert_raw_to_vmdk
+  elif [[ -f "$efi_img_file" ]]; then
+    warn "VMDK not found, but EFI IMG found. Converting..."
+    convert_efi_img_to_vmdk
   else
     error "No compatible VM image found in $OUTPUT_DIR/"
     echo "Expected one of:"
     echo "  - $vmdk_file"
     echo "  - $img_gz_file" 
     echo "  - $raw_file"
+    echo "  - $efi_img_file"
     echo "Please run build-linuxkit.sh first"
     exit 1
   fi
@@ -138,6 +143,22 @@ convert_raw_to_vmdk() {
     fi
     
     log "✅ RAW to VMDK conversion completed"
+  fi
+}
+
+convert_efi_img_to_vmdk() {
+  local efi_img_file="$OUTPUT_DIR/homebridge-$ARCH-efi.img"
+  local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
+  
+  if [[ -f "$efi_img_file" && ! -f "$vmdk_file" ]]; then
+    log "🔄 Converting EFI IMG to VMDK..."
+    if command -v qemu-img &> /dev/null; then
+      qemu-img convert -f raw -O vmdk "$efi_img_file" "$vmdk_file"
+    else
+      VBoxManage convertfromraw "$efi_img_file" "$vmdk_file" --format VMDK
+    fi
+    
+    log "✅ EFI IMG to VMDK conversion completed"
   fi
 }
 

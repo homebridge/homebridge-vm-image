@@ -168,7 +168,33 @@ build_image() {
     "$LINUXKIT_CONFIG"
   
   # Check if build was successful
-  if [[ -f "$OUTPUT_DIR/$image_name.raw" ]]; then
+  # LinuxKit with raw-efi format creates files with -efi suffix
+  if [[ -f "$OUTPUT_DIR/$image_name-efi.img" ]]; then
+    echo "✅ EFI Raw image created: $OUTPUT_DIR/$image_name-efi.img"
+    
+    # Create standard .raw and .img files for compatibility
+    echo "🔄 Creating compatibility formats..."
+    cp "$OUTPUT_DIR/$image_name-efi.img" "$OUTPUT_DIR/$image_name.raw"
+    cp "$OUTPUT_DIR/$image_name-efi.img" "$OUTPUT_DIR/$image_name.img"
+    
+    # Create VMDK format manually using qemu-img if available
+    echo "🔄 Creating VMDK format..."
+    if command -v qemu-img &> /dev/null; then
+      qemu-img convert -f raw -O vmdk "$OUTPUT_DIR/$image_name.raw" "$OUTPUT_DIR/$image_name.vmdk"
+      echo "✅ VMDK image created: $OUTPUT_DIR/$image_name.vmdk"
+    else
+      echo "⚠️  qemu-img not found, skipping VMDK creation"
+      echo "💡 To create VMDK format manually, install qemu-utils and run:"
+      echo "   qemu-img convert -f raw -O vmdk $OUTPUT_DIR/$image_name.raw $OUTPUT_DIR/$image_name.vmdk"
+    fi
+    
+    # Compress the image
+    echo "📦 Compressing image..."
+    gzip -f "$OUTPUT_DIR/$image_name.img"
+    
+    echo "✅ Compressed image: $OUTPUT_DIR/$image_name.img.gz"
+  elif [[ -f "$OUTPUT_DIR/$image_name.raw" ]]; then
+    # Fallback for older LinuxKit versions or different formats
     echo "✅ Raw image created: $OUTPUT_DIR/$image_name.raw"
     
     # Convert to IMG format for compatibility
@@ -197,7 +223,9 @@ build_image() {
     echo "✅ EFI ISO created: $OUTPUT_DIR/$image_name-efi.iso"
   fi
   
-  if [[ -f "$OUTPUT_DIR/$image_name.qcow2" ]]; then
+  if [[ -f "$OUTPUT_DIR/$image_name-efi.qcow2" ]]; then
+    echo "✅ QCOW2 image created: $OUTPUT_DIR/$image_name-efi.qcow2"
+  elif [[ -f "$OUTPUT_DIR/$image_name.qcow2" ]]; then
     echo "✅ QCOW2 image created: $OUTPUT_DIR/$image_name.qcow2"
   fi
   

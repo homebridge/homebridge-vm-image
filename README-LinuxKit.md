@@ -53,11 +53,15 @@ LinuxKit creates lightweight, secure, and portable Linux subsystems. This implem
 
 The build creates multiple formats suitable for different hypervisors:
 
-- **homebridge-{arch}.img.gz** - Compressed raw disk image (universal compatibility)
+- **homebridge-{arch}-efi.img** - EFI-bootable raw disk image (universal compatibility, mountable on macOS)
+- **homebridge-{arch}.img.gz** - Compressed raw disk image for distribution
 - **homebridge-{arch}.vmdk** - VMware disk format (created using qemu-img if available)
-- **homebridge-{arch}.qcow2** - QEMU/KVM disk format
+- **homebridge-{arch}-efi.qcow2** - QEMU/KVM disk format with EFI support
 
-**Note**: VMDK format is created using `qemu-img` to avoid SYSLINUX dependency issues with LinuxKit's built-in VMDK converter. If `qemu-img` is not available, only RAW and QCOW2 formats will be created.
+**Note**: 
+- The `-efi.img` file is mountable on macOS using DiskImageMounter for inspection
+- VMDK format is created using `qemu-img` to avoid SYSLINUX dependency issues with LinuxKit's built-in VMDK converter
+- If `qemu-img` is not available, only RAW and QCOW2 formats will be created
 
 ### Build Time
 
@@ -101,6 +105,15 @@ The `homebridge-linuxkit.yml` file defines:
   - **Homebridge**: Alpine 3.18 with Node.js, Homebridge and Config UI X (avoids Docker Hub rate limits)
   - **Avahi**: mDNS/Bonjour for HomeKit discovery
 - **Files**: Avahi service configuration for HomeKit advertising
+
+## macOS Integration
+
+- **DiskImageMounter**: The `.img` files are raw disk images that can be mounted on macOS using DiskImageMounter for inspection
+- **Hypervisor Support**: 
+  - **VMware Fusion**: Use the `.vmdk` file directly
+  - **Parallels Desktop**: Convert `.img` to Parallels format or use `.vmdk`
+  - **VirtualBox**: Use the `.vmdk` file or convert `.img` to `.vdi`
+  - **UTM (Apple Silicon)**: Use the `.qcow2` file for best performance
 
 ## Architecture Support
 
@@ -174,7 +187,7 @@ To customize the Homebridge configuration:
 
 - **VirtualBox not found**: Install VirtualBox from https://www.virtualbox.org/
 - **VM creation fails**: Ensure no existing VM with the same name
-- **Image not found**: The validation script supports multiple formats (VMDK, compressed IMG, RAW) and will auto-convert as needed
+- **Image not found**: The validation script supports multiple formats (VMDK, compressed IMG, RAW, EFI IMG) and will auto-convert as needed. Ensure the build completed successfully and produced at least one supported format.
 - **Timeout during validation**: Increase timeout or check VM console
 
 ## Development
