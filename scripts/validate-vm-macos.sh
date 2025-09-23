@@ -250,7 +250,7 @@ VBoxManage modifyvm "$VM_NAME" \
     --firmware efi \
     --boot1 disk \
     --graphicscontroller none \
-    --audio none \
+    --audio-driver none \
     --usb off \
     --uart1 0x3F8 4 \
     --uartmode1 file "vm-console-${ARCHITECTURE}.log" \
@@ -264,10 +264,13 @@ if ! VBoxManage showvminfo "$VM_NAME" --machinereadable | grep -q "name=\"$VM_NA
     exit 1
 fi
 
-# Add storage controller and attach disk as Live CD
-log "💾 Configuring VM for Live CD boot..." "$GRAY"
-VBoxManage storagectl "$VM_NAME" --name "IDE" --add ide --controller PIIX4
-VBoxManage storageattach "$VM_NAME" --storagectl "IDE" --port 0 --device 0 --type dvddrive --medium "$VDI_FILE"
+# Add storage controller and attach disk
+log "💾 Configuring VM storage (Live CD mode)..." "$GRAY"
+VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
+VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI_FILE"
+
+# Configure the disk as immutable (Live CD behavior)
+VBoxManage modifymedium "$VDI_FILE" --type immutable
 
 VM_CREATED=true
 log "✅ VM created and configured" "$GREEN"
@@ -280,7 +283,7 @@ log "   Architecture: $ARCHITECTURE" "$GRAY"
 log "   Memory: ${VM_RAM}MB" "$GRAY"
 log "   Firmware: EFI (with BIOS fallback)" "$GRAY"
 log "   Graphics: Disabled (headless mode)" "$GRAY"
-log "   Storage: Live CD mode (IDE DVD drive)" "$GRAY"
+log "   Storage: Live CD mode (SATA HDD, immutable)" "$GRAY"
 log "   Console: Logged to vm-console-${ARCHITECTURE}.log" "$GRAY"
 
 # Step 7: Start VM
