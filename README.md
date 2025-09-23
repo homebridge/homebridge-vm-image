@@ -11,9 +11,11 @@ A minimal image that runs Homebridge.
 1. Click here to download the latest VM image:
    - [**homebridge-amd64.img.gz**](https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-amd64.img.gz) (AMD64/x86_64 systems)
    - [**homebridge-arm64.img.gz**](https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-arm64.img.gz) (ARM64 systems)
+   - [**homebridge-arm64-vbox.img.gz**](https://github.com/homebridge/homebridge-vm-image/releases/download/v0.0.1/homebridge-arm64-vbox.img.gz) (ARM64 systems with VirtualBox - *experimental*)
 2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.
     * *OS*: Linux -> Other Linux (64bit)
     * *Hyper-V*: Select "Generation 1 VM"
+    * *VirtualBox ARM64*: See [VirtualBox ARM64 Setup Guide](README-VirtualBox-ARM64.md) for ARM64-specific instructions
 3. Configure your virtual machine with the following settings:
     * **RAM**: 1GB Minimum
     * **CPU**: 1+
@@ -30,3 +32,13 @@ A minimal image that runs Homebridge.
 <p align="center">
   <img src="https://user-images.githubusercontent.com/3979615/86241831-fb3a5e00-bbe6-11ea-8070-f3e6c2bf5ec6.png">
 </p>
+
+## VirtualBox ARM64 Support
+
+**Experimental**: VirtualBox support on ARM64 systems (Apple Silicon, Windows ARM64, Linux ARM64) is available but experimental. 
+
+- **Status**: Requires VirtualBox 7.0+ with ARM64 support
+- **Performance**: May be slower than native ARM64 virtualization
+- **Alternatives**: Consider UTM (macOS), Hyper-V (Windows), or QEMU/KVM (Linux) for better ARM64 performance
+
+For detailed ARM64 VirtualBox setup instructions, troubleshooting, and alternatives, see the [VirtualBox ARM64 Setup Guide](README-VirtualBox-ARM64.md).
