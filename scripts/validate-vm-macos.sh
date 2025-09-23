@@ -250,7 +250,7 @@ VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
 
 # Determine OS type based on architecture
 if [[ "$ARCHITECTURE" == "arm64" ]]; then
-    OSTYPE="Linux_arm64"  # Use Linux ARM64 for Apple Silicon
+    OSTYPE="Debian_arm64"  # Use Linux ARM64 for Apple Silicon
 else
     OSTYPE="Debian_64"  # Use Debian 64-bit for Intel
 fi
