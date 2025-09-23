@@ -30,6 +30,31 @@
 
 set -euo pipefail
 
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+GRAY='\033[0;37m'
+NC='\033[0m' # No Color
+
+VM_NAME="homebridge-test-vm"
+LOG_FILE="validation-$(date +%Y%m%d-%H%M%S).log"
+TIMEOUT=300  # 5 minutes timeout for Homebridge to start
+CHECK_INTERVAL=10
+VM_RAM=1024  # 1GB RAM
+GITHUB_REPO="homebridge/homebridge-vm-image"
+LATEST_RELEASE_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+
+# Logging function
+log() {
+    local message="$1"
+    local color="${2:-$NC}"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo -e "${color}${message}${NC}"
+    echo "[$timestamp] $message" >> "$LOG_FILE"
+}
+
 # Configuration
 ARCHITECTURE="${1:-}"  # Get from command line argument
 
@@ -49,30 +74,6 @@ if [[ -z "$ARCHITECTURE" ]]; then
     esac
     log "🔍 Auto-detected architecture: $ARCHITECTURE" "$BLUE"
 fi
-VM_NAME="homebridge-test-vm"
-LOG_FILE="validation-$(date +%Y%m%d-%H%M%S).log"
-TIMEOUT=300  # 5 minutes timeout for Homebridge to start
-CHECK_INTERVAL=10
-VM_RAM=1024  # 1GB RAM
-GITHUB_REPO="homebridge/homebridge-vm-image"
-LATEST_RELEASE_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-GRAY='\033[0;37m'
-NC='\033[0m' # No Color
-
-# Logging function
-log() {
-    local message="$1"
-    local color="${2:-$NC}"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo -e "${color}${message}${NC}"
-    echo "[$timestamp] $message" >> "$LOG_FILE"
-}
 
 # Error handling
 cleanup_vm() {
@@ -224,7 +225,7 @@ log "🖥️ Creating VirtualBox VM..." "$YELLOW"
 VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
 
 # Create VM
-VBoxManage createvm --name "$VM_NAME" --ostype "Linux_64" --register
+VBoxManage createvm --name "$VM_NAME" --ostype "Debian12_arm64" --register
 
 # Configure VM settings
 VBoxManage modifyvm "$VM_NAME" \
