@@ -38,7 +38,7 @@ LinuxKit creates lightweight, secure, and portable Linux subsystems. This implem
 ### Basic Usage
 
 ```bash
-# Build for AMD64 (default)
+# Build for host architecture (auto-detected)
 ./build-linuxkit.sh
 
 # Build for specific architecture
@@ -48,6 +48,10 @@ LinuxKit creates lightweight, secure, and portable Linux subsystems. This implem
 # Get help
 ./build-linuxkit.sh --help
 ```
+
+**Auto-Detection**: The script automatically detects your host architecture:
+- **Apple Silicon (M1/M2/M3)**: Defaults to ARM64 build for optimal compatibility
+- **Intel Mac/PC**: Defaults to AMD64 build
 
 ### Output Formats
 

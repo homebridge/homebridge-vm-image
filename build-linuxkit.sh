@@ -9,6 +9,15 @@ OUTPUT_DIR="output"
 BUILD_DIR="build"
 LINUXKIT_CONFIG="homebridge-linuxkit.yml"
 
+# Auto-detect architecture based on host system
+detect_default_arch() {
+  case "$(uname -m)" in
+    arm64|aarch64) echo "arm64" ;;
+    x86_64) echo "amd64" ;;
+    *) echo "amd64" ;;  # fallback to amd64 for unknown architectures
+  esac
+}
+
 # Handle help flag first
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   print_usage() {
@@ -17,11 +26,11 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "Build Homebridge VM images using LinuxKit"
     echo ""
     echo "Arguments:"
-    echo "  ARCHITECTURE    Target architecture (amd64|arm64) [default: amd64]"
+    echo "  ARCHITECTURE    Target architecture (amd64|arm64) [default: auto-detect from host]"
     echo ""
     echo "Examples:"
-    echo "  $0              # Build for amd64"
-    echo "  $0 amd64        # Build for amd64"
+    echo "  $0              # Build for host architecture ($(detect_default_arch))"
+    echo "  $0 amd64        # Build for AMD64"
     echo "  $0 arm64        # Build for ARM64"
     echo ""
     echo "Requirements:"
@@ -37,7 +46,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-ARCH="${1:-amd64}"
+ARCH="${1:-$(detect_default_arch)}"
 
 # Validate architecture
 if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
@@ -264,11 +273,11 @@ print_usage() {
   echo "Build Homebridge VM images using LinuxKit"
   echo ""
   echo "Arguments:"
-  echo "  ARCHITECTURE    Target architecture (amd64|arm64) [default: amd64]"
+  echo "  ARCHITECTURE    Target architecture (amd64|arm64) [default: auto-detect from host]"
   echo ""
   echo "Examples:"
-  echo "  $0              # Build for amd64"
-  echo "  $0 amd64        # Build for amd64"
+  echo "  $0              # Build for host architecture ($(detect_default_arch))"
+  echo "  $0 amd64        # Build for AMD64"
   echo "  $0 arm64        # Build for ARM64"
   echo ""
   echo "Requirements:"
