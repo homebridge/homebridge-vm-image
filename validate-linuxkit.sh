@@ -243,6 +243,9 @@ create_vm() {
     --nic1 nat \
     --audio-driver none \
     --usb off \
+    --graphicscontroller vmsvga \
+    --vram 16 \
+    --accelerate3d off \
     --natpf1 "homebridge,tcp,,8581,,8581" \
     --natpf1 "ssh,tcp,,2222,,22" \
     --natpf1 "homekit,tcp,,51826,,51826" \
