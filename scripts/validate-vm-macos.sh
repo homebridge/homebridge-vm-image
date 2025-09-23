@@ -267,10 +267,12 @@ fi
 # Add storage controller and attach disk
 log "💾 Configuring VM storage (Live CD mode)..." "$GRAY"
 VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
-VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI_FILE"
 
-# Configure the disk as immutable (Live CD behavior)
+# Configure the disk as immutable (Live CD behavior) before attaching
 VBoxManage modifymedium "$VDI_FILE" --type immutable
+
+# Attach the immutable disk
+VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI_FILE"
 
 VM_CREATED=true
 log "✅ VM created and configured" "$GREEN"
