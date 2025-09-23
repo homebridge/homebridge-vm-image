@@ -111,11 +111,15 @@ The `homebridge-linuxkit.yml` file defines:
 ## macOS Integration
 
 - **DiskImageMounter**: The `.img` files are raw disk images that can be mounted on macOS using DiskImageMounter for inspection
-- **Hypervisor Support**: 
-  - **VMware Fusion**: Use the `.vmdk` file directly
-  - **Parallels Desktop**: Convert `.img` to Parallels format or use `.vmdk`
-  - **VirtualBox**: Use the `.vmdk` file or convert `.img` to `.vdi`
-  - **UTM (Apple Silicon)**: Use the `.qcow2` file for best performance
+- **Apple Silicon (M1/M2) Compatibility**: 
+  - **VirtualBox**: Only supports ARM64 VMs on Apple Silicon - use `./build-linuxkit.sh arm64`
+  - **VMware Fusion**: Supports both ARM64 natively and x86 emulation
+  - **Parallels Desktop**: Supports both ARM64 natively and x86 emulation  
+  - **UTM**: Supports both ARM64 natively and x86 emulation
+- **Intel Mac Compatibility**:
+  - **VirtualBox**: Supports both AMD64 and ARM64 VMs
+  - **VMware Fusion**: Supports both AMD64 and ARM64 VMs
+  - **Parallels Desktop**: Supports both AMD64 and ARM64 VMs
 
 ## Architecture Support
 
@@ -194,6 +198,9 @@ To customize the Homebridge configuration:
 
 - **VirtualBox not found**: Install VirtualBox from https://www.virtualbox.org/
 - **VM creation fails**: Ensure no existing VM with the same name
+- **Architecture mismatch**: VirtualBox on Apple Silicon (M1/M2) cannot run AMD64/x86 VMs
+  - Use ARM64 builds on Apple Silicon: `./build-linuxkit.sh arm64` and `./validate-linuxkit.sh arm64`
+  - For x86 emulation on Apple Silicon, use UTM or Parallels Desktop instead of VirtualBox
 - **Image not found**: The validation script supports multiple formats (VMDK, compressed IMG, RAW, EFI IMG) and will auto-convert as needed. Ensure the build completed successfully and produced at least one supported format.
 - **Timeout during validation**: Increase timeout or check VM console
 

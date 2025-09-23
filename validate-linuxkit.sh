@@ -24,6 +24,11 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "  - VM image built with build-linuxkit.sh"
     echo "  - curl (for testing HTTP endpoints)"
     echo "  - nc/netcat (for testing ports)"
+    echo ""
+    echo "Architecture Notes:"
+    echo "  - Apple Silicon (M1/M2): Use arm64 architecture only with VirtualBox"
+    echo "  - Intel Mac: Both amd64 and arm64 architectures supported"
+    echo "  - Host architecture: $(uname -m)"
   }
   print_usage
   exit 0
@@ -80,6 +85,24 @@ check_dependencies() {
   local vbox_version
   vbox_version=$(VBoxManage --version 2>/dev/null || echo "unknown")
   log "✅ VirtualBox version: $vbox_version"
+  
+  # Check architecture compatibility
+  local host_arch
+  host_arch=$(uname -m)
+  
+  if [[ "$host_arch" == "arm64" && "$ARCH" == "amd64" ]]; then
+    error "Architecture mismatch: Cannot run AMD64/x86 VMs on ARM64 hardware"
+    echo ""
+    echo "💡 Solutions:"
+    echo "   1. Use ARM64 image instead: ./validate-linuxkit.sh arm64"
+    echo "   2. Build ARM64 image: ./build-linuxkit.sh arm64"
+    echo "   3. Use a different hypervisor (UTM, Parallels Desktop) for x86 emulation"
+    echo ""
+    echo "ℹ️  VirtualBox on Apple Silicon (M1/M2) cannot run x86/AMD64 VMs natively"
+    exit 1
+  elif [[ "$host_arch" == "x86_64" && "$ARCH" == "arm64" ]]; then
+    warn "Running ARM64 VM on x86_64 host - this may work but performance could be limited"
+  fi
   
   # Check if VM image exists in any supported format
   local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
@@ -373,6 +396,11 @@ print_usage() {
   echo "  - VM image built with build-linuxkit.sh"
   echo "  - curl (for testing HTTP endpoints)"
   echo "  - nc/netcat (for testing ports)"
+  echo ""
+  echo "Architecture Notes:"
+  echo "  - Apple Silicon (M1/M2): Use arm64 architecture only with VirtualBox"
+  echo "  - Intel Mac: Both amd64 and arm64 architectures supported"
+  echo "  - Host architecture: $(uname -m)"
 }
 
 main() {
