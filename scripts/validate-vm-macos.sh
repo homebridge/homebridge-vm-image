@@ -26,7 +26,7 @@
 #   5. Validate that Homebridge service starts correctly
 #   6. Test web interface accessibility on port 8581
 #   7. Check SSH port accessibility on port 2222
-#   8. Clean up the VM after validation
+#   8. Leave VM running for log review (use cleanup-vm-macos.sh to clean up)
 
 set -euo pipefail
 
@@ -74,25 +74,6 @@ if [[ -z "$ARCHITECTURE" ]]; then
     esac
     log "🔍 Auto-detected architecture: $ARCHITECTURE" "$BLUE"
 fi
-
-# Error handling
-cleanup_vm() {
-    if [[ -n "${VM_CREATED:-}" ]] && VBoxManage list vms | grep -q "$VM_NAME"; then
-        log "🗑️ Cleaning up VM..." "$YELLOW"
-        VBoxManage controlvm "$VM_NAME" poweroff 2>/dev/null || true
-        sleep 2
-        VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
-        log "✅ VM cleanup completed" "$GREEN"
-    fi
-    
-    # Clean up downloaded files and logs
-    [[ -f "homebridge-${ARCHITECTURE}.img.gz" ]] && rm -f "homebridge-${ARCHITECTURE}.img.gz"
-    [[ -f "homebridge-${ARCHITECTURE}.img" ]] && rm -f "homebridge-${ARCHITECTURE}.img"
-    [[ -f "homebridge-${ARCHITECTURE}.vdi" ]] && rm -f "homebridge-${ARCHITECTURE}.vdi"
-    [[ -f "vm-console-${ARCHITECTURE}.log" ]] && rm -f "vm-console-${ARCHITECTURE}.log"
-}
-
-trap cleanup_vm EXIT
 
 # Show help if requested
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
@@ -457,6 +438,11 @@ log "🌐 Web interface: http://localhost:8581" "$GREEN"
 log "📊 Results saved to validation-results.json" "$GREEN"
 log "📋 Log file: $LOG_FILE" "$GRAY"
 log "🖥️ VM console log: vm-console-${ARCHITECTURE}.log" "$GRAY"
+
+log "🧹 Cleanup information:" "$BLUE"
+log "   VM '$VM_NAME' is still running for your review" "$GRAY"
+log "   To clean up VM and files: ./scripts/cleanup-vm-macos.sh" "$GRAY"
+log "   To clean up specific arch: ./scripts/cleanup-vm-macos.sh $ARCHITECTURE" "$GRAY"
 
 log "🔧 Next steps for full SSH validation:" "$BLUE"
 log "   1. Enable SSH server in VM image build process (add openssh-server)" "$GRAY"

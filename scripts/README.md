@@ -54,6 +54,31 @@ chmod +x validate-vm-macos.sh
 - VM boots successfully
 - Homebridge web interface becomes accessible at http://localhost:8581
 - SSH port 2222 becomes accessible (if SSH server is enabled in VM)
+- VM remains running for log review and testing
+
+### macOS Cleanup Script
+**File:** `cleanup-vm-macos.sh`
+
+Cleans up VMs and files created by the validation script.
+
+**Usage:**
+```bash
+chmod +x cleanup-vm-macos.sh
+
+# Clean up all VMs and files
+./cleanup-vm-macos.sh
+
+# Clean up specific architecture files only
+./cleanup-vm-macos.sh amd64
+./cleanup-vm-macos.sh arm64
+```
+
+**What it cleans up:**
+- VirtualBox VMs named "homebridge-test-vm"
+- Downloaded VM image files (*.img.gz, *.img, *.vdi)
+- Console log files (vm-console-*.log)
+- Validation result files (validation-results.json, vm-screenshot.png)
+- Old validation log files
 
 ### Windows PowerShell Scripts
 
@@ -114,4 +139,7 @@ brew install --cask virtualbox
 Each validation run creates:
 - `validation-YYYYMMDD-HHMMSS.log` - Detailed execution log
 - `validation-results.json` - JSON summary of results
+- `vm-console-{arch}.log` - VM console output for debugging
 - `vm-screenshot.png` - VM screenshot if validation fails
+
+**Note:** The validation script leaves the VM running and files in place for review. Use `cleanup-vm-macos.sh` to clean up when finished.
