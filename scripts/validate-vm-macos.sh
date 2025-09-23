@@ -265,14 +265,21 @@ if ! VBoxManage showvminfo "$VM_NAME" --machinereadable | grep -q "name=\"$VM_NA
 fi
 
 # Add storage controller and attach disk
-log "💾 Configuring VM storage (Live CD mode)..." "$GRAY"
+log "💾 Configuring VM storage (Live CD mode + 8GB HDD)..." "$GRAY"
 VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
 
-# Configure the disk as immutable (Live CD behavior) before attaching
+# Create 8GB virtual hard disk (thin/dynamic) as per README requirements
+HDD_FILE="homebridge-${ARCHITECTURE}-storage.vdi"
+VBoxManage createmedium disk --filename "$HDD_FILE" --size 8192 --variant Standard
+
+# Configure the VM image disk as immutable (Live CD behavior) before attaching
 VBoxManage modifymedium "$VDI_FILE" --type immutable
 
-# Attach the immutable disk
-VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI_FILE"
+# Attach the 8GB storage disk to port 0 (primary storage)
+VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$HDD_FILE"
+
+# Attach the immutable VM image to port 1 (Live CD)
+VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 1 --device 0 --type hdd --medium "$VDI_FILE"
 
 VM_CREATED=true
 log "✅ VM created and configured" "$GREEN"
@@ -285,7 +292,7 @@ log "   Architecture: $ARCHITECTURE" "$GRAY"
 log "   Memory: ${VM_RAM}MB" "$GRAY"
 log "   Firmware: EFI (with BIOS fallback)" "$GRAY"
 log "   Graphics: Disabled (headless mode)" "$GRAY"
-log "   Storage: Live CD mode (SATA HDD, immutable)" "$GRAY"
+log "   Storage: 8GB HDD + Live CD (SATA controller)" "$GRAY"
 log "   Console: Logged to vm-console-${ARCHITECTURE}.log" "$GRAY"
 
 # Step 7: Start VM

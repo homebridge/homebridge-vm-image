@@ -81,7 +81,7 @@ cleanup_files_for_arch() {
     log "🗂️ Cleaning up files for $arch architecture..." "$YELLOW"
     
     # VM image files
-    for file in "homebridge-${arch}.img.gz" "homebridge-${arch}.img" "homebridge-${arch}.vdi"; do
+    for file in "homebridge-${arch}.img.gz" "homebridge-${arch}.img" "homebridge-${arch}.vdi" "homebridge-${arch}-storage.vdi"; do
         if [[ -f "$file" ]]; then
             rm -f "$file"
             log "   Removed: $file" "$GRAY"
