@@ -215,6 +215,7 @@ cleanup_vm() {
   if VBoxManage list vms | grep -q "\"$VM_NAME\""; then
     warn "Removing existing VM: $VM_NAME"
     VBoxManage unregistervm "$VM_NAME" || true
+    rm -rf ~/VirtualBox\ VMs/"$VM_NAME"
   fi
 }
 
@@ -249,6 +250,8 @@ create_vm() {
     --natpf1 "homebridge,tcp,,8581,,8581" \
     --natpf1 "ssh,tcp,,2222,,22" \
     --natpf1 "homekit,tcp,,51826,,51826" \
+    --mouse usbtablet \
+    --keyboard usb
 #    --uart1 0x3F8 4 \
 #    --uartmode1 file "vm-console-${ARCH}.log" \
   
