@@ -258,13 +258,24 @@ create_vm() {
   # Add storage controller
   VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
   
-  # Attach disk
+  # Attach main system disk
   VBoxManage storageattach "$VM_NAME" \
     --storagectl "SATA" \
     --port 0 \
     --device 0 \
     --type hdd \
     --medium "$vmdk_file"
+  
+  # Create and attach Homebridge data disk (1GB)
+  local data_disk="${VM_NAME}-homebridge-data.vdi"
+  VBoxManage createhd --filename "output/${data_disk}" --size 1024 --format VDI
+  
+  VBoxManage storageattach "$VM_NAME" \
+    --storagectl "SATA" \
+    --port 1 \
+    --device 0 \
+    --type hdd \
+    --medium "output/${data_disk}"
   
   # Configure VirtualBox Guest Additions features
   VBoxManage modifyvm "$VM_NAME" \
