@@ -8,6 +8,24 @@ init:
   - linuxkit/containerd:838b745e38e43309393675ce3cf04bee9047eb91
 
 onboot:
+  - name: format-and-mount
+    image: alpine:3.18
+    command: ["/bin/sh", "-c", "
+      if [ -b /dev/sdb ]; then
+        echo '/dev/sdb found, using it for /var/lib/homebridge';
+        blkid /dev/sdb || mkfs.ext4 /dev/sdb;
+        mkdir -p /var/lib/homebridge;
+        mount /dev/sdb /var/lib/homebridge;
+        chown 1000:1000 /var/lib/homebridge;
+        echo '/dev/sdb /var/lib/homebridge ext4 defaults 0 2' >> /etc/fstab;
+        echo 'Mounted /dev/sdb on /var/lib/homebridge:';
+      else
+        echo 'ERROR: /dev/sdb not found, using tmpfs for /var/lib/homebridge';
+        mkdir -p /var/lib/homebridge;
+        mount -t tmpfs tmpfs /var/lib/homebridge;
+        chown 1000:1000 /var/lib/homebridge;
+      fi
+    "]
   - name: dhcpcd
     image: linuxkit/dhcpcd:4681273eeea47c26d980958656e60fe70d49e318
     command: ["/sbin/dhcpcd", "--nobackground", "-f", "/dhcpcd.conf", "-1"]

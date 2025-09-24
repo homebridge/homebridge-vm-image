@@ -166,6 +166,7 @@ cleanup_temporary_files() {
     "$output_dir/homebridge-*.vmdk"
     "$output_dir/homebridge-*.img"
     "$output_dir/homebridge-*.raw"
+    "$output_dir/homebridge-data.vdi"
   )
   
   local cleaned=false

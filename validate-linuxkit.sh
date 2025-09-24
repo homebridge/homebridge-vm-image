@@ -223,6 +223,7 @@ create_vm() {
   log "🖥️  Creating VirtualBox VM..."
   
   local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
+  local homebridge_data="$OUTPUT_DIR/homebridge-data.vdi"
   local os_type
   
   # Set OS type based on architecture
@@ -265,7 +266,20 @@ create_vm() {
     --device 0 \
     --type hdd \
     --medium "$vmdk_file"
-  
+
+  # Create and attach homebridge-data hard disk
+
+  if [[ ! -f "$homebridge_data" ]]; then
+    VBoxManage createhd --filename "$homebridge_data" --size 10240
+  fi
+
+  VBoxManage storageattach "$VM_NAME" \
+  --storagectl "SATA" \
+  --port 1 \
+  --device 0 \
+  --type hdd \
+  --medium "$homebridge_data"
+
   # Configure VirtualBox Guest Additions features
   VBoxManage modifyvm "$VM_NAME" \
     --clipboard-mode bidirectional \
