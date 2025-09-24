@@ -84,17 +84,29 @@ fi
 sudo chroot "$ROOTFS" /bin/bash -eux <<EOF
 export DEBIAN_FRONTEND=noninteractive
 
-# Install base and bootloader
+# Install base and docker-homebridge compatible packages
 apt-get update
+apt-get upgrade -y
 apt-get install -y \
+  curl wget tzdata locales psmisc procps iputils-ping logrotate \
+  libatomic1 apt-transport-https apt-utils jq openssl sudo nano net-tools \
+  python3 python3-pip pipx python3-setuptools git make g++ libnss-mdns \
+  avahi-discover libavahi-compat-libdnssd-dev python3-venv python3-dev \
   linux-image-$ARCH grub-efi-$ARCH grub-efi-$ARCH-bin \
-  grub-common grub2-common \
-  systemd systemd-sysv sudo curl gnupg dbus \
-  procps net-tools iproute2 avahi-daemon libavahi-compat-libdnssd-dev \
-  ca-certificates \
-  build-essential python3 python3-dev python3-setuptools \
-  pkg-config git \
-  hyperv-daemons dhcpcd5
+  grub-common grub2-common systemd systemd-sysv dbus \
+  gnupg iproute2 avahi-daemon ca-certificates build-essential \
+  pkg-config hyperv-daemons dhcpcd5
+
+# Locale and timezone setup
+locale-gen en_US.UTF-8
+ln -snf /usr/share/zoneinfo/Etc/GMT /etc/localtime
+echo Etc/GMT > /etc/timezone
+
+# Install tzupdate via pipx
+pipx install tzupdate || true
+
+# Ensure ping is executable
+chmod 0755 /bin/ping
 
 # Add Homebridge APT repo
 curl -fsSL https://repo.homebridge.io/KEY.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/homebridge.gpg
@@ -103,6 +115,11 @@ echo 'deb [signed-by=/etc/apt/trusted.gpg.d/homebridge.gpg] https://repo.homebri
 # Install Homebridge
 apt-get update
 apt-get install -y homebridge
+
+# Clean up
+apt-get clean
+rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
+rm -rf /etc/cron.daily/apt-compat /etc/cron.daily/dpkg /etc/cron.daily/passwd /etc/cron.daily/exim4-base
 
 # Configure networking for automatic DHCP
 cat > /etc/systemd/network/10-ethernet.network <<'NETEOF'

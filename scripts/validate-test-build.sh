@@ -244,23 +244,22 @@ create_vm() {
     --cpus 1 \
     --firmware efi \
     --boot1 disk \
-    --nic1 nat \
+    --nic1 bridged \
+    --bridgeadapter1 "en0" \
+    --cableconnected1 on \
     --audio-driver none \
     --usb off \
     --graphicscontroller vmsvga \
     --vram 16 \
     --accelerate3d off \
-    --natpf1 "homebridge,tcp,,8581,,8581" \
-    --natpf1 "ssh,tcp,,2222,,22" \
-    --natpf1 "homekit,tcp,,51826,,51826" \
     --mouse usbtablet \
     --keyboard usb \
     --uart1 0x3F8 4 \
     --uartmode1 file "$OUTPUT_DIR/vm-console-${ARCH}.log" \
   
   # Add storage controller
-  VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
-  
+  VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci --portcount 4
+
   # Attach main system disk
   VBoxManage storageattach "$VM_NAME" \
     --storagectl "SATA" \
