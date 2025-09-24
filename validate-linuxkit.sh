@@ -259,7 +259,7 @@ create_vm() {
   # Add storage controller
   VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
   
-  # Attach disk
+  # Attach main system disk
   VBoxManage storageattach "$VM_NAME" \
     --storagectl "SATA" \
     --port 0 \
