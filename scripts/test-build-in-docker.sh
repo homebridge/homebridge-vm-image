@@ -54,7 +54,7 @@ docker run --rm -it \
     ./build.sh $ARCH
     ls -lh output/
     echo '==> Build complete. Output files:'
-    ls output/homebridge-${ARCH}.img.gz
+    ls output/
   "
 
 echo "==> Local Docker test finished for arch: $ARCH"

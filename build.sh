@@ -88,90 +88,15 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get upgrade -y
 apt-get install -y \
-  wget tzdata locales psmisc procps iputils-ping logrotate \
-  libatomic1 apt-utils  openssl sudo nano net-tools \
-  libnss-mdns \
+  wget  locales psmisc procps iputils-ping logrotate \
+  apt-utils  openssl sudo nano net-tools libnss-mdns \
   linux-image-$ARCH grub-efi-$ARCH grub-efi-$ARCH-bin \
   grub-common grub2-common systemd systemd-sysv dbus \
-  gnupg iproute2 build-essential \
-  hyperv-daemons dhcpcd5 
-
-# Locale and timezone setup
-locale-gen en_US.UTF-8
-ln -snf /usr/share/zoneinfo/Etc/GMT /etc/localtime
-echo Etc/GMT > /etc/timezone
-
-# Install tzupdate via pipx
-pipx install tzupdate || true
-
-# Clean up
-apt-get clean
-rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
-rm -rf /etc/cron.daily/apt-compat /etc/cron.daily/dpkg /etc/cron.daily/passwd /etc/cron.daily/exim4-base
-
-# Configure networking for automatic DHCP
-cat > /etc/systemd/network/10-ethernet.network <<'NETEOF'
-[Match]
-Name=en* eth*
-
-[Network]
-DHCP=yes
-IPv6AcceptRA=yes
-
-[DHCP]
-RouteMetric=10
-UseMTU=true
-NETEOF
-
-# Enable networking services
-systemctl enable systemd-networkd
-
-# Try to enable systemd-resolved, but don't fail if it doesn't exist
-if systemctl list-unit-files | grep -q systemd-resolved; then
-    systemctl enable systemd-resolved
-    # Create proper resolv.conf symlink (handle busy file)
-    umount /etc/resolv.conf 2>/dev/null || true
-    rm -f /etc/resolv.conf
-    ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
-    echo "systemd-resolved configured"
-else
-    echo "systemd-resolved not available, using traditional DNS"
-    # Create basic resolv.conf with public DNS servers
-    umount /etc/resolv.conf 2>/dev/null || true
-    rm -f /etc/resolv.conf
-    cat > /etc/resolv.conf <<'DNSEOF'
-# Fallback DNS configuration
-nameserver 8.8.8.8
-nameserver 8.8.4.4
-nameserver 2001:4860:4860::8888
-nameserver 2001:4860:4860::8844
-DNSEOF
-fi
-
-# Fallback traditional networking (in case systemd-networkd fails)
-cat > /etc/network/interfaces <<'IFACEEOF'
-# The loopback network interface
-auto lo
-iface lo inet loopback
-
-# The primary network interface
-auto eth0
-iface eth0 inet dhcp
-
-auto ens3
-iface ens3 inet dhcp
-
-auto enp0s3
-iface enp0s3 inet dhcp
-IFACEEOF
+  gnupg iproute2 hyperv-daemons dhcpcd5 
 
 # fstab with UUIDs for reliable mounting
 echo "UUID=$ROOT_UUID / ext4 defaults 0 1" > /etc/fstab
 echo "UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1" >> /etc/fstab
-
-# Enable console services for both TTY and Serial
-systemctl enable getty@tty1.service
-systemctl enable serial-getty@ttyS0.service
 
 # GRUB install
 grub-install \
@@ -184,10 +109,10 @@ grub-install \
   --recheck
 
 # Configure GRUB with UUID-based root and enhanced serial console
-sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"console=tty0 console=ttyS0,115200n8 root=UUID=$ROOT_UUID loglevel=7 systemd.journald.forward_to_console=yes\"|" /etc/default/grub
+sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"console=tty0 console=ttyS0 root=UUID=$ROOT_UUID loglevel=7\"|" /etc/default/grub
 sed -i 's/^GRUB_CMDLINE_LINUX=".*"/GRUB_CMDLINE_LINUX=""/' /etc/default/grub
-sed -i 's/^#GRUB_TERMINAL=console/GRUB_TERMINAL="console serial"/' /etc/default/grub
-sed -i 's/^#GRUB_SERIAL_COMMAND=.*/GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"/' /etc/default/grub
+sed -i 's/^#GRUB_TERMINAL=console/GRUB_TERMINAL="console"/' /etc/default/grub
+#sed -i 's/^#GRUB_SERIAL_COMMAND=.*/GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"/' /etc/default/grub
 
 # Add serial console configuration if not present
 grep -q "^GRUB_SERIAL_COMMAND=" /etc/default/grub || echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /etc/default/grub
@@ -223,26 +148,16 @@ echo "root:root" | chpasswd
 # Final initramfs update
 update-initramfs -u
 
-# Enable services
-mv /root/setup/50-avahi.service /etc/avahi/services/
-systemctl enable avahi-daemon
-systemctl enable dhcpcd
-
-# Test network configuration
-echo "=== Testing network setup ==="
-systemctl status systemd-networkd --no-pager || echo "systemd-networkd not running"
-systemctl status systemd-resolved --no-pager || echo "systemd-resolved not running"
-
 # Clean
 apt-get clean
 
 # Debug info
-echo "=== Final fstab ==="
-cat /etc/fstab
-echo "=== GRUB config ==="
-cat /etc/default/grub
-echo "=== Available block devices ==="
-lsblk || true
+#echo "=== Final fstab ==="
+#cat /etc/fstab
+#echo "=== GRUB config ==="
+#cat /etc/default/grub
+#echo "=== Available block devices ==="
+#lsblk || true
 EOF
 
 install_staged_assets() {
@@ -250,10 +165,12 @@ install_staged_assets() {
   echo "=== Installing staged assets for $1 ==="
   local STAGE_ASSET="$1"
   local TARGET_DIR="$2"
+  export ROOTFS_DIR="$ROOTFS"
   # Copy config files if present
-#  if [ -d "assets/$STAGE_ASSET" ]; then
-#    sudo cp -r "assets/$STAGE_ASSET/"* "$TARGET_DIR/"
-#  fi
+  if [ -d "assets/$STAGE_ASSET/files" ]; then
+    sudo mkdir -p "$ROOTFS/files"
+    sudo cp -r "assets/$STAGE_ASSET/files" "$ROOTFS/files"
+  fi
   # Install extra packages if 00-packages exists
   if [ -f "assets/$STAGE_ASSET/00-packages" ]; then
     local EXTRA_PKGS
@@ -262,23 +179,37 @@ install_staged_assets() {
       sudo chroot "$ROOTFS" /bin/bash -c "apt-get update && apt-get install -y $EXTRA_PKGS"
     fi
   fi
+  echo "=== Installed extra packages for $1 ==="
   # Run custom script if 01-run.sh exists
-  if [ -f "assets/$STAGE_ASSET/01-run.sh" ]; then
-    sudo cp "assets/$STAGE_ASSET/01-run.sh" "$ROOTFS/tmp/01-run.sh"
-    sudo chroot "$ROOTFS" /bin/bash -c "bash /tmp/01-run.sh"
-    sudo rm -f "$ROOTFS/tmp/01-run.sh"
-  fi
+  for RUN_SCRIPT in "assets/$STAGE_ASSET"/[0-9][0-9]-run.sh; do
+    if [ -f "$RUN_SCRIPT" ]; then
+      echo "=== Running staged script: $RUN_SCRIPT ==="
+      # sudo cp "$RUN_SCRIPT" "$ROOTFS/tmp/$(basename "$RUN_SCRIPT")"
+      # sudo chmod +x "$ROOTFS/tmp/$(basename "$RUN_SCRIPT")"
+      # sudo chroot "$ROOTFS" /bin/bash -c "bash /tmp/$(basename "$RUN_SCRIPT")"
+      # sudo rm -f "$ROOTFS/tmp/$(basename "$RUN_SCRIPT")"
+      (
+        on_chroot() {
+          sudo chroot "$ROOTFS" /bin/bash -eux "$@"
+        }
+        cd "assets/$STAGE_ASSET"
+        sudo chmod +x "$(basename "$RUN_SCRIPT")"
+        export -f on_chroot
+        ./$(basename "$RUN_SCRIPT")
+      )
+      echo "=== Finished staged script: $RUN_SCRIPT ==="
+    fi
+  done
   echo "=== Finished staged assets for $1 ==="
   echo
 }
 
-on_chroot() {
-  sudo chroot "$ROOTFS" /bin/bash -eux "$@"
-}
-
 # Customization from raspbian image 01-homebridge
 
-#install_staged_assets "01-homebridge" "$ROOTFS/etc/nginx"
+export FIRST_USER_NAME="homebridge"
+export BUILD_VERSION="test build"
+
+install_staged_assets "01-homebridge" "$ROOTFS/etc/nginx"
 #install_staged_assets "03-nginx" "$ROOTFS/etc/nginx"
 #install_staged_assets "04-tzupdate" "$ROOTFS/etc/nginx"
 #install_staged_assets "05-ffmpeg" "$ROOTFS/etc/nginx"
@@ -299,7 +230,7 @@ sudo umount -l "$ESP_MOUNTDIR" || true
 sudo losetup -d "$LOOP_DEV"
 
 # Compress
-gzip -f "$IMG_PATH"
+# gzip -k -f "$IMG_PATH"
 
 echo "✅ Finished: $IMG_PATH.gz"
 echo "Root UUID: $ROOT_UUID"

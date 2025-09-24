@@ -127,11 +127,12 @@ check_dependencies() {
   local img_gz_file="$OUTPUT_DIR/homebridge-$ARCH.img.gz"
   local raw_file="$OUTPUT_DIR/homebridge-$ARCH.raw"
   local efi_img_file="$OUTPUT_DIR/homebridge-$ARCH-efi.img"
+  local img_file="$OUTPUT_DIR/homebridge-$ARCH.img"
   
   if [[ -f "$vmdk_file" ]]; then
     log "✅ VMDK image found: $vmdk_file"
-  elif [[ -f "$img_gz_file" ]]; then
-    warn "VMDK not found, but compressed IMG found. Converting..."
+  elif [[ -f "$img_gz_file" || -f "$img_file" ]]; then
+    warn "VMDK not found, but IMG found. Converting..."
     convert_image_format
   elif [[ -f "$raw_file" ]]; then
     warn "VMDK not found, but RAW image found. Converting..."
@@ -157,9 +158,10 @@ convert_image_format() {
   local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
   
   if [[ -f "$img_gz" && ! -f "$vmdk_file" ]]; then
-    log "📦 Extracting compressed image..."
-    gunzip -k "$img_gz"
-    
+    if [[ ! -f "$img_file"  ]]; then
+      log "📦 Extracting compressed image..."
+      gunzip -k "$img_gz"
+    fi
     log "🔄 Converting IMG to VMDK..."
     if command -v qemu-img &> /dev/null; then
       qemu-img convert -f raw -O vmdk "$img_file" "$vmdk_file"
