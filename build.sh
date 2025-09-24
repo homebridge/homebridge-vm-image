@@ -88,14 +88,13 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get upgrade -y
 apt-get install -y \
-  curl wget tzdata locales psmisc procps iputils-ping logrotate \
-  libatomic1 apt-transport-https apt-utils jq openssl sudo nano net-tools \
-  python3 python3-pip pipx python3-setuptools git make g++ libnss-mdns \
-  avahi-discover libavahi-compat-libdnssd-dev python3-venv python3-dev \
+  wget tzdata locales psmisc procps iputils-ping logrotate \
+  libatomic1 apt-utils  openssl sudo nano net-tools \
+  libnss-mdns \
   linux-image-$ARCH grub-efi-$ARCH grub-efi-$ARCH-bin \
   grub-common grub2-common systemd systemd-sysv dbus \
-  gnupg iproute2 avahi-daemon ca-certificates build-essential \
-  pkg-config hyperv-daemons dhcpcd5
+  gnupg iproute2 build-essential \
+  hyperv-daemons dhcpcd5 
 
 # Locale and timezone setup
 locale-gen en_US.UTF-8
@@ -104,17 +103,6 @@ echo Etc/GMT > /etc/timezone
 
 # Install tzupdate via pipx
 pipx install tzupdate || true
-
-# Ensure ping is executable
-chmod 0755 /bin/ping
-
-# Add Homebridge APT repo
-curl -fsSL https://repo.homebridge.io/KEY.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/homebridge.gpg
-echo 'deb [signed-by=/etc/apt/trusted.gpg.d/homebridge.gpg] https://repo.homebridge.io stable main' > /etc/apt/sources.list.d/homebridge.list
-
-# Install Homebridge
-apt-get update
-apt-get install -y homebridge
 
 # Clean up
 apt-get clean
@@ -185,33 +173,6 @@ echo "UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1" >> /etc/fstab
 systemctl enable getty@tty1.service
 systemctl enable serial-getty@ttyS0.service
 
-# Configure systemd for serial console logging
-mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
-cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf <<'SERIALEOF'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty -o '-p -- \\u' --keep-baud 115200,57600,38400,9600 %I $TERM
-StandardOutput=journal+console
-StandardError=journal+console
-SERIALEOF
-
-# Configure journald for console output
-mkdir -p /etc/systemd/journald.conf.d
-cat > /etc/systemd/journald.conf.d/console.conf <<'JOURNALEOF'
-[Journal]
-ForwardToConsole=yes
-TTYPath=/dev/console
-MaxLevelConsole=info
-JOURNALEOF
-
-# Configure rsyslog for serial console if available
-if systemctl list-unit-files | grep -q rsyslog; then
-    cat > /etc/rsyslog.d/50-console.conf <<'RSYSLOGEOF'
-# Send all logs to console (which includes serial)
-*.* /dev/console
-RSYSLOGEOF
-fi
-
 # GRUB install
 grub-install \
   --target=${ARCH}-efi \
@@ -241,10 +202,6 @@ update-initramfs -c -k all
 
 update-grub
 
-cat /etc/default/grub
-
-ls -lR /boot/efi/EFI
-
 # Fallback EFI bootloader (strict + safe)
 mkdir -p /boot/efi/EFI/BOOT
 BOOT_PATH=\$(find /boot/efi/EFI -type f \\( -name 'grubx64.efi' -o -name 'grubaa64.efi' \\) ! -path '*/BOOT/*' | head -n1)
@@ -268,7 +225,6 @@ update-initramfs -u
 
 # Enable services
 mv /root/setup/50-avahi.service /etc/avahi/services/
-systemctl enable homebridge
 systemctl enable avahi-daemon
 systemctl enable dhcpcd
 
@@ -288,6 +244,45 @@ cat /etc/default/grub
 echo "=== Available block devices ==="
 lsblk || true
 EOF
+
+install_staged_assets() {
+  echo
+  echo "=== Installing staged assets for $1 ==="
+  local STAGE_ASSET="$1"
+  local TARGET_DIR="$2"
+  # Copy config files if present
+#  if [ -d "assets/$STAGE_ASSET" ]; then
+#    sudo cp -r "assets/$STAGE_ASSET/"* "$TARGET_DIR/"
+#  fi
+  # Install extra packages if 00-packages exists
+  if [ -f "assets/$STAGE_ASSET/00-packages" ]; then
+    local EXTRA_PKGS
+    EXTRA_PKGS=$(grep -v '^#' "assets/$STAGE_ASSET/00-packages" | xargs)
+    if [ -n "$EXTRA_PKGS" ]; then
+      sudo chroot "$ROOTFS" /bin/bash -c "apt-get update && apt-get install -y $EXTRA_PKGS"
+    fi
+  fi
+  # Run custom script if 01-run.sh exists
+  if [ -f "assets/$STAGE_ASSET/01-run.sh" ]; then
+    sudo cp "assets/$STAGE_ASSET/01-run.sh" "$ROOTFS/tmp/01-run.sh"
+    sudo chroot "$ROOTFS" /bin/bash -c "bash /tmp/01-run.sh"
+    sudo rm -f "$ROOTFS/tmp/01-run.sh"
+  fi
+  echo "=== Finished staged assets for $1 ==="
+  echo
+}
+
+on_chroot() {
+  sudo chroot "$ROOTFS" /bin/bash -eux "$@"
+}
+
+# Customization from raspbian image 01-homebridge
+
+#install_staged_assets "01-homebridge" "$ROOTFS/etc/nginx"
+#install_staged_assets "03-nginx" "$ROOTFS/etc/nginx"
+#install_staged_assets "04-tzupdate" "$ROOTFS/etc/nginx"
+#install_staged_assets "05-ffmpeg" "$ROOTFS/etc/nginx"
+#install_staged_assets "07-other-package" "$ROOTFS/etc/nginx"
 
 # Clean exit
 sudo chroot "$ROOTFS" /bin/bash -c 'ps -ef || true'

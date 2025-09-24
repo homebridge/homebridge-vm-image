@@ -271,7 +271,7 @@ create_vm() {
   # Create and attach homebridge-data hard disk
 
   if [[ ! -f "$homebridge_data" ]]; then
-    log "📁 Creating persistent data disk..."
+    log "📁 Creating persistent homebridge data disk..."
     VBoxManage createhd --filename "$homebridge_data" --size 10240
   fi
 
