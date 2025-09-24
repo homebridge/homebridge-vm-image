@@ -42,8 +42,8 @@ docker run --rm -it \
   "$DOCKER_IMAGE" bash -c "
     set -e
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install -y \
+    apt-get update -qq
+    apt-get install -y -qq \
       debootstrap parted e2fsprogs dosfstools \
       $GRUB_EFI_PKG \
       qemu-user-static gzip \

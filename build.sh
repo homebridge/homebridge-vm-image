@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 
+# Quiet APT output unless there's an error
+APT_DEBUG="-qq"
+DEB_QUIET=""
+
 ARCH="$1"
 DISTRO="bookworm"
 IMG_NAME="homebridge-${ARCH}.img"
@@ -59,7 +63,18 @@ echo "Root UUID: $ROOT_UUID"
 
 # Mount and bootstrap
 sudo mount "$ROOT_PART" "$ROOTFS"
-sudo debootstrap --arch="$ARCH" --variant=buildd "$DISTRO" "$ROOTFS" http://deb.debian.org/debian
+
+# Use cached debootstrap if available
+mkdir -p cache
+if [ -f "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" ]; then
+  echo "Restoring cached debootstrap rootfs..."
+  mkdir -p "$ROOTFS"
+  tar -xzf "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" -C "$ROOTFS"
+else
+  echo "Running debootstrap..."
+  sudo debootstrap --arch="$ARCH" --variant=buildd "$DISTRO" "$ROOTFS" http://deb.debian.org/debian
+  tar -czf "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" -C "$ROOTFS" .
+fi
 
 # Mount for chroot
 sudo mount --bind /dev "$ROOTFS/dev"
@@ -86,8 +101,8 @@ export DEBIAN_FRONTEND=noninteractive
 
 # Install base and docker-homebridge compatible packages
 apt-get update
-apt-get upgrade -y
-apt-get install -y \
+apt-get upgrade -y ${APT_DEBUG}
+apt-get install -y ${APT_DEBUG} \
   wget  locales psmisc procps iputils-ping logrotate \
   apt-utils  openssl sudo nano net-tools libnss-mdns \
   linux-image-$ARCH grub-efi-$ARCH grub-efi-$ARCH-bin \
@@ -165,7 +180,6 @@ install_staged_assets() {
   echo "=== Installing staged assets for $1 ==="
   local STAGE_ASSET="$1"
   local TARGET_DIR="$2"
-  export ROOTFS_DIR="$ROOTFS"
   # Copy config files if present
   if [ -d "assets/$STAGE_ASSET/files" ]; then
     sudo mkdir -p "$ROOTFS/files"
@@ -176,7 +190,7 @@ install_staged_assets() {
     local EXTRA_PKGS
     EXTRA_PKGS=$(grep -v '^#' "assets/$STAGE_ASSET/00-packages" | xargs)
     if [ -n "$EXTRA_PKGS" ]; then
-      sudo chroot "$ROOTFS" /bin/bash -c "apt-get update && apt-get install -y $EXTRA_PKGS"
+      sudo chroot "$ROOTFS" /bin/bash -c "apt-get update ${APT_DEBUG} && apt-get install -y ${APT_DEBUG} $EXTRA_PKGS"
     fi
   fi
   echo "=== Installed extra packages for $1 ==="
@@ -189,13 +203,17 @@ install_staged_assets() {
       # sudo chroot "$ROOTFS" /bin/bash -c "bash /tmp/$(basename "$RUN_SCRIPT")"
       # sudo rm -f "$ROOTFS/tmp/$(basename "$RUN_SCRIPT")"
       (
-        on_chroot() {
-          sudo chroot "$ROOTFS" /bin/bash -eux "$@"
-        }
         cd "assets/$STAGE_ASSET"
         sudo chmod +x "$(basename "$RUN_SCRIPT")"
-        export -f on_chroot
-        ./$(basename "$RUN_SCRIPT")
+        # export ROOTFS_DIR="$ROOTFS"
+        sudo /bin/bash -c '
+          export ROOTFS_DIR="'"$ROOTFS"'"
+          on_chroot() {
+            chroot "'"../../$ROOTFS"'" /bin/bash -eux "$@"
+          }
+          export -f on_chroot
+          ./$(basename "'"$RUN_SCRIPT"'")
+        '
       )
       echo "=== Finished staged script: $RUN_SCRIPT ==="
     fi

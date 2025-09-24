@@ -157,7 +157,7 @@ convert_image_format() {
   local img_file="$OUTPUT_DIR/homebridge-$ARCH.img"
   local vmdk_file="$OUTPUT_DIR/homebridge-$ARCH.vmdk"
   
-  if [[ -f "$img_gz" && ! -f "$vmdk_file" ]]; then
+  if [[ (-f "$img_gz" || -f "$img_file" )&& ! -f "$vmdk_file" ]]; then
     if [[ ! -f "$img_file"  ]]; then
       log "📦 Extracting compressed image..."
       gunzip -k "$img_gz"
