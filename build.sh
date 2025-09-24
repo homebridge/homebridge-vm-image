@@ -30,18 +30,36 @@ parted -s "$IMG_PATH" mkpart ESP fat32 1MiB "${ESP_SIZE_MB}MiB"
 parted -s "$IMG_PATH" set 1 esp on
 parted -s "$IMG_PATH" mkpart primary ext4 "${ESP_SIZE_MB}MiB" 100%
 
-# Setup loop device
-LOOP_DEV=$(sudo losetup --find --partscan --show "$IMG_PATH")
-ESP_PART="${LOOP_DEV}p1"
-ROOT_PART="${LOOP_DEV}p2"
+# Setup loop device and partitions
+LOOP_DEV=$(sudo losetup --find --show "$IMG_PATH")
+sudo kpartx -a $LOOP_DEV
+sleep 2  # Give udev time to create devices
+ESP_PART="/dev/mapper/$(basename $LOOP_DEV)p1"
+ROOT_PART="/dev/mapper/$(basename $LOOP_DEV)p2"
+
+for part in "$ESP_PART" "$ROOT_PART"; do
+  if [[ ! -b "$part" ]]; then
+    echo "ERROR: Partition device $part not found!"
+    sudo kpartx -l "$LOOP_DEV"
+    ls -l /dev/mapper/
+    exit 1
+  fi
+done
 
 # Format
 sudo mkfs.vfat -F32 "$ESP_PART"
 sudo mkfs.ext4 "$ROOT_PART"
 
+# Get UUIDs for reliable mounting
+ESP_UUID=$(sudo blkid -s UUID -o value "$ESP_PART")
+ROOT_UUID=$(sudo blkid -s UUID -o value "$ROOT_PART")
+
+echo "ESP UUID: $ESP_UUID"
+echo "Root UUID: $ROOT_UUID"
+
 # Mount and bootstrap
 sudo mount "$ROOT_PART" "$ROOTFS"
-sudo debootstrap --arch="$ARCH" --variant=minbase "$DISTRO" "$ROOTFS" http://deb.debian.org/debian
+sudo debootstrap --arch="$ARCH" --variant=buildd "$DISTRO" "$ROOTFS" http://deb.debian.org/debian
 
 # Mount for chroot
 sudo mount --bind /dev "$ROOTFS/dev"
@@ -72,11 +90,11 @@ apt-get install -y \
   linux-image-$ARCH grub-efi-$ARCH grub-efi-$ARCH-bin \
   grub-common grub2-common \
   systemd systemd-sysv sudo curl gnupg dbus \
-  procps net-tools avahi-daemon libavahi-compat-libdnssd-dev \
+  procps net-tools iproute2 avahi-daemon libavahi-compat-libdnssd-dev \
   ca-certificates \
   build-essential python3 python3-dev python3-setuptools \
   pkg-config git \
-  hyperv-daemons
+  hyperv-daemons dhcpcd5
 
 # Add Homebridge APT repo
 curl -fsSL https://repo.homebridge.io/KEY.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/homebridge.gpg
@@ -86,13 +104,96 @@ echo 'deb [signed-by=/etc/apt/trusted.gpg.d/homebridge.gpg] https://repo.homebri
 apt-get update
 apt-get install -y homebridge
 
-# fstab
-echo "/dev/vda2 / ext4 defaults 0 1" > /etc/fstab
-echo "/dev/vda1 /boot/efi vfat umask=0077 0 1" >> /etc/fstab
+# Configure networking for automatic DHCP
+cat > /etc/systemd/network/10-ethernet.network <<'NETEOF'
+[Match]
+Name=en* eth*
 
-# Enable console
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+
+[DHCP]
+RouteMetric=10
+UseMTU=true
+NETEOF
+
+# Enable networking services
+systemctl enable systemd-networkd
+
+# Try to enable systemd-resolved, but don't fail if it doesn't exist
+if systemctl list-unit-files | grep -q systemd-resolved; then
+    systemctl enable systemd-resolved
+    # Create proper resolv.conf symlink (handle busy file)
+    umount /etc/resolv.conf 2>/dev/null || true
+    rm -f /etc/resolv.conf
+    ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+    echo "systemd-resolved configured"
+else
+    echo "systemd-resolved not available, using traditional DNS"
+    # Create basic resolv.conf with public DNS servers
+    umount /etc/resolv.conf 2>/dev/null || true
+    rm -f /etc/resolv.conf
+    cat > /etc/resolv.conf <<'DNSEOF'
+# Fallback DNS configuration
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+nameserver 2001:4860:4860::8888
+nameserver 2001:4860:4860::8844
+DNSEOF
+fi
+
+# Fallback traditional networking (in case systemd-networkd fails)
+cat > /etc/network/interfaces <<'IFACEEOF'
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+auto eth0
+iface eth0 inet dhcp
+
+auto ens3
+iface ens3 inet dhcp
+
+auto enp0s3
+iface enp0s3 inet dhcp
+IFACEEOF
+
+# fstab with UUIDs for reliable mounting
+echo "UUID=$ROOT_UUID / ext4 defaults 0 1" > /etc/fstab
+echo "UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1" >> /etc/fstab
+
+# Enable console services for both TTY and Serial
 systemctl enable getty@tty1.service
 systemctl enable serial-getty@ttyS0.service
+
+# Configure systemd for serial console logging
+mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
+cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf <<'SERIALEOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -- \\u' --keep-baud 115200,57600,38400,9600 %I $TERM
+StandardOutput=journal+console
+StandardError=journal+console
+SERIALEOF
+
+# Configure journald for console output
+mkdir -p /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/console.conf <<'JOURNALEOF'
+[Journal]
+ForwardToConsole=yes
+TTYPath=/dev/console
+MaxLevelConsole=info
+JOURNALEOF
+
+# Configure rsyslog for serial console if available
+if systemctl list-unit-files | grep -q rsyslog; then
+    cat > /etc/rsyslog.d/50-console.conf <<'RSYSLOGEOF'
+# Send all logs to console (which includes serial)
+*.* /dev/console
+RSYSLOGEOF
+fi
 
 # GRUB install
 grub-install \
@@ -104,7 +205,28 @@ grub-install \
   --removable \
   --recheck
 
+# Configure GRUB with UUID-based root and enhanced serial console
+sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"console=tty0 console=ttyS0,115200n8 root=UUID=$ROOT_UUID loglevel=7 systemd.journald.forward_to_console=yes\"|" /etc/default/grub
+sed -i 's/^GRUB_CMDLINE_LINUX=".*"/GRUB_CMDLINE_LINUX=""/' /etc/default/grub
+sed -i 's/^#GRUB_TERMINAL=console/GRUB_TERMINAL="console serial"/' /etc/default/grub
+sed -i 's/^#GRUB_SERIAL_COMMAND=.*/GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"/' /etc/default/grub
+
+# Add serial console configuration if not present
+grep -q "^GRUB_SERIAL_COMMAND=" /etc/default/grub || echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /etc/default/grub
+
+# Clean initramfs configuration to avoid loop device references
+rm -f /etc/initramfs-tools/conf.d/resume
+echo "RESUME=none" > /etc/initramfs-tools/conf.d/resume
+
+# Force clean rebuild of initramfs
+update-initramfs -d -k all || true
+update-initramfs -c -k all
+
 update-grub
+
+cat /etc/default/grub
+
+ls -lR /boot/efi/EFI
 
 # Fallback EFI bootloader (strict + safe)
 mkdir -p /boot/efi/EFI/BOOT
@@ -124,13 +246,30 @@ echo "127.0.0.1 localhost" >> /etc/hosts
 echo "127.0.1.1 homebridge-vm" >> /etc/hosts
 echo "root:root" | chpasswd
 
+# Final initramfs update
+update-initramfs -u
+
 # Enable services
 mv /root/setup/50-avahi.service /etc/avahi/services/
 systemctl enable homebridge
 systemctl enable avahi-daemon
+systemctl enable dhcpcd
+
+# Test network configuration
+echo "=== Testing network setup ==="
+systemctl status systemd-networkd --no-pager || echo "systemd-networkd not running"
+systemctl status systemd-resolved --no-pager || echo "systemd-resolved not running"
 
 # Clean
 apt-get clean
+
+# Debug info
+echo "=== Final fstab ==="
+cat /etc/fstab
+echo "=== GRUB config ==="
+cat /etc/default/grub
+echo "=== Available block devices ==="
+lsblk || true
 EOF
 
 # Clean exit
@@ -151,3 +290,5 @@ sudo losetup -d "$LOOP_DEV"
 gzip -f "$IMG_PATH"
 
 echo "✅ Finished: $IMG_PATH.gz"
+echo "Root UUID: $ROOT_UUID"
+echo "ESP UUID: $ESP_UUID"
