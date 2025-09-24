@@ -52,9 +52,10 @@ sudo mount "$ESP_PART" "$ESP_MOUNTDIR"
 sudo mkdir -p "$ROOTFS/boot/efi"
 sudo mount --bind "$ESP_MOUNTDIR" "$ROOTFS/boot/efi"
 
-# Copy Avahi template
+# Copy Avahi template and Homebridge service
 sudo mkdir -p "$ROOTFS/root/setup"
 sudo cp assets/50-avahi.service "$ROOTFS/root/setup/"
+sudo cp assets/homebridge.service "$ROOTFS/root/setup/"
 
 # Copy GRUB modules for amd64
 if [ "$ARCH" = "amd64" ]; then
@@ -86,17 +87,36 @@ echo 'deb [signed-by=/etc/apt/trusted.gpg.d/homebridge.gpg] https://repo.homebri
 apt-get update
 apt-get install -y homebridge
 
-# fstab
-echo "/dev/vda2 / ext4 defaults 0 1" > /etc/fstab
-echo "/dev/vda1 /boot/efi vfat umask=0077 0 1" >> /etc/fstab
+# fstab - use UUIDs for universal compatibility across VM platforms
+# Get the UUIDs of the mounted filesystems
+ROOT_PART_DEV=\$(df / | tail -1 | awk '{print \$1}')
+EFI_PART_DEV=\$(df /boot/efi | tail -1 | awk '{print \$1}')
+ROOT_UUID=\$(blkid -s UUID -o value \$ROOT_PART_DEV)
+EFI_UUID=\$(blkid -s UUID -o value \$EFI_PART_DEV)
+
+echo "UUID=\$ROOT_UUID / ext4 defaults 0 1" > /etc/fstab
+echo "UUID=\$EFI_UUID /boot/efi vfat umask=0077 0 1" >> /etc/fstab
+
+# Add fallback entries for different VM platforms  
+echo "" >> /etc/fstab
+echo "# Platform-specific fallbacks (uncomment if UUID fails):" >> /etc/fstab
+echo "#/dev/sda2 / ext4 defaults 0 1  # VirtualBox/VMware SATA" >> /etc/fstab
+echo "#/dev/sda1 /boot/efi vfat umask=0077 0 1" >> /etc/fstab
+echo "#/dev/vda2 / ext4 defaults 0 1  # KVM/QEMU virtio" >> /etc/fstab  
+echo "#/dev/vda1 /boot/efi vfat umask=0077 0 1" >> /etc/fstab
 
 # Enable console
 systemctl enable getty@tty1.service
 systemctl enable serial-getty@ttyS0.service
 
-# GRUB install
+# GRUB install - use correct target architecture
+GRUB_TARGET="x86_64-efi"
+if [ "$ARCH" = "arm64" ]; then
+  GRUB_TARGET="arm64-efi"
+fi
+
 grub-install \
-  --target=${ARCH}-efi \
+  --target=\${GRUB_TARGET} \
   --efi-directory=/boot/efi \
   --boot-directory=/boot \
   --bootloader-id=debian \
@@ -126,6 +146,7 @@ echo "root:root" | chpasswd
 
 # Enable services
 mv /root/setup/50-avahi.service /etc/avahi/services/
+mv /root/setup/homebridge.service /etc/systemd/system/
 systemctl enable homebridge
 systemctl enable avahi-daemon
 
