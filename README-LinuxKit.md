@@ -204,6 +204,11 @@ The built images include:
 - **Default PIN**: 031-45-154
 - **Bridge Name**: Homebridge
 - **MAC Address**: CC:22:3D:E3:CE:30
+- **VirtualBox Guest Additions**: Pre-installed for enhanced VM integration
+  - Bidirectional clipboard sharing
+  - Drag and drop support
+  - Better graphics performance
+  - Seamless mouse integration
 
 ## Customization
 
@@ -290,6 +295,33 @@ LinuxKit services can be added to the `services` section of the YAML file. Each 
 - Requires Docker Desktop (not podman or other runtimes)
 - ARM64 validation requires VirtualBox 7.0+ with ARM64 support
 - Some hypervisors may require additional configuration for EFI boot
+
+## VirtualBox Guest Additions
+
+The LinuxKit images come with VirtualBox Guest Additions pre-installed and configured for enhanced VM integration:
+
+### Features Available
+
+- **Bidirectional Clipboard**: Copy/paste between host and guest OS
+- **Drag & Drop**: File transfer via drag and drop (bidirectional)
+- **Seamless Mouse Integration**: No mouse capture/release needed
+- **Better Graphics Performance**: Optimized display drivers
+- **Automatic Resolution Adjustment**: VM screen adapts to window size
+
+### Auto-Configuration
+
+The validation script automatically configures:
+- Bidirectional clipboard sharing
+- Bidirectional drag and drop
+- VMSVGA graphics controller for optimal performance
+
+### Manual Configuration
+
+If using the image outside the validation script, enable these features in VirtualBox:
+
+1. **Shared Clipboard**: VM Settings → General → Advanced → Shared Clipboard → Bidirectional
+2. **Drag & Drop**: VM Settings → General → Advanced → Drag'n'Drop → Bidirectional
+3. **Graphics**: VM Settings → Display → Graphics Controller → VMSVGA
 
 ## Future Enhancements
 

@@ -266,7 +266,12 @@ create_vm() {
     --type hdd \
     --medium "$vmdk_file"
   
-  log "✅ VM created and configured"
+  # Configure VirtualBox Guest Additions features
+  VBoxManage modifyvm "$VM_NAME" \
+    --clipboard-mode bidirectional \
+    --draganddrop bidirectional
+  
+  log "✅ VM created and configured with Guest Additions support"
 }
 
 start_vm() {

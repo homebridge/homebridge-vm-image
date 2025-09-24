@@ -18,6 +18,17 @@ services:
     env:
      - INSECURE=true
 
+  - name: vbox-guest-additions
+    image: alpine:3.18
+    command: ["/bin/sh", "-c", "apk add --no-cache virtualbox-guest-additions virtualbox-guest-modules-lts dbus && modprobe vboxguest && modprobe vboxsf && modprobe vboxvideo && exec VBoxService --foreground"]
+    capabilities:
+      - all
+    binds:
+      - /dev:/dev
+      - /sys:/sys
+      - /proc:/proc
+    pid: host
+
   - name: homebridge
     image: alpine:3.18
     command: ["/bin/sh", "-c", "apk add --no-cache nodejs npm python3 py3-pip build-base linux-headers avahi-dev dbus-dev && npm install -g --unsafe-perm homebridge homebridge-config-ui-x && mkdir -p /homebridge && if [ ! -f /homebridge/config.json ]; then echo '{\"bridge\":{\"name\":\"Homebridge\",\"username\":\"CC:22:3D:E3:CE:30\",\"port\":51826,\"pin\":\"031-45-154\"},\"accessories\":[],\"platforms\":[{\"name\":\"Config\",\"port\":8581,\"platform\":\"config\"}]}' > /homebridge/config.json; fi && cd /homebridge && exec homebridge -U /homebridge"]
