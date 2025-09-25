@@ -8,14 +8,6 @@
 # Executables Files
 #
 
-ls -l
-pwd
-
-ls -l files/
-
-echo "ROOTFS_DIR=${ROOTFS_DIR}"
-
-ls -l files/hb-config-new "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 install -m 755 files/hb-config-new "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 
 

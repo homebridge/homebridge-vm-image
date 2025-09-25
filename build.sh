@@ -23,7 +23,7 @@ if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
 fi
 
 # Clean
-sudo rm -rf "$WORKDIR" "$OUTPUT_DIR"
+sudo rm -rf "$WORKDIR" ${OUTPUT_DIR}/*
 mkdir -p "$ROOTFS" "$MOUNTDIR" "$ESP_MOUNTDIR" "$OUTPUT_DIR"
 
 # Create disk image and partition
@@ -64,39 +64,60 @@ echo "Root UUID: $ROOT_UUID"
 # Mount and bootstrap
 sudo mount "$ROOT_PART" "$ROOTFS"
 
-# Use cached debootstrap if available
+# Create cache directory
 mkdir -p cache
-if [ -f "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" ]; then
-  echo "Restoring cached debootstrap rootfs..."
-  mkdir -p "$ROOTFS"
-  tar -xzf "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" -C "$ROOTFS"
+
+# Check for base system cache (before customization)
+BASE_CACHE="cache/base-system-${DISTRO}-${ARCH}.tar.gz"
+if [ -f "$BASE_CACHE" ]; then
+  echo "Restoring cached base system (pre-customization)..."
+  tar -xzf "$BASE_CACHE" -C "$ROOTFS"
+  
+  # Mount for chroot
+  sudo mount --bind /dev "$ROOTFS/dev"
+  sudo mount --bind /sys "$ROOTFS/sys"
+  sudo mount --bind /proc "$ROOTFS/proc"
+  
+  sudo mount "$ESP_PART" "$ESP_MOUNTDIR"
+  sudo mkdir -p "$ROOTFS/boot/efi"
+  sudo mount --bind "$ESP_MOUNTDIR" "$ROOTFS/boot/efi"
+  
+  echo "Base system restored from cache, skipping to customization..."
 else
-  echo "Running debootstrap..."
-  sudo debootstrap --arch="$ARCH" --variant=buildd "$DISTRO" "$ROOTFS" http://deb.debian.org/debian
-  tar -czf "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" -C "$ROOTFS" .
-fi
+  echo "No base system cache found, building from scratch..."
+  
+  # Use cached debootstrap if available
+  if [ -f "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" ]; then
+    echo "Restoring cached debootstrap rootfs..."
+    mkdir -p "$ROOTFS"
+    tar -xzf "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" -C "$ROOTFS"
+  else
+    echo "Running debootstrap..."
+    sudo debootstrap --arch="$ARCH" --variant=buildd "$DISTRO" "$ROOTFS" http://deb.debian.org/debian
+    tar -czf "cache/debootstrap-${DISTRO}-${ARCH}.tar.gz" -C "$ROOTFS" .
+  fi
 
-# Mount for chroot
-sudo mount --bind /dev "$ROOTFS/dev"
-sudo mount --bind /sys "$ROOTFS/sys"
-sudo mount --bind /proc "$ROOTFS/proc"
+  # Mount for chroot
+  sudo mount --bind /dev "$ROOTFS/dev"
+  sudo mount --bind /sys "$ROOTFS/sys"
+  sudo mount --bind /proc "$ROOTFS/proc"
 
-sudo mount "$ESP_PART" "$ESP_MOUNTDIR"
-sudo mkdir -p "$ROOTFS/boot/efi"
-sudo mount --bind "$ESP_MOUNTDIR" "$ROOTFS/boot/efi"
+  sudo mount "$ESP_PART" "$ESP_MOUNTDIR"
+  sudo mkdir -p "$ROOTFS/boot/efi"
+  sudo mount --bind "$ESP_MOUNTDIR" "$ROOTFS/boot/efi"
 
-# Copy Avahi template
-sudo mkdir -p "$ROOTFS/root/setup"
-sudo cp assets/50-avahi.service "$ROOTFS/root/setup/"
+  # Copy Avahi template
+  sudo mkdir -p "$ROOTFS/root/setup"
+  sudo cp assets/50-avahi.service "$ROOTFS/root/setup/"
 
-# Copy GRUB modules for amd64
-if [ "$ARCH" = "amd64" ]; then
-  sudo mkdir -p "$ROOTFS/usr/lib/grub/amd64-efi"
-  sudo cp -r /usr/lib/grub/x86_64-efi/* "$ROOTFS/usr/lib/grub/amd64-efi/"
-fi
+  # Copy GRUB modules for amd64
+  if [ "$ARCH" = "amd64" ]; then
+    sudo mkdir -p "$ROOTFS/usr/lib/grub/amd64-efi"
+    sudo cp -r /usr/lib/grub/x86_64-efi/* "$ROOTFS/usr/lib/grub/amd64-efi/"
+  fi
 
-# Run chroot
-sudo chroot "$ROOTFS" /bin/bash -eux <<EOF
+  # Run chroot
+  sudo chroot "$ROOTFS" /bin/bash -eux <<EOF
 export DEBIAN_FRONTEND=noninteractive
 
 # Install base and docker-homebridge compatible packages
@@ -104,14 +125,13 @@ apt-get update
 apt-get upgrade -y ${APT_DEBUG}
 apt-get install -y ${APT_DEBUG} \
   wget  locales psmisc procps iputils-ping logrotate \
-  apt-utils  openssl sudo nano net-tools libnss-mdns \
+  apt-utils openssl sudo nano net-tools libnss-mdns \
   linux-image-$ARCH grub-efi-$ARCH grub-efi-$ARCH-bin \
   grub-common grub2-common systemd systemd-sysv dbus \
-  gnupg iproute2 hyperv-daemons dhcpcd5 
+  gnupg iproute2 hyperv-daemons dhcpcd5 linux-headers-$ARCH \
+  ssh
 
-# fstab with UUIDs for reliable mounting
-echo "UUID=$ROOT_UUID / ext4 defaults 0 1" > /etc/fstab
-echo "UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1" >> /etc/fstab
+locale-gen en_CA.UTF-8
 
 # GRUB install
 grub-install \
@@ -130,7 +150,7 @@ sed -i 's/^#GRUB_TERMINAL=console/GRUB_TERMINAL="console"/' /etc/default/grub
 #sed -i 's/^#GRUB_SERIAL_COMMAND=.*/GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"/' /etc/default/grub
 
 # Add serial console configuration if not present
-grep -q "^GRUB_SERIAL_COMMAND=" /etc/default/grub || echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /etc/default/grub
+# grep -q "^GRUB_SERIAL_COMMAND=" /etc/default/grub || echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /etc/default/grub
 
 # Clean initramfs configuration to avoid loop device references
 rm -f /etc/initramfs-tools/conf.d/resume
@@ -175,6 +195,26 @@ apt-get clean
 #lsblk || true
 EOF
 
+  # Cache the base system before customization
+  echo "Caching base system (pre-customization)..."
+  
+  # Temporarily unmount to create clean cache
+  sudo umount -l "$ROOTFS/boot/efi" || true
+  sudo umount -l "$ROOTFS/proc" || true
+  sudo umount -l "$ROOTFS/sys" || true  
+  sudo umount -l "$ROOTFS/dev" || true
+  
+  # Create cache of the base system
+  tar -czf "$BASE_CACHE" -C "$ROOTFS" .
+  echo "Base system cached to: $BASE_CACHE"
+  
+  # Remount for customization
+  sudo mount --bind /dev "$ROOTFS/dev"
+  sudo mount --bind /sys "$ROOTFS/sys"
+  sudo mount --bind /proc "$ROOTFS/proc"
+  sudo mount --bind "$ESP_MOUNTDIR" "$ROOTFS/boot/efi"
+fi
+
 install_staged_assets() {
   echo
   echo "=== Installing staged assets for $1 ==="
@@ -204,10 +244,10 @@ install_staged_assets() {
       # sudo rm -f "$ROOTFS/tmp/$(basename "$RUN_SCRIPT")"
       (
         cd "assets/$STAGE_ASSET"
-        sudo chmod +x "$(basename "$RUN_SCRIPT")"
+        # sudo chmod +x "$(basename "$RUN_SCRIPT")"
         # export ROOTFS_DIR="$ROOTFS"
         sudo /bin/bash -c '
-          export ROOTFS_DIR="'"$ROOTFS"'"
+          export ROOTFS_DIR="/repo/'"$ROOTFS"'"
           on_chroot() {
             chroot "'"../../$ROOTFS"'" /bin/bash -eux "$@"
           }
@@ -222,16 +262,22 @@ install_staged_assets() {
   echo
 }
 
+sudo chroot "$ROOTFS" /bin/bash -eux <<FSTABEOF
+# fstab with UUIDs for reliable mounting
+echo "UUID=$ROOT_UUID / ext4 defaults 0 1" > /etc/fstab
+echo "UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1" >> /etc/fstab
+FSTABEOF
+
 # Customization from raspbian image 01-homebridge
 
 export FIRST_USER_NAME="homebridge"
 export BUILD_VERSION="test build"
 
 install_staged_assets "01-homebridge" "$ROOTFS/etc/nginx"
-#install_staged_assets "03-nginx" "$ROOTFS/etc/nginx"
-#install_staged_assets "04-tzupdate" "$ROOTFS/etc/nginx"
-#install_staged_assets "05-ffmpeg" "$ROOTFS/etc/nginx"
-#install_staged_assets "07-other-package" "$ROOTFS/etc/nginx"
+install_staged_assets "03-nginx" "$ROOTFS/etc/nginx"
+install_staged_assets "04-tzupdate" "$ROOTFS/etc/nginx"
+install_staged_assets "05-ffmpeg" "$ROOTFS/etc/nginx"
+install_staged_assets "07-other-package" "$ROOTFS/etc/nginx"
 
 # Clean exit
 sudo chroot "$ROOTFS" /bin/bash -c 'ps -ef || true'
@@ -250,6 +296,6 @@ sudo losetup -d "$LOOP_DEV"
 # Compress
 # gzip -k -f "$IMG_PATH"
 
-echo "✅ Finished: $IMG_PATH.gz"
+echo "✅ Finished: $IMG_PATH"
 echo "Root UUID: $ROOT_UUID"
 echo "ESP UUID: $ESP_UUID"

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Homebridge VM Image Builder - Local Docker Test Script
-# This script detects the architecture, selects the correct Docker image,
-# installs required packages, mounts the repo, and runs build.sh for the specified architecture.
+# Simplified to include Dockerfile checksum in the image tag.
 
 set -e
 
+# Detect architecture
 detect_arch() {
   case "$(uname -m)" in
     arm64|aarch64) echo "arm64" ;;
@@ -16,12 +16,19 @@ detect_arch() {
 
 ARCH="${1:-$(detect_arch)}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DOCKERFILE="$REPO_ROOT/scripts/Dockerfile"
+
+# Generate a checksum for the Dockerfile
+DOCKERFILE_HASH=$(sha256sum "$DOCKERFILE" | awk '{print $1}')
+
+# Use the checksum as part of the image tag
+DOCKER_IMAGE_TAG="homebridge-vm-builder-base:$ARCH-$DOCKERFILE_HASH"
 
 if [[ "$ARCH" == "arm64" ]]; then
-  DOCKER_IMAGE="arm64v8/ubuntu:24.04"
+  BASE_IMAGE="arm64v8/ubuntu:24.04"
   GRUB_EFI_PKG="grub-efi-arm64-bin"
 elif [[ "$ARCH" == "amd64" ]]; then
-  DOCKER_IMAGE="ubuntu:24.04"
+  BASE_IMAGE="ubuntu:24.04"
   GRUB_EFI_PKG="grub-efi-amd64-bin"
 else
   echo "Unsupported architecture: $ARCH"
@@ -29,28 +36,31 @@ else
 fi
 
 echo "==> Starting Homebridge VM Image Builder local build for arch: $ARCH"
-echo "==> Using Docker image: $DOCKER_IMAGE"
+echo "==> Using base image: $BASE_IMAGE"
+echo "==> Using Docker image tag: $DOCKER_IMAGE_TAG"
 echo "==> Using repo root: $REPO_ROOT"
 
-docker pull "$DOCKER_IMAGE"
+# Check if the image already exists
+if ! docker image inspect "$DOCKER_IMAGE_TAG" > /dev/null 2>&1; then
+  echo "==> Dockerfile has changed or image does not exist. Building the Docker image."
+  docker build \
+    --build-arg BASE_IMAGE="$BASE_IMAGE" \
+    --build-arg GRUB_EFI_PKG="$GRUB_EFI_PKG" \
+    -t "$DOCKER_IMAGE_TAG" \
+    -f "$DOCKERFILE" \
+    "$REPO_ROOT"
+else
+  echo "==> Using cached Docker image: $DOCKER_IMAGE_TAG"
+fi
 
+# Run the build
 docker run --rm -it \
   --privileged \
-  -v "$REPO_ROOT":/repo \
+  -v "$REPO_ROOT":/repo/ \
   --workdir /repo \
   --name homebridge-vm-test-$ARCH \
-  "$DOCKER_IMAGE" bash -c "
+  "$DOCKER_IMAGE_TAG" bash -c "
     set -e
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get install -y -qq \
-      debootstrap parted e2fsprogs dosfstools \
-      $GRUB_EFI_PKG \
-      qemu-user-static gzip \
-      sudo udev kpartx psmisc
-    # sudo udev psmisc are needed for build.sh to work properly inside Docker
-    # kpartx is needed, grub-pc-bin was remoted  
-    chmod +x ./build.sh
     ./build.sh $ARCH
     ls -lh output/
     echo '==> Build complete. Output files:'
