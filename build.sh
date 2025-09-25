@@ -474,7 +474,8 @@ main() {
     local APT_MANIFEST=""
     if [[ -f "$MANIFEST_FILE" ]]; then
         # Preserve all lines from the manifest file except header lines, keeping original line returns
-        APT_MANIFEST=$(awk '!/^Package/ && !/^-------/' "$MANIFEST_FILE")
+        # Keep only lines starting and ending with |, excluding those containing Package or ------
+        APT_MANIFEST=$(awk '/^\|.*\|$/ && !/Package/ && !/------/' "$MANIFEST_FILE" | sed 's/\r$//')
     else
         warn "Manifest file not found: ${ROOTFS}/opt/homebridge/homebridge_apt_pkg*.manifest"
     fi
@@ -496,9 +497,11 @@ main() {
 
     log "Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
 
+    log ""
     while IFS= read -r line; do
         log "$line"
     done < "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
+    log ""
 }
 
 # Run main function
