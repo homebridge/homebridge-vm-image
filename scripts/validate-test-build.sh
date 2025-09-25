@@ -63,7 +63,7 @@ if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
   echo "Supported architectures: amd64, arm64"
   exit 1
 fi
-VM_NAME="homebridge-local_build-test"
+VM_NAME="homebridge-local_build-test $ARCH"
 VM_RAM="1024"
 OUTPUT_DIR="${REPO_ROOT}/output"
 VALIDATION_TIMEOUT=300  # 5 minutes
@@ -247,7 +247,6 @@ create_vm() {
   VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
     --cpus 1 \
-    --firmware efi \
     --boot1 disk \
     --nic1 bridged \
     --bridgeadapter1 "en0" \

@@ -9,7 +9,7 @@ readonly ESP_SIZE_MB=256
 # Debug settings - set DEBUG=1 for verbose output
 readonly DEBUG="${DEBUG:-0}"
 readonly APT_QUIET=$([[ $DEBUG -eq 1 ]] && echo "" || echo "-qq")
-readonly APT_REDIRECT=$([[ $DEBUG -eq 1 ]] && echo "" || echo ">/dev/null 2>&1")
+readonly APT_REDIRECT=$([[ $DEBUG -eq 1 ]] && echo "" || echo "> /dev/null 2>&1")
 readonly BASH_DEBUG_FLAG=$([[ $DEBUG -eq 1 ]] && echo "x" || echo "")
 
 set -euo pipefail
@@ -171,8 +171,8 @@ setup_rootfs() {
         # Install zstd on host if available for faster debootstrap
         if command -v apt-get >/dev/null 2>&1 && ! command -v zstd >/dev/null 2>&1; then
             info "Installing zstd for faster debootstrap"
-            sudo apt-get update -qq >/dev/null 2>&1 || true
-            sudo apt-get install -y -qq zstd >/dev/null 2>&1 || true
+            sudo apt-get update -qq ${APT_REDIRECT} || true
+            sudo apt-get install -y -qq zstd ${APT_REDIRECT} || true
         fi
         
         sudo debootstrap --arch="$arch" --variant=minbase "$DISTRO" "$ROOTFS" \
@@ -220,7 +220,32 @@ export DEBIAN_FRONTEND=noninteractive
 export ARCH="$1"
 export ROOT_UUID="$2" 
 export ESP_UUID="$3"
-export APT_QUIET="$4"
+export DEBUG="$4"
+readonly APT_QUIET=$([[ $DEBUG -eq 1 ]] && echo "" || echo "-qq")
+readonly BASH_DEBUG_FLAG=$([[ $DEBUG -eq 1 ]] && echo "x" || echo "")
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log() {
+  echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
+}
+
+warn() {
+  echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING:${NC} $1"
+}
+
+error() {
+  echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1"
+}
+
+info() {
+  echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] INFO:${NC} $1"
+}
 
 # Configure APT for faster downloads
 echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99nolang
@@ -229,28 +254,53 @@ echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/99norecommends
 # Update package lists
 apt-get update
 
+log "Installing base system packages"
 # Install essential packages first
-apt-get install -y $APT_QUIET \
-    apt-utils locales systemd systemd-sysv
+if [[ $DEBUG -eq 1 ]]; then
+  apt-get install -y $APT_QUIET \
+  apt-utils locales systemd systemd-sysv
+else
+  apt-get install -y $APT_QUIET \
+  apt-utils locales systemd systemd-sysv > /dev/null 2>&1
+fi
+
 
 # Configure locale early
 locale-gen en_CA.UTF-8
 echo 'LANG=en_CA.UTF-8' > /etc/default/locale
 
-# Install kernel and bootloader
-apt-get install -y $APT_QUIET \
-    linux-image-$ARCH linux-headers-$ARCH \
-    grub-efi-$ARCH grub-efi-$ARCH-bin grub-common grub2-common
+log "Installing kernel, bootloader, and utilities"
+if [[ $DEBUG -eq 1 ]]; then
+  # Install kernel and bootloader
+  apt-get install -y $APT_QUIET \
+      linux-image-$ARCH linux-headers-$ARCH \
+      grub-efi-$ARCH grub-efi-$ARCH-bin grub-common grub2-common
 
-    # Install system utilities
-apt-get install -y $APT_QUIET \
-    wget psmisc procps iputils-ping logrotate openssl sudo nano \
-    net-tools libnss-mdns dbus gnupg iproute2 dhcpcd5 ssh zstd \
-    avahi-daemon
+  # Install system utilities
+  apt-get install -y $APT_QUIET \
+      wget psmisc procps iputils-ping logrotate openssl sudo nano \
+      net-tools libnss-mdns dbus gnupg iproute2 dhcpcd5 ssh zstd \
+      avahi-daemon
 
-# Install virtualization support
-apt-get install -y $APT_QUIET hyperv-daemons || true
+  # Install virtualization support
+  apt-get install -y $APT_QUIET hyperv-daemons || true
+else
+  # Install kernel and bootloader
+  apt-get install -y $APT_QUIET \
+      linux-image-$ARCH linux-headers-$ARCH \
+      grub-efi-$ARCH grub-efi-$ARCH-bin grub-common grub2-common > /dev/null 2>&1
 
+  # Install system utilities
+  apt-get install -y $APT_QUIET \
+      wget psmisc procps iputils-ping logrotate openssl sudo nano \
+      net-tools libnss-mdns dbus gnupg iproute2 dhcpcd5 ssh zstd \
+      avahi-daemon > /dev/null 2>&1
+
+  # Install virtualization support
+  apt-get install -y $APT_QUIET hyperv-daemons > /dev/null 2>&1 || true
+fi
+
+log "Setting up GRUB bootloader"
 # Configure GRUB
 grub-install \
     --target=${ARCH}-efi \
@@ -261,23 +311,27 @@ grub-install \
     --removable \
     --recheck
 
-# GRUB configuration
+# GRUB configuration with serial console
 cat > /etc/default/grub <<GRUB_EOF
 GRUB_DEFAULT=0
-GRUB_TIMEOUT=2
-GRUB_DISTRIBUTOR="Homebridge VM - $arch"
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="Homebridge VM on ${ARCH}"
 GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
-GRUB_CMDLINE_LINUX=""
+GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
+GRUB_TERMINAL="console serial"
+#GRUB_SERIAL_COMMAND="serial --speed=921600 --unit=0 --word=8 --parity=no --stop=1"
 GRUB_EOF
 
 update-grub
 
+log "Configuring fstab"
 # Create fstab
 cat > /etc/fstab <<FSTAB_EOF
 UUID=$ROOT_UUID / ext4 defaults,noatime 0 1
 UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1
 FSTAB_EOF
 
+log "Updating initramfs"
 # Configure initramfs
 echo "RESUME=none" > /etc/initramfs-tools/conf.d/resume
 update-initramfs -c -k all
@@ -309,7 +363,8 @@ rm -rf /var/lib/apt/lists/*
 CHROOT_EOF
 
     # Execute chroot script
-    sudo chroot "$ROOTFS" /bin/bash /dev/stdin "$arch" "$ROOT_UUID" "$ESP_UUID" "$APT_QUIET" < /tmp/chroot_setup.sh
+
+    sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "$arch" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < /tmp/chroot_setup.sh
     rm -f /tmp/chroot_setup.sh
 }
 
@@ -328,20 +383,20 @@ install_staged_assets() {
         packages=$(grep -v '^#' "$assets_dir/00-packages" | tr '\n' ' ' | xargs)
         if [[ -n "$packages" ]]; then
             info "Installing packages: $packages"
-            sudo chroot "$ROOTFS" /bin/bash -c "
+            sudo chroot "$ROOTFS" /bin/bash -euc${BASH_DEBUG_FLAG} "
                 export DEBIAN_FRONTEND=noninteractive
-                apt-get update $APT_REDIRECT
-                apt-get install -y $APT_QUIET $packages $APT_REDIRECT
+                apt-get update ${APT_REDIRECT}
+                apt-get install -y $APT_QUIET $packages ${APT_REDIRECT}
                 apt-get clean
             "
         fi
     fi
     
     # Copy files
-    if [[ -d "$assets_dir/files" ]]; then
-        info "Copying asset files"
-        sudo cp -r "$assets_dir/files/." "$ROOTFS/"
-    fi
+#    if [[ -d "$assets_dir/files" ]]; then
+#        info "Copying asset files"
+#        sudo cp -r "$assets_dir/files/." "$ROOTFS/"
+#    fi
     
     # Run scripts
     for script in "$assets_dir"/[0-9][0-9]-run.sh; do
@@ -350,14 +405,14 @@ install_staged_assets() {
         info "Running script: $(basename "$script")"
         (
             cd "$assets_dir"
-            sudo bash -euo pipefail -c "
+            sudo bash -euo pipefail -euc "
                 export ROOTFS_DIR='$SCRIPT_DIR/$ROOTFS'
                 export DEBIAN_FRONTEND=noninteractive
                 export FIRST_USER_NAME='${FIRST_USER_NAME:-homebridge}'
                 export BUILD_VERSION='${BUILD_VERSION:-development}'
                 
                 on_chroot() {
-                    chroot '$SCRIPT_DIR/$ROOTFS' /bin/bash -euo pipefail \"\$@\"
+                    chroot '$SCRIPT_DIR/$ROOTFS' /bin/bash -euo${BASH_DEBUG_FLAG} pipefail \"\$@\"
                 }
                 export -f on_chroot
                 
