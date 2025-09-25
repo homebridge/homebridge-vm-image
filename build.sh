@@ -69,9 +69,9 @@ trap cleanup EXIT INT TERM
 # Validate architecture
 validate_arch() {
     local arch="$1"
-    case "$arch" in
+    case "${ARCH}" in
         arm64|amd64) return 0 ;;
-        *) error "Unsupported architecture: $arch" && exit 1 ;;
+        *) error "Unsupported architecture: ${ARCH}" && exit 1 ;;
     esac
 }
 
@@ -158,7 +158,7 @@ setup_loop_device() {
 # Bootstrap or restore cached rootfs
 setup_rootfs() {
     local arch="$1"
-    local cache_file="${CACHE_DIR}/debootstrap-${DISTRO}-${arch}.tar.gz"
+    local cache_file="${CACHE_DIR}/debootstrap-${DISTRO}-${ARCH}.tar.gz"
     
     sudo mount "$ROOT_PART" "$ROOTFS"
     
@@ -166,7 +166,7 @@ setup_rootfs() {
         log "Restoring cached rootfs ($(du -sh "$cache_file" | cut -f1))"
         sudo tar -xzf "$cache_file" -C "$ROOTFS"
     else
-        log "Running debootstrap for $arch"
+        log "Running debootstrap for ${ARCH}"
         
         # Install zstd on host if available for faster debootstrap
         if command -v apt-get >/dev/null 2>&1 && ! command -v zstd >/dev/null 2>&1; then
@@ -175,7 +175,7 @@ setup_rootfs() {
             sudo apt-get install -y -qq zstd ${APT_REDIRECT} || true
         fi
         
-        sudo debootstrap --arch="$arch" --variant=minbase "$DISTRO" "$ROOTFS" \
+        sudo debootstrap --arch="${ARCH}" --variant=minbase "$DISTRO" "$ROOTFS" \
             http://deb.debian.org/debian
         
         info "Caching debootstrap result"
@@ -208,7 +208,7 @@ configure_base_system() {
     log "Configuring base system"
     
     # Copy GRUB modules for amd64 compatibility
-    if [[ "$arch" == "amd64" && -d "/usr/lib/grub/x86_64-efi" ]]; then
+    if [[ "${ARCH}" == "amd64" && -d "/usr/lib/grub/x86_64-efi" ]]; then
         sudo mkdir -p "${ROOTFS}/usr/lib/grub/amd64-efi"
         sudo cp -r /usr/lib/grub/x86_64-efi/* "${ROOTFS}/usr/lib/grub/amd64-efi/"
     fi
@@ -231,21 +231,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-log() {
-  echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
-}
-
-warn() {
-  echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING:${NC} $1"
-}
-
-error() {
-  echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1"
-}
-
-info() {
-  echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] INFO:${NC} $1"
-}
+# Logging functions
+log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
+warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
+error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
+info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
 
 # Configure APT for faster downloads
 echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99nolang
@@ -273,8 +263,8 @@ log "Installing kernel, bootloader, and utilities"
 if [[ $DEBUG -eq 1 ]]; then
   # Install kernel and bootloader
   apt-get install -y $APT_QUIET \
-      linux-image-$ARCH linux-headers-$ARCH \
-      grub-efi-$ARCH grub-efi-$ARCH-bin grub-common grub2-common
+      linux-image-${ARCH} linux-headers-${ARCH} \
+      grub-efi-${ARCH} grub-efi-${ARCH}-bin grub-common grub2-common
 
   # Install system utilities
   apt-get install -y $APT_QUIET \
@@ -287,8 +277,8 @@ if [[ $DEBUG -eq 1 ]]; then
 else
   # Install kernel and bootloader
   apt-get install -y $APT_QUIET \
-      linux-image-$ARCH linux-headers-$ARCH \
-      grub-efi-$ARCH grub-efi-$ARCH-bin grub-common grub2-common > /dev/null 2>&1
+      linux-image-${ARCH} linux-headers-${ARCH} \
+      grub-efi-${ARCH} grub-efi-${ARCH}-bin grub-common grub2-common > /dev/null 2>&1
 
   # Install system utilities
   apt-get install -y $APT_QUIET \
@@ -319,7 +309,7 @@ GRUB_DISTRIBUTOR="Homebridge VM on ${ARCH}"
 GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
 GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
 GRUB_TERMINAL="console serial"
-#GRUB_SERIAL_COMMAND="serial --speed=921600 --unit=0 --word=8 --parity=no --stop=1"
+GRUB_SERIAL_COMMAND="serial --speed=921600 --unit=0 --word=8 --parity=no --stop=1"
 GRUB_EOF
 
 update-grub
@@ -364,7 +354,7 @@ CHROOT_EOF
 
     # Execute chroot script
 
-    sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "$arch" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < /tmp/chroot_setup.sh
+    sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < /tmp/chroot_setup.sh
     rm -f /tmp/chroot_setup.sh
 }
 
@@ -410,6 +400,9 @@ install_staged_assets() {
                 export DEBIAN_FRONTEND=noninteractive
                 export FIRST_USER_NAME='${FIRST_USER_NAME:-homebridge}'
                 export BUILD_VERSION='${BUILD_VERSION:-development}'
+                export HOMEBRIDGE_APT_PKG_VERSION='${HOMEBRIDGE_APT_PKG_VERSION:-}'
+                export FFMPEG_FOR_HOMEBRIDGE_VERSION='${FFMPEG_FOR_HOMEBRIDGE_VERSION:-}'
+                export RELEASE_STREAM='${RELEASE_STREAM:-stable}'
                 
                 on_chroot() {
                     chroot '$SCRIPT_DIR/$ROOTFS' /bin/bash -euo${BASH_DEBUG_FLAG} pipefail \"\$@\"
@@ -424,8 +417,8 @@ install_staged_assets() {
 
 # Main function
 main() {
-    local arch="${1:-}"
-    [[ -z "$arch" ]] && { error "Usage: $0 <architecture> [arm64|amd64]"; exit 1; }
+    local ARCH="${1:-}"
+    [[ -z "${ARCH}" ]] && { error "Usage: $0 <architecture> [arm64|amd64]"; exit 1; }
     local RELEASE_STREAM="${2:-stable}"
 
     if [[ "${RELEASE_STREAM}" != "stable" && "${RELEASE_STREAM}" != "beta" && "${RELEASE_STREAM}" != "alpha" ]] then
@@ -433,11 +426,11 @@ main() {
         exit 1
     fi
 
-    validate_arch "$arch"
+    validate_arch "${ARCH}"
     
     # Setup directories and variables
-    readonly IMG_NAME="homebridge-${arch}.img"
-    readonly WORKDIR="work-${arch}"
+    readonly IMG_NAME="homebridge-${ARCH}.img"
+    readonly WORKDIR="work-${ARCH}"
     readonly ROOTFS="${WORKDIR}/rootfs"
     readonly MOUNTDIR="${WORKDIR}/mnt"  
     readonly ESP_MOUNTDIR="${WORKDIR}/esp"
@@ -445,7 +438,7 @@ main() {
     readonly CACHE_DIR="cache"
     readonly IMG_PATH="$OUTPUT_DIR/$IMG_NAME"
     
-    log "Starting Homebridge VM build for release stream ${RELEASE_STREAM} on arch: $ARCH"
+    log "Starting Homebridge VM build for release stream ${BLUE}${RELEASE_STREAM}${NC} on arch: ${BLUE}${ARCH}${NC}"
     log "Output: $IMG_PATH"
     log "Debug mode: $([[ $DEBUG -eq 1 ]] && echo "ON" || echo "OFF")"
     
@@ -456,25 +449,56 @@ main() {
     # Build process
     create_image "$IMG_PATH" "$SIZE_MB"
     setup_loop_device "$IMG_PATH" 
-    setup_rootfs "$arch"
+    setup_rootfs "${ARCH}"
     mount_for_chroot
-    configure_base_system "$arch"
+    configure_base_system "${ARCH}"
     
     # Install customizations, these are copied from homebridge-raspbian-image
     export FIRST_USER_NAME="homebridge"
-    export BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d)}"
+    export BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d)-${RELEASE_STREAM}-${ARCH}}"
 
-    export HOMEBRIDGE_APT_PKG_VERSION=$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
-    export FFMPEG_FOR_HOMEBRIDGE_VERSION=$(jq -r '.dependencies["ffmpeg-for-homebridge"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
+    export HOMEBRIDGE_APT_PKG_NPM_VERSION=$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
+    export HOMEBRIDGE_APT_PKG_VERSION=$( echo ${HOMEBRIDGE_APT_PKG_NPM_VERSION} | sed 's/-/~/' )
+    export FFMPEG_FOR_HOMEBRIDGE_VERSION=v$(jq -r '.dependencies["ffmpeg-for-homebridge"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
 
-    log "Using homebridge-apt-pkg version: ${HOMEBRIDGE_APT_PKG_VERSION}"
-    log "Using ffmpeg-for-homebridge version: ${FFMPEG_FOR_HOMEBRIDGE_VERSION}"
+    log "Using homebridge-apt-pkg NPM version: ${BLUE}${HOMEBRIDGE_APT_PKG_NPM_VERSION}${NC}"
+    log "Using homebridge-apt-pkg version: ${BLUE}${HOMEBRIDGE_APT_PKG_VERSION}${NC}"
+    log "Using ffmpeg-for-homebridge version: ${BLUE}${FFMPEG_FOR_HOMEBRIDGE_VERSION}${NC}"
     
     for stage in $(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
       install_staged_assets "$stage"
     done
     
+    local MANIFEST_FILE
+    MANIFEST_FILE=$(ls "${ROOTFS}/opt/homebridge/homebridge_apt_pkg"*.manifest 2>/dev/null | head -n 1)
+    local APT_MANIFEST=""
+    if [[ -f "$MANIFEST_FILE" ]]; then
+        # Preserve all lines from the manifest file except header lines, keeping original line returns
+        APT_MANIFEST=$(awk '!/^Package/ && !/^-------/' "$MANIFEST_FILE")
+    else
+        warn "Manifest file not found: ${ROOTFS}/opt/homebridge/homebridge_apt_pkg*.manifest"
+    fi
+
+    {
+        echo "Homebridge VM Package Manifest"
+        echo
+        echo "Release Version: ${BUILD_VERSION}"
+        echo
+        echo "| Package | Version |"
+        echo "|:-------:|:-------:|"
+        echo "| Debian | ${DISTRO} |"
+        [[ -n "$APT_MANIFEST" ]] && printf "%s\n" "$APT_MANIFEST"
+        echo "| ffmpeg for homebridge | ${FFMPEG_FOR_HOMEBRIDGE_VERSION} |"
+        echo "| Homebridge APT Package | ${HOMEBRIDGE_APT_PKG_NPM_VERSION} |"
+    } > "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
+
+    cp "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest" "${ROOTFS}/opt/homebridge/"
+
     log "Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
+
+    while IFS= read -r line; do
+        log "$line"
+    done < "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
 }
 
 # Run main function

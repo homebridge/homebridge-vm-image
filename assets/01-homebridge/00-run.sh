@@ -38,10 +38,10 @@ on_chroot << EOF
 
 # Original had a sudo tee ....but the build failed with that 'sudo: unable to resolve host b23313a4fe2b: Name or service not known
 curl -sSfL https://repo.homebridge.io/KEY.gpg | gpg --dearmor | tee /usr/share/keyrings/homebridge.gpg  > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io stable main" | tee /etc/apt/sources.list.d/homebridge.list > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io ${RELEASE_STREAM} main" | tee /etc/apt/sources.list.d/homebridge.list > /dev/null
 
 apt-get update
-apt-get install homebridge
+apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
 
 # correct ownership
 chown -R ${FIRST_USER_NAME}:${FIRST_USER_NAME} /var/lib/homebridge

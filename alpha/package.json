@@ -1,0 +1,10 @@
+{
+  "name": "@homebridge/homebridge-vm-image",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Stub file to track versions of homebridge-apt-pkg and ffmpeg-for-homebridge for the 'alpha' release stream of the homebridge-vm-image package",
+  "dependencies": {
+    "@homebridge/homebridge-apt-pkg": "1.7.11-alpha.20250921",
+    "ffmpeg-for-homebridge": "2.2.0"
+  }
+}

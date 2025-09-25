@@ -13,21 +13,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-log() {
-  echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
-}
-
-warn() {
-  echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING:${NC} $1"
-}
-
-error() {
-  echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1"
-}
-
-info() {
-  echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] INFO:${NC} $1"
-}
+# Logging functions
+log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
+warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
+error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
+info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
 
 echo "🧪 Homebridge VM Image Local Test Build"
 echo "======================================="
@@ -41,6 +31,7 @@ detect_arch() {
   esac
 }
 
+RELEASE_STREAM="${2:-stable}"
 ARCH="${1:-$(detect_arch)}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCKERFILE="$REPO_ROOT/scripts/Dockerfile"
@@ -49,7 +40,7 @@ DOCKERFILE="$REPO_ROOT/scripts/Dockerfile"
 DOCKERFILE_HASH=$(sha256sum "$DOCKERFILE" | awk '{print $1}')
 
 # Use the checksum as part of the image tag
-DOCKER_IMAGE_TAG="homebridge-vm-builder-base:$ARCH-$DOCKERFILE_HASH"
+DOCKER_IMAGE_TAG="homebridge-vm-builder-base:${RELEASE_STREAM}-$ARCH-$DOCKERFILE_HASH"
 
 if [[ "$ARCH" == "arm64" ]]; then
   BASE_IMAGE="arm64v8/ubuntu:24.04"
@@ -62,7 +53,7 @@ else
   exit 1
 fi
 
-log "==> Starting Homebridge VM Image Builder local build for arch: $ARCH"
+log "==> Starting Homebridge VM Image Builder local build for release stream ${RELEASE_STREAM} on arch: $ARCH"
 log "==> Using base image: $BASE_IMAGE"
 log "==> Using Docker image tag: $DOCKER_IMAGE_TAG"
 log "==> Using repo root: $REPO_ROOT"
@@ -85,10 +76,10 @@ docker run --rm -it \
   --privileged \
   -v "$REPO_ROOT":/repo/ \
   --workdir /repo \
-  --name homebridge-vm-test-$ARCH \
+  --name homebridge-vm-build-${RELEASE_STREAM}-${ARCH} \
   "$DOCKER_IMAGE_TAG" \
-  bash ./build.sh "$ARCH"
+  bash ./build.sh "$ARCH" "${RELEASE_STREAM}" 
 
 ELAPSED=$(($(date +%s) - BUILD_START))
 log "==> Elapsed build time: $((ELAPSED/60))m $((ELAPSED%60))s"
-log "==> Local Docker test finished for arch: $ARCH"
+log "==> Local Docker test finished for release stream ${BLUE}${RELEASE_STREAM}${NC} on arch: ${BLUE}${ARCH}${NC}"
