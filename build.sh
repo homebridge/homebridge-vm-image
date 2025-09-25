@@ -426,7 +426,13 @@ install_staged_assets() {
 main() {
     local arch="${1:-}"
     [[ -z "$arch" ]] && { error "Usage: $0 <architecture> [arm64|amd64]"; exit 1; }
-    
+    local RELEASE_STREAM="${2:-stable}"
+
+    if [[ "${RELEASE_STREAM}" != "stable" && "${RELEASE_STREAM}" != "beta" && "${RELEASE_STREAM}" != "alpha" ]] then
+        error "Invalid release stream: ${RELEASE_STREAM}. Must be 'stable', 'beta' or 'alpha'."
+        exit 1
+    fi
+
     validate_arch "$arch"
     
     # Setup directories and variables
@@ -439,7 +445,7 @@ main() {
     readonly CACHE_DIR="cache"
     readonly IMG_PATH="$OUTPUT_DIR/$IMG_NAME"
     
-    log "Starting Homebridge VM build for $arch"
+    log "Starting Homebridge VM build for release stream ${RELEASE_STREAM} on arch: $ARCH"
     log "Output: $IMG_PATH"
     log "Debug mode: $([[ $DEBUG -eq 1 ]] && echo "ON" || echo "OFF")"
     
@@ -457,6 +463,12 @@ main() {
     # Install customizations, these are copied from homebridge-raspbian-image
     export FIRST_USER_NAME="homebridge"
     export BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d)}"
+
+    export HOMEBRIDGE_APT_PKG_VERSION=$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
+    export FFMPEG_FOR_HOMEBRIDGE_VERSION=$(jq -r '.dependencies["ffmpeg-for-homebridge"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
+
+    log "Using homebridge-apt-pkg version: ${HOMEBRIDGE_APT_PKG_VERSION}"
+    log "Using ffmpeg-for-homebridge version: ${FFMPEG_FOR_HOMEBRIDGE_VERSION}"
     
     for stage in $(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
       install_staged_assets "$stage"
