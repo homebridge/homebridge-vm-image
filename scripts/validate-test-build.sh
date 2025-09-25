@@ -289,6 +289,8 @@ create_vm() {
     --clipboard-mode bidirectional \
     --draganddrop bidirectional
   
+  VBoxManage modifyvm  "$VM_NAME" --iconfile ${REPO_ROOT}/assets/homebridge-icon.png
+
   log "✅ VM created and configured with Guest Additions support"
 }
 
