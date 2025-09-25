@@ -3,6 +3,7 @@
 #
 # Setup nginx
 #
+set -eou
 
 install -m 644 files/homebridge.local "${ROOTFS_DIR}/etc/nginx/sites-available/"
 install -m 644 files/custom_502.html "${ROOTFS_DIR}/usr/share/nginx/html/"

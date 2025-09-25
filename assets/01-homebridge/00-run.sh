@@ -7,6 +7,7 @@
 #
 # Executables Files
 #
+set -eou
 
 install -m 755 files/hb-config-new "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 

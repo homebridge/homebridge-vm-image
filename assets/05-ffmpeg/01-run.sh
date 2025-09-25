@@ -7,7 +7,7 @@
 on_chroot << 'EOF'
 uname -a
 
-set -ex
+set -eou
 
 case "$(uname -m)" in
   x86_64) FFMPEG_ARCH='x86_64' ;;

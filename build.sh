@@ -499,7 +499,7 @@ main() {
 
     log ""
     while IFS= read -r line; do
-        log "$line"
+        info "$line"
     done < "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
     log ""
 }
