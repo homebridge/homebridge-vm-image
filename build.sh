@@ -497,6 +497,13 @@ main() {
 
     cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
+    echo "# Appended by homebridge-vm-image" >> ${ROOTFS}/opt/homebridge/source.sh
+    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
+    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
+    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
+
+
+
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
 
