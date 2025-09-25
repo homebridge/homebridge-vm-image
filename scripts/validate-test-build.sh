@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
+
+BASH_DEBUG="" # "" or "x" for debugging
+
+set -euo${BASH_DEBUG} pipefail
 
 # Homebridge VM Validation Script
 # Compatible with macOS/M1 and Linux systems with VirtualBox

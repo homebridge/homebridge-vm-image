@@ -86,13 +86,9 @@ docker run --rm -it \
   -v "$REPO_ROOT":/repo/ \
   --workdir /repo \
   --name homebridge-vm-test-$ARCH \
-  "$DOCKER_IMAGE_TAG" bash -c "
-    set -e
-    ./build.sh $ARCH
-    ls -lh output/
-    echo '==> Build complete. Output files:'
-    ls output/
-  "
+  "$DOCKER_IMAGE_TAG" \
+  bash ./build.sh "$ARCH"
+
 ELAPSED=$(($(date +%s) - BUILD_START))
 log "==> Elapsed build time: $((ELAPSED/60))m $((ELAPSED%60))s"
 log "==> Local Docker test finished for arch: $ARCH"
