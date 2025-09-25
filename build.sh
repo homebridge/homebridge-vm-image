@@ -480,7 +480,7 @@ main() {
         warn "Manifest file not found: ${ROOTFS}/opt/homebridge/homebridge_apt_pkg*.manifest"
     fi
 
-    local MANIFEST_FILE="$OUTPUT_DIR/homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
+    local MANIFEST_FILE="$OUTPUT_DIR/${IMG_NAME}.manifest"
 
     {
         echo "Homebridge VM Package Manifest"
@@ -501,8 +501,6 @@ main() {
     echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
     echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
     echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
-
-
 
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
