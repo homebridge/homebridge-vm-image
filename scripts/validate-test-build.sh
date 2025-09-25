@@ -247,6 +247,7 @@ create_vm() {
   VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
     --cpus 1 \
+    --firmware bios \
     --boot1 disk \
     --nic1 bridged \
     --bridgeadapter1 "en0" \
