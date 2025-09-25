@@ -3,7 +3,6 @@
 #
 # Setup nginx
 #
-set -eou
 
 install -m 644 files/homebridge.local "${ROOTFS_DIR}/etc/nginx/sites-available/"
 install -m 644 files/custom_502.html "${ROOTFS_DIR}/usr/share/nginx/html/"
@@ -12,6 +11,8 @@ install -m 644 files/nginx-homebridge-self-signed-cert.service "${ROOTFS_DIR}/et
 install -m 644 files/nginx-homebridge-self-signed-cert "${ROOTFS_DIR}/usr/local/sbin/"
 
 on_chroot << EOF
+set -e
+
 rm -rf /etc/nginx/sites-enabled/default
 rm -rf /etc/nginx/sites-available/default
 ln -sf /etc/nginx/sites-available/homebridge.local /etc/nginx/sites-enabled/homebridge.local

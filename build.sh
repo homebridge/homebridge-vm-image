@@ -469,16 +469,18 @@ main() {
       install_staged_assets "$stage"
     done
     
-    local MANIFEST_FILE
-    MANIFEST_FILE=$(ls "${ROOTFS}/opt/homebridge/homebridge_apt_pkg"*.manifest 2>/dev/null | head -n 1)
+    local APT_MANIFEST_FILE
+    APT_MANIFEST_FILE=$(ls "${ROOTFS}/opt/homebridge/homebridge_apt_pkg"*.manifest 2>/dev/null | head -n 1)
     local APT_MANIFEST=""
-    if [[ -f "$MANIFEST_FILE" ]]; then
+    if [[ -f "$APT_MANIFEST_FILE" ]]; then
         # Preserve all lines from the manifest file except header lines, keeping original line returns
         # Keep only lines starting and ending with |, excluding those containing Package or ------
-        APT_MANIFEST=$(awk '/^\|.*\|$/ && !/Package/ && !/------/' "$MANIFEST_FILE" | sed 's/\r$//')
+        APT_MANIFEST=$(awk '/^\|.*\|$/ && !/Package/ && !/------/' "$APT_MANIFEST_FILE" | sed 's/\r$//')
     else
         warn "Manifest file not found: ${ROOTFS}/opt/homebridge/homebridge_apt_pkg*.manifest"
     fi
+
+    local MANIFEST_FILE="$OUTPUT_DIR/homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
 
     {
         echo "Homebridge VM Package Manifest"
@@ -491,16 +493,17 @@ main() {
         [[ -n "$APT_MANIFEST" ]] && printf "%s\n" "$APT_MANIFEST"
         echo "| ffmpeg for homebridge | ${FFMPEG_FOR_HOMEBRIDGE_VERSION} |"
         echo "| Homebridge APT Package | ${HOMEBRIDGE_APT_PKG_NPM_VERSION} |"
-    } > "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
+    } > ${MANIFEST_FILE}
 
-    cp "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest" "${ROOTFS}/opt/homebridge/"
+    cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
-    log "Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
+    log ""
+    log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
 
     log ""
     while IFS= read -r line; do
         info "$line"
-    done < "$OUTPUT_DIR/Homebridge-VM_Image-${RELEASE_STREAM}-${ARCH}.manifest"
+    done < ${MANIFEST_FILE}
     log ""
 }
 

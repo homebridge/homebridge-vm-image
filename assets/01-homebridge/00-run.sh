@@ -7,7 +7,6 @@
 #
 # Executables Files
 #
-set -eou
 
 install -m 755 files/hb-config-new "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 
@@ -36,6 +35,8 @@ install -m 633 files/bashrc.partial "${ROOTFS_DIR}/tmp/bashrc.partial"
 echo "$BUILD_VERSION" > "${ROOTFS_DIR}/etc/hb-release"
 
 on_chroot << EOF
+
+set -e
 
 # Original had a sudo tee ....but the build failed with that 'sudo: unable to resolve host b23313a4fe2b: Name or service not known
 curl -sSfL https://repo.homebridge.io/KEY.gpg | gpg --dearmor | tee /usr/share/keyrings/homebridge.gpg  > /dev/null

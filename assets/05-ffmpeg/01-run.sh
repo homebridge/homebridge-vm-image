@@ -7,7 +7,7 @@
 on_chroot << 'EOF'
 uname -a
 
-set -eou
+set -e
 
 case "$(uname -m)" in
   x86_64) FFMPEG_ARCH='x86_64' ;;
@@ -17,5 +17,5 @@ case "$(uname -m)" in
 esac
 
 curl -Lfs "https://github.com/homebridge/ffmpeg-for-homebridge/releases/download/${FFMPEG_FOR_HOMEBRIDGE_VERSION}/ffmpeg-alpine-${FFMPEG_ARCH}.tar.gz" | tar xzf - -C / --no-same-owner
-ffmpeg || exit 0
+ffmpeg -version || exit 0
 EOF
