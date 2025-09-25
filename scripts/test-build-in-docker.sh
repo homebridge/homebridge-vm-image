@@ -5,6 +5,33 @@
 
 set -e
 
+BUILD_START=$(date +%s)
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log() {
+  echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
+}
+
+warn() {
+  echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING:${NC} $1"
+}
+
+error() {
+  echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1"
+}
+
+info() {
+  echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] INFO:${NC} $1"
+}
+
+echo "🧪 Homebridge VM Image Local Test Build"
+echo "======================================="
+
 # Detect architecture
 detect_arch() {
   case "$(uname -m)" in
@@ -31,18 +58,18 @@ elif [[ "$ARCH" == "amd64" ]]; then
   BASE_IMAGE="ubuntu:24.04"
   GRUB_EFI_PKG="grub-efi-amd64-bin"
 else
-  echo "Unsupported architecture: $ARCH"
+  error "Unsupported architecture: $ARCH"
   exit 1
 fi
 
-echo "==> Starting Homebridge VM Image Builder local build for arch: $ARCH"
-echo "==> Using base image: $BASE_IMAGE"
-echo "==> Using Docker image tag: $DOCKER_IMAGE_TAG"
-echo "==> Using repo root: $REPO_ROOT"
+log "==> Starting Homebridge VM Image Builder local build for arch: $ARCH"
+log "==> Using base image: $BASE_IMAGE"
+log "==> Using Docker image tag: $DOCKER_IMAGE_TAG"
+log "==> Using repo root: $REPO_ROOT"
 
 # Check if the image already exists
 if ! docker image inspect "$DOCKER_IMAGE_TAG" > /dev/null 2>&1; then
-  echo "==> Dockerfile has changed or image does not exist. Building the Docker image."
+  info "==> Dockerfile has changed or image does not exist. Building the Docker image."
   docker build \
     --build-arg BASE_IMAGE="$BASE_IMAGE" \
     --build-arg GRUB_EFI_PKG="$GRUB_EFI_PKG" \
@@ -50,7 +77,7 @@ if ! docker image inspect "$DOCKER_IMAGE_TAG" > /dev/null 2>&1; then
     -f "$DOCKERFILE" \
     "$REPO_ROOT"
 else
-  echo "==> Using cached Docker image: $DOCKER_IMAGE_TAG"
+  info "==> Using cached Docker image: $DOCKER_IMAGE_TAG"
 fi
 
 # Run the build
@@ -66,5 +93,6 @@ docker run --rm -it \
     echo '==> Build complete. Output files:'
     ls output/
   "
-
-echo "==> Local Docker test finished for arch: $ARCH"
+ELAPSED=$(($(date +%s) - BUILD_START))
+log "==> Elapsed build time: $((ELAPSED/60))m $((ELAPSED%60))s"
+log "==> Local Docker test finished for arch: $ARCH"

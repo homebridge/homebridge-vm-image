@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+
 
 # Quiet APT output unless there's an error
 APT_DEBUG="-qq"
-DEB_QUIET=""
+BASH_DEBUG="x"
+
+set -eu${BASH_DEBUG}o pipefail
 
 ARCH="$1"
 DISTRO="bookworm"
@@ -54,13 +56,6 @@ done
 sudo mkfs.vfat -F32 "$ESP_PART"
 sudo mkfs.ext4 "$ROOT_PART"
 
-# Get UUIDs for reliable mounting
-ESP_UUID=$(sudo blkid -s UUID -o value "$ESP_PART")
-ROOT_UUID=$(sudo blkid -s UUID -o value "$ROOT_PART")
-
-echo "ESP UUID: $ESP_UUID"
-echo "Root UUID: $ROOT_UUID"
-
 # Mount and bootstrap
 sudo mount "$ROOT_PART" "$ROOTFS"
 
@@ -77,6 +72,8 @@ if [ -f "$BASE_CACHE" ]; then
   sudo mount --bind /dev "$ROOTFS/dev"
   sudo mount --bind /sys "$ROOTFS/sys"
   sudo mount --bind /proc "$ROOTFS/proc"
+  sudo mkdir -p "$ROOTFS/dev/pts"
+  sudo mount --bind /dev/pts "$ROOTFS/dev/pts"
   
   sudo mount "$ESP_PART" "$ESP_MOUNTDIR"
   sudo mkdir -p "$ROOTFS/boot/efi"
@@ -101,6 +98,8 @@ else
   sudo mount --bind /dev "$ROOTFS/dev"
   sudo mount --bind /sys "$ROOTFS/sys"
   sudo mount --bind /proc "$ROOTFS/proc"
+  sudo mkdir -p "$ROOTFS/dev/pts"
+  sudo mount --bind /dev/pts "$ROOTFS/dev/pts"
 
   sudo mount "$ESP_PART" "$ESP_MOUNTDIR"
   sudo mkdir -p "$ROOTFS/boot/efi"
@@ -117,7 +116,7 @@ else
   fi
 
   # Run chroot
-  sudo chroot "$ROOTFS" /bin/bash -eux <<EOF
+  sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG} <<EOF
 export DEBIAN_FRONTEND=noninteractive
 
 # Install base and docker-homebridge compatible packages
@@ -129,7 +128,7 @@ apt-get install -y ${APT_DEBUG} \
   linux-image-$ARCH grub-efi-$ARCH grub-efi-$ARCH-bin \
   grub-common grub2-common systemd systemd-sysv dbus \
   gnupg iproute2 hyperv-daemons dhcpcd5 linux-headers-$ARCH \
-  ssh
+  ssh dialog
 
 locale-gen en_CA.UTF-8
 
@@ -142,15 +141,6 @@ grub-install \
   --no-nvram \
   --removable \
   --recheck
-
-# Configure GRUB with UUID-based root and enhanced serial console
-sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"console=tty0 console=ttyS0 root=UUID=$ROOT_UUID loglevel=7\"|" /etc/default/grub
-sed -i 's/^GRUB_CMDLINE_LINUX=".*"/GRUB_CMDLINE_LINUX=""/' /etc/default/grub
-sed -i 's/^#GRUB_TERMINAL=console/GRUB_TERMINAL="console"/' /etc/default/grub
-#sed -i 's/^#GRUB_SERIAL_COMMAND=.*/GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"/' /etc/default/grub
-
-# Add serial console configuration if not present
-# grep -q "^GRUB_SERIAL_COMMAND=" /etc/default/grub || echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /etc/default/grub
 
 # Clean initramfs configuration to avoid loop device references
 rm -f /etc/initramfs-tools/conf.d/resume
@@ -202,7 +192,9 @@ EOF
   sudo umount -l "$ROOTFS/boot/efi" || true
   sudo umount -l "$ROOTFS/proc" || true
   sudo umount -l "$ROOTFS/sys" || true  
+  sudo umount -l "$ROOTFS/dev/pts" || true
   sudo umount -l "$ROOTFS/dev" || true
+
   
   # Create cache of the base system
   tar -czf "$BASE_CACHE" -C "$ROOTFS" .
@@ -212,6 +204,9 @@ EOF
   sudo mount --bind /dev "$ROOTFS/dev"
   sudo mount --bind /sys "$ROOTFS/sys"
   sudo mount --bind /proc "$ROOTFS/proc"
+  sudo mkdir -p "$ROOTFS/dev/pts"
+  sudo mount --bind /dev/pts "$ROOTFS/dev/pts"
+
   sudo mount --bind "$ESP_MOUNTDIR" "$ROOTFS/boot/efi"
 fi
 
@@ -262,7 +257,30 @@ install_staged_assets() {
   echo
 }
 
-sudo chroot "$ROOTFS" /bin/bash -eux <<FSTABEOF
+# Get UUIDs for reliable mounting
+ESP_UUID=$(sudo blkid -s UUID -o value "$ESP_PART")
+ROOT_UUID=$(sudo blkid -s UUID -o value "$ROOT_PART")
+
+echo "ESP UUID: $ESP_UUID"
+echo "Root UUID: $ROOT_UUID"
+
+sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG} <<FSTABEOF
+
+# Configure GRUB with UUID-based root and enhanced serial console
+sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"console=tty0 console=ttyS0 root=UUID=$ROOT_UUID loglevel=7\"|" /etc/default/grub
+sed -i 's/^GRUB_CMDLINE_LINUX=".*"/GRUB_CMDLINE_LINUX=""/' /etc/default/grub
+sed -i 's/^#GRUB_TERMINAL=console/GRUB_TERMINAL="console"/' /etc/default/grub
+#sed -i 's/^#GRUB_SERIAL_COMMAND=.*/GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"/' /etc/default/grub
+
+# Add serial console configuration if not present
+# grep -q "^GRUB_SERIAL_COMMAND=" /etc/default/grub || echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /etc/default/grub
+
+update-grub
+
+# Force clean rebuild of initramfs
+update-initramfs -d -k all || true
+update-initramfs -c -k all
+
 # fstab with UUIDs for reliable mounting
 echo "UUID=$ROOT_UUID / ext4 defaults 0 1" > /etc/fstab
 echo "UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1" >> /etc/fstab
@@ -282,11 +300,13 @@ install_staged_assets "07-other-package" "$ROOTFS/etc/nginx"
 # Clean exit
 sudo chroot "$ROOTFS" /bin/bash -c 'ps -ef || true'
 sudo fuser -km "$ROOTFS/dev" || true
+sudo fuser -km "$ROOTFS/dev/pts" || true
 sudo fuser -km "$ROOTFS/proc" || true
 sudo fuser -km "$ROOTFS/sys" || true
 
 sudo umount -l "$ROOTFS/proc" || true
 sudo umount -l "$ROOTFS/sys" || true
+sudo umount -l "$ROOTFS/dev/pts" || true
 sudo umount -l "$ROOTFS/dev" || true
 sudo umount -l "$ROOTFS/boot/efi" || true
 sudo umount -l "$ROOTFS" || true
@@ -297,5 +317,3 @@ sudo losetup -d "$LOOP_DEV"
 # gzip -k -f "$IMG_PATH"
 
 echo "✅ Finished: $IMG_PATH"
-echo "Root UUID: $ROOT_UUID"
-echo "ESP UUID: $ESP_UUID"

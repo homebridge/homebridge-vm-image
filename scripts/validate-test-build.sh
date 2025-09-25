@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# LinuxKit Homebridge VM Validation Script
+# Homebridge VM Validation Script
 # Compatible with macOS/M1 and Linux systems with VirtualBox
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
