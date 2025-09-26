@@ -509,7 +509,7 @@ main() {
         echo "| Homebridge APT Package | ${HOMEBRIDGE_APT_PKG_NPM_VERSION} |"
     } > ${MANIFEST_FILE}
 
-    cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
+    sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
     echo "# Appended by homebridge-vm-image" >> ${ROOTFS}/opt/homebridge/source.sh
     echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
