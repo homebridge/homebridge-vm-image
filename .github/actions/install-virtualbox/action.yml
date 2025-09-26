@@ -21,9 +21,11 @@ runs:
 
     - name: Add Oracle VirtualBox repo
       run: |
+        echo "::group::Adding Oracle VirtualBox Repository"
         wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
         echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
         sudo apt-get update
+        echo "::endgroup::"
       shell: bash
 
     - name: Install VirtualBox
