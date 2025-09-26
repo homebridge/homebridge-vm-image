@@ -115,13 +115,18 @@ jobs:
             exit 1
           fi
 
+      - name: Cleanup VM
+        run: |
+          echo "::group::Cleaning up VM"
+          VBoxManage controlvm "${{ env.VM_NAME }}" poweroff || true
+          VBoxManage unregistervm "${{ env.VM_NAME }}" --delete || true
+          echo "::endgroup::"
+
       - name: Cleanup VM and Collect Logs
+        if: always()
         run: |
           LOG_DIR="./output/vbox-logs"
           mkdir -p "$LOG_DIR"
-          # Power off and unregister VM
-          VBoxManage controlvm "${{ env.VM_NAME }}" poweroff || true
-          VBoxManage unregistervm "${{ env.VM_NAME }}" --delete || true
           # Collect all VirtualBox logs for this VM
           for log in $(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)/*.log; do
             cp "$log" "$LOG_DIR/" 2>/dev/null || true
@@ -136,6 +141,7 @@ jobs:
           ls -l "$LOG_DIR" || true
 
       - name: Upload VM and Serial Logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: virtualbox-validation-logs-${{ inputs.arch }}-${{ inputs.release_stream }}
