@@ -81,7 +81,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       # Setup build environemnt
       - name: Install dependencies
@@ -102,6 +102,52 @@ jobs:
           retention-days: 7
           name: ${{ matrix.arch }}
           path: output/*
+
+  package-for-virtual-box:
+    runs-on: ubuntu-latest
+    needs: [build-img-file, set-versions]
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: ./output
+
+      - name: Install VirtualBox
+        run: |
+          sudo apt-get update
+          # Use jammy repo for best compatibility on GitHub runners
+          wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
+          echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
+          sudo apt-get update
+          sudo apt-get install -y virtualbox-7.0 || sudo apt-get install -y virtualbox-6.1
+          vboxmanage --version
+
+      - name: Package VirtualBox Appliance
+        id: package_appliance
+        run: |
+          scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          echo "OVA_FILE=${OVA_FILE}" >> $GITHUB_OUTPUT
+
+      - name: Validate VirtualBox Appliance Image
+        run: |
+          ./validate-virtual-box-package.sh ${{ steps.package_appliance.outputs.OVA_FILE }}
+
+      - name: Upload image and manifest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          retention-days: 7
+          name: virtualbox-${{ matrix.arch }}
+          path: |
+            ${{ steps.package_appliance.outputs.OVA_FILE }}
+            output/*.manifest
 
   create-release:
     runs-on: ubuntu-latest

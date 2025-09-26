@@ -515,10 +515,11 @@ main() {
 
     sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
-    sudo echo "# Appended by homebridge-vm-image" >> ${ROOTFS}/opt/homebridge/source.sh
-    sudo echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
-    sudo echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
-    sudo echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
+    # filepath: [build.sh](http://_vscodecontentref_/0)
+    echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
 
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
