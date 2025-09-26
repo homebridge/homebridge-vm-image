@@ -76,12 +76,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog qemu-user-static gzip sudo udev kpartx psmisc jq          
           sudo apt-get install -y grub-efi-${{ matrix.arch }}-bin
-      # Step 2: Start the build process - bash ./build.sh "$ARCH" "${RELEASE_STREAM}" "${HOMEBRIDGE_VM_IMAGE_VERSION}"
+
+      # Step 2: Start the build process
       - name: run build.sh script
         run: |
           ./build.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
 
-      # Step 3: Upload the OVA file as an artifact
+      # Step 3: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
         uses: actions/upload-artifact@v4
         with:
@@ -92,8 +93,9 @@ jobs:
       - name: Steps complete
         run: |
           echo "::notice::Image Build steps complete for ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "::notice::Run ID ${{ github.run_id }}"
-          echo "::notice::Architecture ${{ matrix.arch }}"
+          echo "::notice::Run ID: ${{ github.run_id }}"
+          echo "::notice::Architecture: ${{ matrix.arch }}"
+          echo "::notice::Release Stream: ${{ inputs.release_stream }}"
 
   invoke-package-and-validate:
     needs: [set-versions, build-img-file]
@@ -102,6 +104,7 @@ jobs:
     - name: Trigger Packaging and Validation Workflow
       run: |
         gh workflow run "release-stage-3_package_for_virtual_box.yml" \
+          --ref "latest" \
           --field release_stream="${{ inputs.release_stream }}" \
           --field run_id="${{ github.run_id }}" \
           --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"

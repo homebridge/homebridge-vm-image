@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'GitHub Actions run ID to associate artifacts'
+        description: 'GitHub Run ID of the build workflow that produced the artifacts'
         required: true
         type: string
       release_stream:
