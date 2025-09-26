@@ -119,18 +119,22 @@ jobs:
           echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
         fi
 
-    - name: Create GitHub Release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        TAG_NAME=${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
-        # Copy manifest for release asset with proper name
-        cp manifest.md Docker.manifest
-        gh release create "${TAG_NAME}" \
-          --title "${{ steps.set_title.outputs.RELEASE_TITLE }}" \
-          --notes-file manifest.md \
-          --draft=false \
-          Docker.manifest
+    - name: Create GitHub Prerelease
+      id: create_release
+      uses: docker://ghcr.io/mini-bomba/create-github-release:v1.2.0
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        tag: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+        prerelease: true
+        draft: false
+        name: ${{ steps.set_title.outputs.release_title }}
+        files: |
+          ./output/*.manifest
+          ./output/*.ova
+          ./output/*.img
+        body: " "
+        clear_attachments: true
+        fail_on_no_files: true
 
     - name: Release created
       run: |
