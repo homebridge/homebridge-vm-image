@@ -102,7 +102,7 @@ jobs:
     - name: Download manifest artifact
       uses: actions/download-artifact@v5
       with:
-        name: virtualbox-appliance*
+        pattern: virtualbox-appliance*
         path: ./output
         merge-multiple: true
 
