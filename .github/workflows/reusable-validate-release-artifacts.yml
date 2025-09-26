@@ -115,14 +115,15 @@ jobs:
             exit 1
           fi
 
-      - name: Cleanup VM
+      - name: Capture VM Screenshot
+        if: always()
         run: |
-          echo "::group::Cleaning up VM"
-          VBoxManage controlvm "${{ env.VM_NAME }}" poweroff || true
-          VBoxManage unregistervm "${{ env.VM_NAME }}" --delete || true
-          echo "::endgroup::"
+          SCREENSHOT_PATH="./output/vbox-logs/${{ env.VM_NAME }}-screenshot.png"
+          # Attempt to take a screenshot of the VM console
+          VBoxManage controlvm "${{ env.VM_NAME }}" screenshotpng "$SCREENSHOT_PATH" || echo "Screenshot failed"
+          ls -l "$SCREENSHOT_PATH" || true
 
-      - name: Cleanup VM and Collect Logs
+      - name: Collect Logs
         if: always()
         run: |
           LOG_DIR="./output/vbox-logs"
@@ -140,13 +141,21 @@ jobs:
           # List collected logs
           ls -l "$LOG_DIR" || true
 
+      - name: Cleanup VM
+        if: always()
+        run: |
+          echo "::group::Cleaning up VM"
+          VBoxManage controlvm "${{ env.VM_NAME }}" poweroff || true
+          VBoxManage unregistervm "${{ env.VM_NAME }}" --delete || true
+          echo "::endgroup::"
+
       - name: Upload VM and Serial Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: virtualbox-validation-logs-${{ inputs.arch }}-${{ inputs.release_stream }}
           path: |
-            ./output/vbox-logs/*.log
+            ./output/vbox-logs/*
 
       - name: Validation Complete
         run: |
