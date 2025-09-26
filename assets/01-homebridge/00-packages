@@ -1,0 +1,14 @@
+apt-transport-https
+ca-certificates
+curl
+gnupg-agent
+software-properties-common
+python3-setuptools
+python3-pip
+gcc
+g++
+make
+ntpdate
+jq
+libavahi-compat-libdnssd-dev
+git

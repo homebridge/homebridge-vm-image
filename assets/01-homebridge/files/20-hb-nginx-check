@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# default port
+UI_PORT=8581
+
+if [ -f /var/lib/homebridge/config.json ]; then
+  PORT_FROM_CONFIG=$(cat /var/lib/homebridge/config.json | jq '.platforms[] | select(.platform == "config") | .port' 2> /dev/null)
+  if [ ${#PORT_FROM_CONFIG} -gt 0 ]; then
+    UI_PORT=$PORT_FROM_CONFIG
+  fi
+fi
+
+# save the result in /etc/hb-ui-port
+echo "$UI_PORT" > /etc/hb-ui-port
+
+# update the nginx config
+if [ -f /etc/nginx/sites-available/homebridge.local ]; then
+  printf "Setting port $UI_PORT in /etc/nginx/sites-available/homebridge.local\n"
+  sed -i "/proxy_pass/c\    proxy_pass                  http://127.0.0.1:${UI_PORT};" /etc/nginx/sites-available/homebridge.local
+  if systemctl is-active --quiet nginx.service; then
+    printf "Reloading nginx...\n"
+    nginx -s reload
+  fi
+fi
+
+exit 0

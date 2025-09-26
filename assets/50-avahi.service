@@ -1,7 +1,0 @@
-<service-group>
-  <name replace-wildcards="yes">Homebridge on %h</name>
-  <service>
-    <type>_hap._tcp</type>
-    <port>51826</port>
-  </service>
-</service-group>
