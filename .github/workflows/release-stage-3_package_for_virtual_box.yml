@@ -11,7 +11,12 @@ on:
       release_stream:
         description: 'Release stream (stable, beta, alpha)'
         required: true
-        type: string
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+        default: beta
       HOMEBRIDGE_VM_IMAGE_VERSION:
         description: 'Homebridge VM image version'
         required: true
@@ -36,7 +41,6 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v5
         with:
-          pattern: ${{ matrix.arch }}*
           path: ./output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
