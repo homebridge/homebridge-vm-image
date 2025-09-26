@@ -186,8 +186,12 @@ setup_rootfs() {
         sudo debootstrap --arch="${ARCH}" --variant=minbase "$DISTRO" "$ROOTFS" \
             http://deb.debian.org/debian
         
-        info "Caching debootstrap result"
-        sudo tar -czf "$cache_file" -C "$ROOTFS" .
+        if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+            info "Skipping cache save on GitHub Actions runner"
+        else
+            info "Caching debootstrap result ($(du -sh "$ROOTFS" | cut -f1))"
+            sudo tar -czf "$cache_file" -C "$ROOTFS" .
+        fi
     fi
 }
 
@@ -511,10 +515,10 @@ main() {
 
     sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
-    echo "# Appended by homebridge-vm-image" >> ${ROOTFS}/opt/homebridge/source.sh
-    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
-    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
-    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
+    sudo echo "# Appended by homebridge-vm-image" >> ${ROOTFS}/opt/homebridge/source.sh
+    sudo echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
+    sudo echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
+    sudo echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" >> ${ROOTFS}/opt/homebridge/source.sh
 
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
