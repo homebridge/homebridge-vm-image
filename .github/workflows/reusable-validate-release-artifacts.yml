@@ -97,6 +97,10 @@ jobs:
         run: |
           for i in {1..12}; do
             sleep 5
+            echo "::group::Listing open ports on localhost"
+            # Show listening ports on the runner (should include 80, 8581, 51826 if VM port forwarding is working)
+            sudo netstat -tuln | grep LISTEN || ss -tuln | grep LISTEN || true
+            echo "::endgroup::"
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8581 || echo "000")
             if [[ "$STATUS" == "200" ]]; then
               echo "::notice::Homebridge UI responded with HTTP 200"
