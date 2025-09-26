@@ -102,6 +102,7 @@ jobs:
             sudo netstat -tuln | grep LISTEN || ss -tuln | grep LISTEN || true
             echo "::endgroup::"
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8581 || echo "000")
+            echo "HTTP status from Homebridge UI: $STATUS"
             if [[ "$STATUS" == "200" ]]; then
               echo "::notice::Homebridge UI responded with HTTP 200"
               break
