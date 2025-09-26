@@ -48,6 +48,10 @@ jobs:
           name: ${{ matrix.arch }}
           path: ./output
           run-id: ${{ inputs.run_id }}
+          merge-multiple: true
+
+      - name: List Downloaded Artifacts
+        run: ls -lR ./output
 
       - name: Package VirtualBox Appliance
         id: package_appliance
@@ -67,3 +71,47 @@ jobs:
           path: |
             ${{ steps.package_appliance.outputs.OVA_FILE }}
             output/*.manifest
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [package-for-virtual-box]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Download manifest artifact
+      uses: actions/download-artifact@v5
+      with:
+        path: ./output
+        merge-multiple: true
+
+    - name: List Downloaded Artifacts
+      run: ls -lR ./output
+
+    - name: Set Release Title
+      id: set_title
+      run: |
+        if [[ "${{ inputs.release_stream }}" == "beta" ]]; then
+          echo "RELEASE_TITLE=BETA: Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+        elif [[ "${{ inputs.release_stream }}" == "alpha" ]]; then
+          echo "RELEASE_TITLE=ALPHA: Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+        else
+          echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG_NAME=${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+        # Copy manifest for release asset with proper name
+        cp manifest.md Docker.manifest
+        gh release create "${TAG_NAME}" \
+          --title "${{ steps.set_title.outputs.RELEASE_TITLE }}" \
+          --notes-file manifest.md \
+          --draft=false \
+          Docker.manifest
+
+    - name: Release created
+      run: |
+        echo "::notice::Release ${{ steps.set_title.outputs.RELEASE_TITLE }} created successfully." 

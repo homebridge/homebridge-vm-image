@@ -31,7 +31,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       HOMEBRIDGE_VM_IMAGE_VERSION: ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
-      RELEASE_TITLE: ${{ steps.set_title.outputs.RELEASE_TITLE }}
 
     steps:
     - name: Checkout
@@ -47,22 +46,10 @@ jobs:
         fi
         echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
-    - name: Set Release Title
-      id: set_title
-      run: |
-        if [[ "${{ inputs.release_stream }}" == "beta" ]]; then
-          echo "RELEASE_TITLE=BETA: Homebridge VM Image Release ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
-        elif [[ "${{ inputs.release_stream }}" == "alpha" ]]; then
-          echo "RELEASE_TITLE=ALPHA: Homebridge VM Image Release ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
-        else
-          echo "RELEASE_TITLE=Homebridge VM Image Release ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
-        fi
-
     - name: Output versions
       run: |
         echo "::group::Version Information"
         echo "HOMEBRIDGE_VM_IMAGE_VERSION=${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-        echo "RELEASE_TITLE=${{ steps.set_title.outputs.RELEASE_TITLE }}"
         echo "::endgroup::"
 
   build-img-file:
