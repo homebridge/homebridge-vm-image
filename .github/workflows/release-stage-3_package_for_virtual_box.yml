@@ -51,7 +51,7 @@ jobs:
         run: ls -lR ./output
 
         # This is needed as Oracle's repo for Bookworm is missing dependency libvpx6
-      - name: Install Packing Dependencies
+      - name: Install Packaging Dependencies
         run: |
           echo "::group::apt-get update"
           sudo apt-get update
@@ -64,12 +64,11 @@ jobs:
           echo "::endgroup::"
           vboxmanage --version
 
-      # Note: quemu-img is not available
       - name: Package VirtualBox Appliance
         id: package_appliance
         run: |
           ./scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "OVA_FILE=${OVA_FILE}" >> $GITHUB_OUTPUT
+          echo "OVA_FILE=./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.ova" >> $GITHUB_OUTPUT
 
       - name: Upload image and manifest artifacts
         uses: actions/upload-artifact@v4
@@ -78,8 +77,8 @@ jobs:
           name: virtualbox-appliance-${{ matrix.arch }}
           path: |
             ${{ steps.package_appliance.outputs.OVA_FILE }}
-            output/*.manifest
-            output/*.img
+            ./output/*.manifest
+            ./output/*.img
 
       - name: Validate VirtualBox Appliance Image
         run: |
