@@ -27,6 +27,14 @@ log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
 error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
 info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
+group_log() {
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        echo -e "::group::$*"
+    else
+        log "$*"
+    fi
+}
+group_end() { echo -e "::endgroup::"; }
 
 # Cleanup function
 cleanup() {
@@ -447,12 +455,18 @@ main() {
     mkdir -p "$ROOTFS" "$MOUNTDIR" "$ESP_MOUNTDIR" "$OUTPUT_DIR" "$CACHE_DIR"
     
     # Build process
+    group_log "Creating and partitioning disk image"
     create_image "$IMG_PATH" "$SIZE_MB"
     setup_loop_device "$IMG_PATH" 
     setup_rootfs "${ARCH}"
     mount_for_chroot
+    group_end
+
+    group_log "Configuring base system"
     configure_base_system "${ARCH}"
+    group_end
     
+    group_log "Installing Homebridge VM customizations"
     # Install customizations, these are copied from homebridge-raspbian-image
     export FIRST_USER_NAME="homebridge"
     export BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d)-${RELEASE_STREAM}-${ARCH}}"
@@ -467,8 +481,8 @@ main() {
     
     for stage in $(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
       install_staged_assets "$stage"
-    done
-    
+    done   
+    group_end
     local APT_MANIFEST_FILE
     APT_MANIFEST_FILE=$(ls "${ROOTFS}/opt/homebridge/homebridge_apt_pkg"*.manifest 2>/dev/null | head -n 1)
     local APT_MANIFEST=""
