@@ -41,7 +41,7 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v5
         with:
-          name: ${{ matrix.arch }}
+          name: homebridge-image-${{ matrix.arch }}
           path: ./output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
