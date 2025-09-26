@@ -110,8 +110,13 @@ jobs:
 
   invoke-package-and-validate:
     needs: [set-versions, build-img-file]
-    uses: ./.github/workflows/release-stage-3_package_for_virtual_box.yml
-    with:
-      run_id: ${{ github.run_id }}
-      release_stream: ${{ inputs.release_stream }}
-      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Trigger Packaging and Validation Workflow
+      run: |
+        gh workflow run "release-stage-3_package_for_virtual_box.yml" \
+          --field release_stream="${{ inputs.release_stream }}" \
+          --field run_id="${{ github.run_id }}" \
+          --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
