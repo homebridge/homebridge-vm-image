@@ -101,6 +101,11 @@ jobs:
     needs: [set-versions, build-img-file]
     runs-on: ubuntu-latest
     steps:
+    # Step 1: Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    # Step 2: Trigger Packaging and Validation Workflow
     - name: Trigger Packaging and Validation Workflow
       run: |
         gh workflow run "release-stage-3_package_for_virtual_box.yml" \

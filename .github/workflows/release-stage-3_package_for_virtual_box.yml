@@ -32,26 +32,31 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
-      - name: Install VirtualBox
-        run: |
-          sudo apt-get update
-          wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
-          echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
-          sudo apt-get update
-          sudo apt-get install -y virtualbox-7.0 || sudo apt-get install -y virtualbox-6.1
-          vboxmanage --version
-
+   
       - name: Download Artifacts
         uses: actions/download-artifact@v5
         with:
-          name: ${{ matrix.arch }}
+          pattern: ${{ matrix.arch }}*
           path: ./output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
 
       - name: List Downloaded Artifacts
         run: ls -lR ./output
+
+        # This is needed as Oracle's repo for Bookworm is missing dependency libvpx6
+      - name: Install VirtualBox
+        run: |
+          echo "::group::apt-get update"
+          sudo apt-get update
+          echo "::endgroup::"
+          echo "::group::Install VirtualBox"
+          wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
+          echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
+          sudo apt-get update
+          sudo apt-get install -y virtualbox-7.0 || sudo apt-get install -y virtualbox-6.1
+          echo "::endgroup::"
+          vboxmanage --version
 
       - name: Package VirtualBox Appliance
         id: package_appliance
