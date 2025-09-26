@@ -44,6 +44,7 @@ jobs:
           path: ./output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: List Downloaded Artifacts
         run: ls -lR ./output
