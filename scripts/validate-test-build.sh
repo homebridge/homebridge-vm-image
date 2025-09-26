@@ -244,6 +244,57 @@ validate_homebridge() {
   return 0
 }
 
+validate_vm_specific_features() {
+  log "🔍 Validating VM-specific features..."
+  
+  # Check dynamic root password
+  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(cat /etc/hb-root-password 2>/dev/null || echo "root") -- -c "test -f /etc/hb-root-password" 2>/dev/null; then
+    log "✅ Dynamic root password system is working"
+  else
+    warn "Dynamic root password not found, may be using fallback"
+  fi
+  
+  # Check source.sh protection
+  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(cat /etc/hb-root-password 2>/dev/null || echo "root") -- -c "test -f /usr/local/sbin/protect-vm-config" 2>/dev/null; then
+    log "✅ VM configuration protection is installed"
+  else
+    error "VM configuration protection missing"
+    return 1
+  fi
+  
+  # Check hb-config is VM-specific
+  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(cat /etc/hb-root-password 2>/dev/null || echo "root") -- -c "grep -q 'Homebridge VM' /usr/local/sbin/hb-config" 2>/dev/null; then
+    log "✅ hb-config is VM-specific version"
+  else
+    warn "hb-config may not be VM-specific version" 
+  fi
+  
+  return 0
+}
+
+validate_ssh_access() {
+  log "🔍 Validating SSH access..."
+  
+  # Try to get the root password from the VM
+  local vm_ip
+  vm_ip=$(VBoxManage guestproperty get "$VM_NAME" "/VirtualBox/GuestInfo/Net/0/V4/IP" | awk '{print $2}' 2>/dev/null || echo "")
+  
+  if [[ -n "$vm_ip" && "$vm_ip" != "No" ]]; then
+    log "VM IP detected: $vm_ip"
+    
+    # Test SSH connectivity (without actually connecting due to security)
+    if nc -z "$vm_ip" 22 2>/dev/null; then
+      log "✅ SSH port (22) is accessible"
+    else
+      warn "SSH port (22) not accessible"
+    fi
+  else
+    warn "Could not detect VM IP for SSH testing"
+  fi
+  
+  return 0
+}
+
 stop_vm() {
   log "🛑 Stopping VM..."
   if VBoxManage list runningvms | grep -q "\"$VM_NAME\""; then
@@ -296,7 +347,7 @@ main() {
   cleanup_vm
   create_vm
   start_vm
-  if wait_for_vm_boot && validate_homebridge; then
+  if wait_for_vm_boot && validate_homebridge && validate_vm_specific_features && validate_ssh_access; then
     log "🎉 All validation tests passed!"
     cleanup_and_exit 0
   else

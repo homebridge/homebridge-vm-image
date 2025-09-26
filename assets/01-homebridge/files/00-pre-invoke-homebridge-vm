@@ -1,0 +1,1 @@
+DPkg::Pre-Invoke {"/usr/local/sbin/protect-vm-config backup || true";};

@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Script to protect VM-specific configurations during APT updates
+# This should be run before and after APT operations
+
+SOURCE_FILE="/opt/homebridge/source.sh"
+BACKUP_FILE="/opt/homebridge/vm-additions.backup"
+VM_MARKER="# Appended by homebridge-vm-image"
+
+backup_vm_additions() {
+    if [ -f "$SOURCE_FILE" ] && grep -q "$VM_MARKER" "$SOURCE_FILE"; then
+        # Extract only the VM-specific additions
+        awk "/$VM_MARKER/,EOF" "$SOURCE_FILE" > "$BACKUP_FILE"
+        echo "VM additions backed up to $BACKUP_FILE"
+    fi
+}
+
+restore_vm_additions() {
+    if [ -f "$BACKUP_FILE" ] && [ -f "$SOURCE_FILE" ]; then
+        # Check if VM additions are missing
+        if ! grep -q "$VM_MARKER" "$SOURCE_FILE"; then
+            echo "Restoring VM additions to $SOURCE_FILE"
+            cat "$BACKUP_FILE" >> "$SOURCE_FILE"
+        fi
+    fi
+}
+
+case "$1" in
+    backup)
+        backup_vm_additions
+        ;;
+    restore)
+        restore_vm_additions
+        ;;
+    *)
+        echo "Usage: $0 {backup|restore}"
+        exit 1
+        ;;
+esac

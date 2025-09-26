@@ -1,14 +1,31 @@
 #!/bin/sh
 
-# Support configuring WiFi via Raspberry Pi Imager Tool
+# Generate a random root password on first boot and save it to a file
+if [ ! -f /etc/hb-root-password ]; then
+  # Generate a random 12-character password
+  RANDOM_PASSWORD=$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-12)
+  
+  # Set the root password
+  echo "root:$RANDOM_PASSWORD" | chpasswd
+  
+  # Save the password to a file (readable only by root)
+  echo "$RANDOM_PASSWORD" > /etc/hb-root-password
+  chmod 600 /etc/hb-root-password
+  
+  # Log the password generation (will appear in console and logs)
+  echo "$(date): Root password generated and saved to /etc/hb-root-password" | tee -a /var/log/first-boot.log
+  echo "$(date): Root password: $RANDOM_PASSWORD" | tee -a /var/log/first-boot.log
+fi
+
+# Support configuring WiFi via VM setup tools (keep original WiFi logic but make it VM-specific)
 # if ssid is set in wpa_supplicant.conf, don't start wifi-connect, disable network manager, and enable dhcpcd
-if grep -q "ssid" "/etc/wpa_supplicant/wpa_supplicant.conf"; then
-  systemctl disable wifi-connect
-  systemctl stop wifi-connect
-  systemctl disable NetworkManager
-  systemctl stop NetworkManager
-  systemctl enable dhcpcd
-  systemctl start dhcpcd
+if [ -f "/etc/wpa_supplicant/wpa_supplicant.conf" ] && grep -q "ssid" "/etc/wpa_supplicant/wpa_supplicant.conf"; then
+  systemctl disable wifi-connect 2>/dev/null || true
+  systemctl stop wifi-connect 2>/dev/null || true
+  systemctl disable NetworkManager 2>/dev/null || true
+  systemctl stop NetworkManager 2>/dev/null || true
+  systemctl enable dhcpcd 2>/dev/null || true
+  systemctl start dhcpcd 2>/dev/null || true
 fi
 
 # disable this service so it does not run again

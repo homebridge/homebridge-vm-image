@@ -356,8 +356,9 @@ cat > /etc/hosts <<HOSTS_EOF
 ::1       localhost ip6-localhost ip6-loopback
 HOSTS_EOF
 
-# Set root password
-echo "root:root" | chpasswd
+# Root password will be generated dynamically on first boot
+# by the first-boot-homebridge service
+echo "Root password will be set dynamically on first boot"
 
 # Clean package cache
 apt-get clean

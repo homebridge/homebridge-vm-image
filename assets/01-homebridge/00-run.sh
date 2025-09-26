@@ -19,6 +19,11 @@ install -m 755 files/20-hb-nginx-check "${ROOTFS_DIR}/etc/hb-service/homebridge/
 install -m 644 files/first-boot-homebridge.service "${ROOTFS_DIR}/etc/systemd/system/"
 install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
 
+# VM configuration protection scripts
+install -m 755 files/protect-vm-config "${ROOTFS_DIR}/usr/local/sbin/"
+install -m 644 files/00-pre-invoke-homebridge-vm "${ROOTFS_DIR}/etc/apt/apt.conf.d/"
+install -m 644 files/99-post-invoke-homebridge-vm "${ROOTFS_DIR}/etc/apt/apt.conf.d/"
+
 #
 # MOTD
 #

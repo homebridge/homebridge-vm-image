@@ -1,0 +1,1 @@
+DPkg::Post-Invoke {"/usr/local/sbin/protect-vm-config restore || true";};

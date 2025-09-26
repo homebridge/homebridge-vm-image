@@ -10,12 +10,8 @@ BOLD='\e[1m'
 NC='\033[0m'
 
 is_pi () {
-  ARCH=$(dpkg --print-architecture)
-  if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
-    return 0
-  else
-    return 1
-  fi
+  # Always return false for VM - not a physical Pi
+  return 1
 }
 
 is_pione() {
@@ -404,9 +400,9 @@ do_install_deconz() {
       echo "Setting up for RaspBee..."
       isRaspbee="1"
 
-      # Install deps
+      # Install deps for VM
       apt update --allow-releaseinfo-change
-      sudo apt install -y i2c-tools build-essential raspberrypi-kernel-headers
+      sudo apt install -y i2c-tools build-essential
 
       # WiringPi (Pi4 Only)
       if [ is_pifour ]; then
@@ -529,14 +525,14 @@ do_install_desktop_and_vnc() {
     RET=$?
     if [ $RET -eq 0 ]; then
 
-      # install desktop
-      if is_installed raspberrypi-ui-mods; then
-        echo "Raspbian Desktop Already Installed"
+      # install desktop for VM
+      if is_installed task-desktop; then
+        echo "Desktop Environment Already Installed"
       else
-        whiptail --title "Warning" --yesno "The Raspbian Desktop will now be installed.\n\nThis may take between 5 and 45 minutes to complete depending on your device." 20 60 2 --no-button "Cancel" --yes-button "Continue"
+        whiptail --title "Warning" --yesno "A desktop environment will now be installed.\n\nThis may take between 5 and 45 minutes to complete depending on your device." 20 60 2 --no-button "Cancel" --yes-button "Continue"
         if [ $? -eq 0 ]; then
           apt update --allow-releaseinfo-change
-          apt install -y raspberrypi-ui-mods
+          apt install -y task-desktop
         else
           return 0;
         fi
@@ -596,7 +592,7 @@ EOL
 }
 
 do_extra_packages() {
-  FUN=$(whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --menu "Advanced Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Back --ok-button Select \
+  FUN=$(whiptail --title "Homebridge VM Configuration Tool (hb-config)" --menu "Advanced Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Back --ok-button Select \
     "A0 AdGuard Home" "Install / Uninstall AdGuard Home" \
     "A1 Pi-hole" "Install / Reconfigure Pi-hole" \
     "A2 Node-RED" "Install / Update Node-RED" \
@@ -623,7 +619,7 @@ do_configure_nginx() {
   RET=$?
   tempDir=$(mktemp -d)
   if [ $RET -eq 0 ]; then
-    whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --separate-output --checklist "\nNGINX Options:"  20 80 5 --cancel-button Cancel --ok-button Save \
+    whiptail --title "Homebridge VM Configuration Tool (hb-config)" --separate-output --checklist "\nNGINX Options:"  20 80 5 --cancel-button Cancel --ok-button Save \
       "1" "Listen on port 80 - http://        " 1  \
       "2" "Listen on port 443 - https://      " 1 \
       "3" "Redirect http:// to https://       " 0 2>$tempDir/results
@@ -749,13 +745,18 @@ $NGINX_REDIRECT_HTTP_TO_HTTPS
   fi
 }
 
-do_configure_raspbian() {
-  raspi-config
+do_configure_system() {
+  # Use the system configuration tools available on the VM
+  if command -v dpkg-reconfigure >/dev/null 2>&1; then
+    dpkg-reconfigure tzdata
+  else
+    whiptail --title "Error" --msgbox "System configuration tool not available." 20 60 1
+  fi
 }
 
 do_update() {
   tempDir=$(mktemp -d)
-  scriptUrl=https://raw.githubusercontent.com/homebridge/homebridge-raspbian-image/latest/stage3_homebridge/01-homebridge/files/hb-config
+  scriptUrl=https://raw.githubusercontent.com/homebridge/homebridge-vm-image/latest/assets/01-homebridge/files/hb-config
 
   # download the update to a temporary directory
   scriptUrl=$scriptUrl?$(date --iso-8601)
@@ -771,7 +772,7 @@ do_update() {
     if bash -n $tempDir/hb-config; then
       chmod +x $tempDir/hb-config
       mv $tempDir/hb-config /usr/local/sbin/hb-config
-      whiptail --title "Success" --msgbox "The hb-config tool has been updated and will now exit.\n\nIf you like the Homebridge Raspberry Pi image please show your support by starring the project on GitHub:\n\nhttps://github.com/homebridge/homebridge-raspbian-image" 20 60 1
+      whiptail --title "Success" --msgbox "The hb-config tool has been updated and will now exit.\n\nIf you like the Homebridge VM image please show your support by starring the project on GitHub:\n\nhttps://github.com/homebridge/homebridge-vm-image" 20 60 1
       exit 0
     else
       whiptail --title "Error" --msgbox "The downloaded script was corrupted and did not pass the syntax check." 20 60 1
@@ -783,7 +784,7 @@ do_about() {
   IMAGE_VERSION=$(cat /etc/hb-release)
 
   whiptail --title "About" --msgbox "\
-This tool provides a straight-forward way of managing Homebridge on a Raspberry Pi. Although it can be run at any time, some of the options may have difficulties if you have heavily customised your installation.
+This tool provides a straight-forward way of managing Homebridge on a VM. Although it can be run at any time, some of the options may have difficulties if you have heavily customised your installation.
 
 Image Version: $IMAGE_VERSION
 
@@ -793,8 +794,8 @@ https://github.com/homebridge/homebridge
 Homebridge Config UI X - @oznu
 https://github.com/oznu/homebridge-config-ui-x
 
-Homebridge Raspbian Image - @oznu
-https://github.com/homebridge/homebridge-raspbian-image
+Homebridge VM Image - @homebridge
+https://github.com/homebridge/homebridge-vm-image
 
 
 \
@@ -815,25 +816,25 @@ if [ "$INTERACTIVE" = True ]; then
   calc_wt_size
   while true; do
     if is_pi ; then
-      FUN=$(whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --backtitle "$(cat /proc/device-tree/model)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
+      FUN=$(whiptail --title "Homebridge VM Configuration Tool (hb-config)" --backtitle "Homebridge VM Image" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
         "1 Upgrade Node.js" "Upgrade Node.js to the latest LTS version" \
         "2 Update Homebridge" "Update Homebridge to the latest version" \
         "3 Restore Config" "Restores the Homebridge config to the factory default" \
         "4 Extra Packages" "Optional packages, eg. Pi-Hole, Node-RED, UniFi Controller" \
         "5 Nginx Options" "Configure Homebridge Nginx settings" \
-        "6 Configure OS" "Open the Raspbian Configuration Tool" \
+        "6 Configure OS" "Open the System Configuration Tool" \
         "7 Networking" "Open the NetworkManager UI" \
         "8 Update" "Update this tool to the latest version" \
         "9 About" "Information about this configuration tool" \
         3>&1 1>&2 2>&3)
     else
-      FUN=$(whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
+      FUN=$(whiptail --title "Homebridge VM Configuration Tool (hb-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
         "1 Upgrade Node.js" "Upgrade Node.js to the latest LTS version" \
         "2 Update Homebridge" "Update Homebridge to the latest version" \
         "3 Restore Config" "Restores the Homebridge config to the factory default" \
         "4 Extra Packages" "Optional packages, eg. Pi-Hole, Node-RED, UniFi Controller" \
         "5 Nginx Options" "Configure Homebridge Nginx settings" \
-        "6 Configure OS" "Open the Raspbian Configuration Tool" \
+        "6 Configure OS" "Open the System Configuration Tool" \
         "7 Networking" "Open the NetworkManager UI" \
         "8 Update" "Update this tool to the latest version" \
         "9 About" "Information about this configuration tool" \
@@ -850,7 +851,7 @@ if [ "$INTERACTIVE" = True ]; then
           3\ *) do_restore_config ;;
           4\ *) do_extra_packages ;;
           5\ *) do_configure_nginx ;;
-          6\ *) do_configure_raspbian ;;
+          6\ *) do_configure_system ;;
           7\ *) nmtui ;;
           8\ *) do_update ;;
           9\ *) do_about ;;
@@ -863,7 +864,7 @@ if [ "$INTERACTIVE" = True ]; then
           3\ *) do_restore_config ;;
           4\ *) do_extra_packages ;;
           5\ *) do_configure_nginx ;;
-          6\ *) do_configure_raspbian ;;
+          6\ *) do_configure_system ;;
           7\ *) nmtui ;;
           8\ *) do_update ;;
           9\ *) do_about ;;
