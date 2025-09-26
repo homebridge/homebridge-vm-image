@@ -87,7 +87,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           retention-days: 7
-          name: ${{ matrix.arch }}
+          name: homebridge-image-${{ matrix.arch }}
           path: output/*
 
       - name: Steps complete

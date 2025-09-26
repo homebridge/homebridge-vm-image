@@ -41,6 +41,7 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v5
         with:
+          name: ${{ matrix.arch }}
           path: ./output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
@@ -50,7 +51,7 @@ jobs:
         run: ls -lR ./output
 
         # This is needed as Oracle's repo for Bookworm is missing dependency libvpx6
-      - name: Install VirtualBox
+      - name: Install Packing Dependencies
         run: |
           echo "::group::apt-get update"
           sudo apt-get update
@@ -59,7 +60,7 @@ jobs:
           wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
           echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
           sudo apt-get update
-          sudo apt-get install -y virtualbox-7.0 || sudo apt-get install -y virtualbox-6.1
+          sudo apt-get install -y virtualbox-7.0 qemu-img || sudo apt-get install -y virtualbox-6.1 qemu-img
           echo "::endgroup::"
           vboxmanage --version
 
@@ -69,18 +70,24 @@ jobs:
           scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
           echo "OVA_FILE=${OVA_FILE}" >> $GITHUB_OUTPUT
 
-      - name: Validate VirtualBox Appliance Image
-        run: |
-          ./validate-virtual-box-package.sh ${{ steps.package_appliance.outputs.OVA_FILE }}
-
       - name: Upload image and manifest artifacts
         uses: actions/upload-artifact@v4
         with:
           retention-days: 7
-          name: virtualbox-${{ matrix.arch }}
+          name: virtualbox-appliance-${{ matrix.arch }}
           path: |
             ${{ steps.package_appliance.outputs.OVA_FILE }}
-            output/*.manifest
+
+      - name: Validate VirtualBox Appliance Image
+        run: |
+          ./scripts/validate-virtual-box-package.sh ${{ steps.package_appliance.outputs.OVA_FILE }}
+
+      - name: Packaging and Validation complete
+        run: |
+          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          echo "::notice::Run ID: ${{ inputs.run_id }}"
+          echo "::notice::Architecture: ${{ matrix.arch }}"
+          echo "::notice::Release Stream: ${{ inputs.release_stream }}" 
 
   create-release:
     runs-on: ubuntu-latest
