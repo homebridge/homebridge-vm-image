@@ -118,7 +118,9 @@ jobs:
       - name: Capture VM Screenshot
         if: always()
         run: |
-          SCREENSHOT_PATH="./output/vbox-logs/${{ env.VM_NAME }}-screenshot.png"
+          LOG_DIR="./output/vbox-logs"
+          mkdir -p "$LOG_DIR"
+          SCREENSHOT_PATH="$LOG_DIR/${{ env.VM_NAME }}-screenshot.png"
           # Attempt to take a screenshot of the VM console
           VBoxManage controlvm "${{ env.VM_NAME }}" screenshotpng "$SCREENSHOT_PATH" || echo "Screenshot failed"
           ls -l "$SCREENSHOT_PATH" || true
@@ -129,6 +131,11 @@ jobs:
           LOG_DIR="./output/vbox-logs"
           mkdir -p "$LOG_DIR"
           # Collect all VirtualBox logs for this VM
+          echo "::group::VM Configuration"
+          VBoxManage showvminfo "${{ env.VM_NAME }}"
+          echo 
+          VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable
+          echo "::endgroup::"
           for log in $(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)/*.log; do
             cp "$log" "$LOG_DIR/" 2>/dev/null || true
           done
