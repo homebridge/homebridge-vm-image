@@ -1,0 +1,69 @@
+name: Package and Validate Homebridge VM VirtualBox Appliance
+run-name: Package and Validate VirtualBox - Run ${{ inputs.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'GitHub Actions run ID to associate artifacts'
+        required: true
+        type: string
+      release_stream:
+        description: 'Release stream (stable, beta, alpha)'
+        required: true
+        type: string
+      HOMEBRIDGE_VM_IMAGE_VERSION:
+        description: 'Homebridge VM image version'
+        required: true
+        type: string
+
+concurrency:
+  group: package-and-validate-virtualbox
+  cancel-in-progress: false
+
+jobs:
+  package-for-virtual-box:
+    runs-on: ubuntu-22.04
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install VirtualBox
+        run: |
+          sudo apt-get update
+          wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
+          echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
+          sudo apt-get update
+          sudo apt-get install -y virtualbox-7.0 || sudo apt-get install -y virtualbox-6.1
+          vboxmanage --version
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ matrix.arch }}
+          path: ./output
+          run-id: ${{ inputs.run_id }}
+
+      - name: Package VirtualBox Appliance
+        id: package_appliance
+        run: |
+          scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          echo "OVA_FILE=${OVA_FILE}" >> $GITHUB_OUTPUT
+
+      - name: Validate VirtualBox Appliance Image
+        run: |
+          ./validate-virtual-box-package.sh ${{ steps.package_appliance.outputs.OVA_FILE }}
+
+      - name: Upload image and manifest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          retention-days: 7
+          name: virtualbox-${{ matrix.arch }}
+          path: |
+            ${{ steps.package_appliance.outputs.OVA_FILE }}
+            output/*.manifest
