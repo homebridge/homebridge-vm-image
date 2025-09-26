@@ -50,6 +50,7 @@ import_ova() {
 
 start_vm() {
   log "🚀 Starting VM..."
+  VBoxManage modifyvm "$VM_NAME" --nic1 nat
   VBoxManage startvm "$VM_NAME" --type headless
   log "✅ VM started: $VM_NAME"
 }
