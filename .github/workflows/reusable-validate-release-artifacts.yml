@@ -1,5 +1,5 @@
-name: Validate Homebridge VM VirtualBox Release Artifact
-run-name: Validate VirtualBox Artifact - Tag ${{ inputs.release_tag }}
+name: Reusable - Validate Homebridge VM VirtualBox Release Artifact
+run-name: Reusable - Validate VirtualBox Artifact - Tag ${{ inputs.release_tag }}
 
 on:
   workflow_dispatch:
