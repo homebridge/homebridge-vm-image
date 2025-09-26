@@ -40,7 +40,7 @@ DOCKERFILE="$REPO_ROOT/scripts/Dockerfile"
 DOCKERFILE_HASH=$(sha256sum "$DOCKERFILE" | awk '{print $1}')
 
 # Use the checksum as part of the image tag
-DOCKER_IMAGE_TAG="homebridge-vm-builder-base:${RELEASE_STREAM}-$ARCH-$DOCKERFILE_HASH"
+DOCKER_IMAGE_TAG="homebridge-vm-builder:${RELEASE_STREAM}-$ARCH-$DOCKERFILE_HASH"
 
 if [[ "$ARCH" == "arm64" ]]; then
   BASE_IMAGE="arm64v8/ubuntu:24.04"

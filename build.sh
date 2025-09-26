@@ -429,14 +429,14 @@ main() {
     validate_arch "${ARCH}"
     
     # Setup directories and variables
-    readonly IMG_NAME="homebridge-${ARCH}.img"
+    readonly IMG_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}" 
     readonly WORKDIR="work-${ARCH}"
     readonly ROOTFS="${WORKDIR}/rootfs"
     readonly MOUNTDIR="${WORKDIR}/mnt"  
     readonly ESP_MOUNTDIR="${WORKDIR}/esp"
     readonly OUTPUT_DIR="output"
     readonly CACHE_DIR="cache"
-    readonly IMG_PATH="$OUTPUT_DIR/$IMG_NAME"
+    readonly IMG_PATH="${OUTPUT_DIR}/${IMG_NAME}.img"
     
     log "Starting Homebridge VM build for release stream ${BLUE}${RELEASE_STREAM}${NC} on arch: ${BLUE}${ARCH}${NC}"
     log "Output: $IMG_PATH"
