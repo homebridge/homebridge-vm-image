@@ -130,25 +130,38 @@ jobs:
         run: |
           LOG_DIR="./output/vbox-logs"
           mkdir -p "$LOG_DIR"
-          # Collect all VirtualBox logs for this VM
           echo "::group::VM Configuration"
+          echo "Collecting VM info for: ${{ env.VM_NAME }}"
           VBoxManage showvminfo "${{ env.VM_NAME }}"
           echo 
           VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable
           echo "::endgroup::"
-          echo "$(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)"
-          ls -l $(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2) || true
-          for log in $(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)/*.log; do
-            echo "Collecting log: $log"
-            cp "$log" "$LOG_DIR/" 2>/dev/null || true
-          done
+          # Get VM log folder path (may contain spaces)
+          VM_LOG_FOLDER="$(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)"
+          echo "Extracted VM log folder: '$VM_LOG_FOLDER'"
+          if [[ -n "$VM_LOG_FOLDER" && -d "$VM_LOG_FOLDER" ]]; then
+            echo "Listing logs in: '$VM_LOG_FOLDER'"
+            ls -l "$VM_LOG_FOLDER" || true
+            for log in "$VM_LOG_FOLDER"/*.log; do
+              if [[ -f "$log" ]]; then
+                echo "Collecting log: $log"
+                cp "$log" "$LOG_DIR/" 2>/dev/null || true
+              else
+                echo "No log file found at: $log"
+              fi
+            done
+          else
+            echo "No VM log folder found for ${VM_NAME} (LogFldr='$VM_LOG_FOLDER')"
+          fi
           # Also collect the serial output log if present
+          echo "Collecting serial logs from ./output/*.log"
           for serial_log in ./output/*.log; do
             if [[ -f "$serial_log" ]]; then
+              echo "Collecting serial log: $serial_log"
               cp "$serial_log" "$LOG_DIR/"
             fi
           done
-          # List collected logs
+          echo "Final collected logs:"
           ls -l "$LOG_DIR" || true
 
       - name: Cleanup VM
