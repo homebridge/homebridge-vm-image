@@ -78,6 +78,7 @@ jobs:
           path: |
             ${{ steps.package_appliance.outputs.OVA_FILE }}
             output/*.manifest
+            output/*.img
 
       - name: Validate VirtualBox Appliance Image
         run: |
@@ -100,6 +101,7 @@ jobs:
     - name: Download manifest artifact
       uses: actions/download-artifact@v5
       with:
+        name: virtualbox-appliance*
         path: ./output
         merge-multiple: true
 
