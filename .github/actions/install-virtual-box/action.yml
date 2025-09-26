@@ -1,0 +1,36 @@
+name: Install VirtualBox
+description: Installs VirtualBox on Ubuntu runners using the jammy repo for best compatibility.
+runs:
+  using: "composite"
+  steps:
+    - name: Check runner OS version
+      run: |
+        source /etc/os-release
+        if [[ "$VERSION_ID" != "22.04" ]]; then
+          echo "::error::Due to Oracle Virtual Box Package issues, this workflow must run on ubuntu-22.04. Current version: $VERSION_ID"
+          exit 1
+        fi
+      shell: bash
+
+    - name: apt-get update
+      run: sudo apt-get update
+      shell: bash
+
+    - name: Add Oracle VirtualBox repo
+      run: |
+        wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
+        echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
+        sudo apt-get update
+      shell: bash
+
+    - name: Install VirtualBox
+      run: |
+        sudo apt-get install -y virtualbox-7.2 || \
+        sudo apt-get install -y virtualbox-7.1 || \
+        sudo apt-get install -y virtualbox-7.0
+      shell: bash
+
+    - name: VirtualBox Version
+      run: |
+        vboxmanage --version
+      shell: bash

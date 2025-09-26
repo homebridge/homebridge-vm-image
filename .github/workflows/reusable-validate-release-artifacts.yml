@@ -1,0 +1,112 @@
+name: Validate Homebridge VM VirtualBox Release Artifact
+run-name: Validate VirtualBox Artifact - Tag ${{ inputs.release_tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to download artifacts from (e.g. v1.2.3)'
+        required: true
+        type: string
+      release_stream:
+        description: 'Release stream (stable, beta, alpha)'
+        required: true
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+        default: beta
+      arch:
+        description: 'Architecture (amd64, arm64)'
+        required: true
+        type: choice
+        options:
+          - amd64
+          - arm64
+        default: amd64
+
+concurrency:
+  group: validate-virtualbox-artifact
+  cancel-in-progress: false
+
+env:
+  OVA_FILE_NAME: homebridge-vm-image-${{ inputs.release_stream }}-${{ inputs.arch }}.ova
+  OVA_FILE: ./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ inputs.arch }}.ova
+  VM_NAME: homebridge-validation-vm-${{ inputs.arch }}
+
+jobs:
+  validate-virtualbox-appliance:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download VirtualBox Appliance Artifact from Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p ./output
+          # Download the OVA file from the release assets using gh CLI
+          gh release download "${{ inputs.release_tag }}" --pattern "${{ env.OVA_FILE_NAME }}" --dir ./output
+          if [[ ! -f "./output/${{ env.OVA_FILE_NAME }}" ]]; then
+            echo "::error::OVA file not found in release: ./output/${{ env.OVA_FILE_NAME }}"
+            ls -l ./output
+            exit 1
+          fi
+
+      - name: List Downloaded Artifacts
+        run: ls -lR ./output
+
+      - name: Install VirtualBox
+        uses: ./.github/actions/install-virtualbox
+
+      - name: Validate VirtualBox Appliance Image
+        run: |
+          set -e
+          # Import OVA
+          VBoxManage import "${{ env.OVA_FILE }}" --vsys 0 --vmname "${{ env.VM_NAME }}"
+          VBoxManage modifyvm "${{ env.VM_NAME }}" --nic1 nat
+          # Set up port forwarding for Homebridge UI (8581)
+          VBoxManage modifyvm "${{ env.VM_NAME }}" --natpf1 "hbui,tcp,,8581,,8581"
+          VBoxManage startvm "${{ env.VM_NAME }}" --type headless
+          # Wait for VM to power on (max 60s)
+          for i in {1..12}; do
+            sleep 5
+            VM_STATE=$(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable | grep -E '^VMState=' | cut -d'"' -f2)
+            if [[ "$VM_STATE" == "running" ]]; then
+              echo "::notice::VM started successfully."
+              break
+            else
+              echo "Waiting for VM to start... Current state: $VM_STATE"
+            fi
+          done
+          if [[ "$VM_STATE" != "running" ]]; then
+            echo "::error::VM failed to start."
+            exit 1
+          fi
+
+      - name: Validate Homebridge UI HTTP Response
+        run: |
+          for i in {1..12}; do
+            sleep 5
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8581 || echo "000")
+            if [[ "$STATUS" == "200" ]]; then
+              echo "::notice::Homebridge UI responded with HTTP 200"
+              break
+            fi
+          done
+          if [[ "$STATUS" != "200" ]]; then
+            echo "::error::Homebridge UI did not respond with HTTP 200"
+            exit 1
+          fi
+
+      - name: Cleanup VM
+        run: |
+          VBoxManage controlvm "${{ env.VM_NAME }}" poweroff || true
+          VBoxManage unregistervm "${{ env.VM_NAME }}" --delete || true
+
+      - name: Validation Complete
+        run: |
+          echo "::notice::Validation completed for ${{ inputs.arch }} ${{ inputs.release_stream }}"
