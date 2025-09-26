@@ -61,7 +61,7 @@ jobs:
     - name: Output versions
       run: |
         echo "::group::Version Information"
-        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}""
+        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
         echo "RELEASE_TITLE=${{ steps.set_title.outputs.RELEASE_TITLE }}"
         echo "::endgroup::"
 
