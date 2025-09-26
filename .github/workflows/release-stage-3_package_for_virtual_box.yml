@@ -60,14 +60,15 @@ jobs:
           wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
           echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
           sudo apt-get update
-          sudo apt-get install -y virtualbox-7.0 qemu-img || sudo apt-get install -y virtualbox-6.1 qemu-img
+          sudo apt-get install -y virtualbox-7.0 || sudo apt-get install -y virtualbox-6.1 
           echo "::endgroup::"
           vboxmanage --version
 
+      # Note: quemu-img is not available
       - name: Package VirtualBox Appliance
         id: package_appliance
         run: |
-          scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          ./scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
           echo "OVA_FILE=${OVA_FILE}" >> $GITHUB_OUTPUT
 
       - name: Upload image and manifest artifacts
