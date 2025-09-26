@@ -99,7 +99,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Download manifest artifact
+    - name: Download release artifacts
       uses: actions/download-artifact@v5
       with:
         pattern: virtualbox-appliance*
