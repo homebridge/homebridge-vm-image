@@ -13,7 +13,10 @@ runs:
       shell: bash
 
     - name: apt-get update
-      run: sudo apt-get update
+      run: |
+        echo "::group::Running apt-get update"
+        sudo apt-get update
+        echo "::endgroup::"
       shell: bash
 
     - name: Add Oracle VirtualBox repo
@@ -25,9 +28,11 @@ runs:
 
     - name: Install VirtualBox
       run: |
+        echo "::group::Installing VirtualBox"
         sudo apt-get install -y virtualbox-7.2 || \
         sudo apt-get install -y virtualbox-7.1 || \
         sudo apt-get install -y virtualbox-7.0
+        echo "::endgroup::"
       shell: bash
 
     - name: VirtualBox Version
