@@ -92,7 +92,7 @@ jobs:
 
       - name: Steps complete
         run: |
-          echo "::notice::Image Build steps complete for ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          echo "::notice::Homebridge VM image version: ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
           echo "::notice::Run ID: ${{ github.run_id }}"
           echo "::notice::Architecture: ${{ matrix.arch }}"
           echo "::notice::Release Stream: ${{ inputs.release_stream }}"
