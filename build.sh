@@ -484,7 +484,9 @@ main() {
     log "Using ffmpeg-for-homebridge version: ${BLUE}${FFMPEG_FOR_HOMEBRIDGE_VERSION}${NC}"
     
     for stage in $(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
+      group_log "Stage: $stage"
       install_staged_assets "$stage"
+      group_end
     done   
     group_end
     local APT_MANIFEST_FILE
