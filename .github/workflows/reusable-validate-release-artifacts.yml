@@ -136,7 +136,10 @@ jobs:
           echo 
           VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable
           echo "::endgroup::"
+          ehho "$(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)"
+          ls -l $(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2) || true
           for log in $(VBoxManage showvminfo "${{ env.VM_NAME }}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)/*.log; do
+            echo "Collecting log: $log"
             cp "$log" "$LOG_DIR/" 2>/dev/null || true
           done
           # Also collect the serial output log if present
