@@ -1,5 +1,5 @@
-name: Package and Validate Homebridge VM VirtualBox Appliance
-run-name: Package and Validate VirtualBox - Run ${{ inputs.run_id }}
+name: Release Stage 3 - Package and Validate Homebridge VM VirtualBox Appliance
+run-name: Release Stage 3 - Package and Validate VirtualBox - Run ${{ inputs.run_id }}
 
 on:
   workflow_dispatch:
