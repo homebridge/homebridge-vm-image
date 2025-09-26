@@ -60,7 +60,7 @@ jobs:
           wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
           echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
           sudo apt-get update
-          sudo apt-get install -y virtualbox-7.0 || sudo apt-get install -y virtualbox-6.1 
+          sudo apt-get install -y virtualbox-7.2 || sudo apt-get install -y virtualbox-7.1 || sudo apt-get install -y virtualbox-7.0
           echo "::endgroup::"
           vboxmanage --version
 
@@ -120,6 +120,10 @@ jobs:
           echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
         fi
 
+    - name: Compress IMG Files for Release
+      run: |
+        gzip -9 ./output/*.img
+
     - name: Create GitHub Prerelease
       id: create_release
       uses: docker://ghcr.io/mini-bomba/create-github-release:v1.2.0
@@ -127,13 +131,15 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
         prerelease: true
-        draft: false
+        draft: true
         name: ${{ steps.set_title.outputs.release_title }}
         files: |
           ./output/*.manifest
           ./output/*.ova
-          ./output/*.img
-        body: " "
+          ./output/*.img.gz
+
+        body: |
+          This is a test release only. Please test the VirtualBox appliance and report any issues you find.
         clear_attachments: true
         fail_on_no_files: true
 
