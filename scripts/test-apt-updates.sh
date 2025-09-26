@@ -32,6 +32,23 @@ test_source_file_exists() {
     log "✅ Source file exists with VM additions"
 }
 
+test_password_system() {
+    log "🔍 Testing secure password system..."
+    
+    # Check that we don't store passwords in plaintext
+    if [ -f "/etc/hb-root-password" ]; then
+        error "Found insecure plaintext password file (should not exist)"
+        return 1
+    fi
+    
+    # Check that the marker file exists (indicating password was set)
+    if [ -f "/etc/hb-root-password-set" ]; then
+        log "✅ Secure password system marker found"
+    else
+        warn "Password system marker not found (may not have run first boot yet)"
+    fi
+}
+
 test_apt_update() {
     log "🔄 Testing APT update..."
     apt-get update -qq
@@ -105,6 +122,7 @@ main() {
     fi
     
     test_source_file_exists
+    test_password_system
     test_protection_scripts
     test_apt_update
     test_source_file_preserved

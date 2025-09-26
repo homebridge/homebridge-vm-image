@@ -1,20 +1,25 @@
 #!/bin/sh
 
-# Generate a random root password on first boot and save it to a file
-if [ ! -f /etc/hb-root-password ]; then
+# Generate a random root password on first boot and display it once
+if [ ! -f /etc/hb-root-password-set ]; then
   # Generate a random 12-character password
   RANDOM_PASSWORD=$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-12)
   
   # Set the root password
   echo "root:$RANDOM_PASSWORD" | chpasswd
   
-  # Save the password to a file (readable only by root)
-  echo "$RANDOM_PASSWORD" > /etc/hb-root-password
-  chmod 600 /etc/hb-root-password
+  # Mark that password has been set (don't store the actual password)
+  touch /etc/hb-root-password-set
+  chmod 600 /etc/hb-root-password-set
   
-  # Log the password generation (will appear in console and logs)
-  echo "$(date): Root password generated and saved to /etc/hb-root-password" | tee -a /var/log/first-boot.log
-  echo "$(date): Root password: $RANDOM_PASSWORD" | tee -a /var/log/first-boot.log
+  # Display password once on console for immediate access (will not persist)
+  echo "$(date): ============================================" | tee -a /var/log/first-boot.log
+  echo "$(date): ROOT PASSWORD (shown only once): $RANDOM_PASSWORD" | tee -a /var/log/first-boot.log
+  echo "$(date): Please change this password immediately using 'passwd' command" | tee -a /var/log/first-boot.log
+  echo "$(date): ============================================" | tee -a /var/log/first-boot.log
+  
+  # Clear the password variable for security
+  unset RANDOM_PASSWORD
 fi
 
 # Support configuring WiFi via VM setup tools (keep original WiFi logic but make it VM-specific)

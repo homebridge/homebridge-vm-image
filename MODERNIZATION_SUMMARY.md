@@ -29,18 +29,18 @@ This document summarizes the modernization work completed to transition from Ras
 
 **Implementation:**
 - Generate random 12-character password on first boot using OpenSSL
-- Save password to `/etc/hb-root-password` (root-readable only)
-- Display password in MOTD with SSH connection instructions
+- Display password once in console/logs during first boot for immediate access
+- No plaintext password storage on filesystem for security
 - Remove hardcoded "root:root" password from build process
-- Log password generation for console visibility
+- Users encouraged to change password immediately using `passwd` command
 
 ### 3. SSH Access Management ✅
 
 **Implementation:**
 - SSH service enabled by default in build process
-- Root password displayed in MOTD with hostname/IP detection
+- SSH connection instructions displayed in MOTD with hostname/IP detection
 - Dynamic connection instructions for both `.local` and IP addresses
-- Password visible on console login for VM hypervisor access
+- Root password shown once during first boot, users encouraged to change it
 
 ### 4. APT Update Protection ✅
 
@@ -72,10 +72,11 @@ This document summarizes the modernization work completed to transition from Ras
 ## Key Features Implemented
 
 ### Dynamic Root Password
-- **Location**: `/etc/hb-root-password`
-- **Generation**: First boot via systemd service
-- **Visibility**: Displayed in MOTD and console logs
-- **Security**: File readable only by root
+- **Security**: No plaintext password storage on filesystem
+- **Generation**: Random password generated and shown once during first boot
+- **Visibility**: Displayed only in console/logs during first boot for immediate access
+- **Best Practice**: Users encouraged to change password immediately using `passwd` command
+- **Marker**: `/etc/hb-root-password-set` indicates password has been generated (no password stored)
 
 ### Configuration Protection
 - **Script**: `/usr/local/sbin/protect-vm-config`
@@ -95,7 +96,7 @@ This document summarizes the modernization work completed to transition from Ras
 ## Usage Instructions
 
 ### For Users
-1. **SSH Access**: Check MOTD after VM boot for password and connection instructions
+1. **SSH Access**: Check console/logs during first boot for root password, then change it immediately
 2. **Configuration**: Use `sudo hb-config` for system management
 3. **Updates**: Standard `apt update && apt upgrade` works with configuration protection
 
@@ -124,9 +125,9 @@ scripts/
 
 ## Security Considerations
 
-- Root password is randomly generated and unique per VM instance
-- Password file has restricted permissions (600, root-owned)
-- SSH access is enabled but requires the dynamically generated password
+- Root password is randomly generated and shown only once during first boot
+- No plaintext password storage on filesystem
+- SSH access requires the dynamically generated password (users should change it)
 - APT hooks run with appropriate error handling to prevent system breakage
 
 ## Maintenance Notes

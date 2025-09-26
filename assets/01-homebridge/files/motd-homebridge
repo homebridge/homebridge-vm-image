@@ -39,11 +39,12 @@ printf "${BOLD}View Logs CMD:${NC} ${GREEN}sudo hb-service logs${NC}\n"
 printf "\n${BOLD}Manage Server:${NC} ${GREEN}sudo hb-config${NC}\n"
 printf "${BOLD}Enter Homebridge Runtime Environment:${NC} ${GREEN}sudo hb-shell${NC}\n"
 
-# Display root password if available
-if [ -f /etc/hb-root-password ]; then
-  ROOT_PASSWORD=$(cat /etc/hb-root-password)
-  printf "\n${BOLD}Root SSH Password:${NC} ${GREEN}${ROOT_PASSWORD}${NC}\n"
-  printf "${BOLD}SSH Access:${NC} ${GREEN}ssh root@${HOSTNAME}.local${NC} or ${GREEN}ssh root@$(echo $IP | awk '{print $1}')${NC}\n"
+# Display SSH access information (password shown only once during first boot)
+if [ -f /etc/hb-root-password-set ]; then
+  printf "\n${BOLD}SSH Access:${NC} ${GREEN}ssh root@${HOSTNAME}.local${NC} or ${GREEN}ssh root@$(echo $IP | awk '{print $1}')${NC}\n"
+  printf "${BOLD}Note:${NC} Root password was shown once during first boot. Use 'passwd' to change it.\n"
+else
+  printf "\n${BOLD}SSH Access:${NC} Root password will be generated on first boot.\n"
 fi
 
 printf "\n"

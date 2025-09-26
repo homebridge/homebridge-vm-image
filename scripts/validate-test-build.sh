@@ -247,15 +247,15 @@ validate_homebridge() {
 validate_vm_specific_features() {
   log "🔍 Validating VM-specific features..."
   
-  # Check dynamic root password
-  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(cat /etc/hb-root-password 2>/dev/null || echo "root") -- -c "test -f /etc/hb-root-password" 2>/dev/null; then
+  # Check dynamic root password system
+  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(echo "root") -- -c "test -f /etc/hb-root-password-set" 2>/dev/null; then
     log "✅ Dynamic root password system is working"
   else
-    warn "Dynamic root password not found, may be using fallback"
+    warn "Dynamic root password marker not found, may be using fallback or not yet generated"
   fi
   
   # Check source.sh protection
-  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(cat /etc/hb-root-password 2>/dev/null || echo "root") -- -c "test -f /usr/local/sbin/protect-vm-config" 2>/dev/null; then
+  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(echo "root") -- -c "test -f /usr/local/sbin/protect-vm-config" 2>/dev/null; then
     log "✅ VM configuration protection is installed"
   else
     error "VM configuration protection missing"
@@ -263,7 +263,7 @@ validate_vm_specific_features() {
   fi
   
   # Check hb-config is VM-specific
-  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(cat /etc/hb-root-password 2>/dev/null || echo "root") -- -c "grep -q 'Homebridge VM' /usr/local/sbin/hb-config" 2>/dev/null; then
+  if VBoxManage guestcontrol "$VM_NAME" run --exe "/bin/bash" --username root --password-file <(echo "root") -- -c "grep -q 'Homebridge VM' /usr/local/sbin/hb-config" 2>/dev/null; then
     log "✅ hb-config is VM-specific version"
   else
     warn "hb-config may not be VM-specific version" 
