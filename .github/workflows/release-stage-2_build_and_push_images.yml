@@ -87,8 +87,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog $GRUB_EFI_PKG qemu-user-static gzip sudo udev kpartx psmisc jq
-          sudo apt-get install -y grub-efi-${{ inputs.release_stream }}-bin
+          sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog qemu-user-static gzip sudo udev kpartx psmisc jq
+          sudo apt-get install -y grub-efi-${{ matrix.arch }}-bin
 
       # Step 2: Start the build process - bash ./build.sh "$ARCH" "${RELEASE_STREAM}" "${HOMEBRIDGE_VM_IMAGE_VERSION}"
       - name: run build.sh script
