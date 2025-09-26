@@ -77,6 +77,7 @@ jobs:
           name: virtualbox-appliance-${{ matrix.arch }}
           path: |
             ${{ steps.package_appliance.outputs.OVA_FILE }}
+            output/*.manifest
 
       - name: Validate VirtualBox Appliance Image
         run: |
