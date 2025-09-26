@@ -1,0 +1,138 @@
+name: Release Stage 2 - Build and Push Homebridge VM Images
+run-name: Release Stage 2 - ${{ github.event.inputs.Scheduled}} - Build and Push ${{ inputs.release_stream }} Homebridge VM Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_stream:
+        description: 'Choose release type: "stable" (builds latest version), "beta" (builds beta version with beta-YYYY-MM-DD tag), or "alpha" (builds alpha version with alpha-YYYY-MM-DD tag).'
+        required: true
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+        default: beta
+      Scheduled:
+          description: 'Whether this is a scheduled run'
+          required: false
+          type: choice
+          options:
+            - Scheduled
+            - Manual
+          default: Manual
+
+concurrency:
+  group: stage-2-build-and-push
+  cancel-in-progress: false
+
+jobs:
+  set-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+      RELEASE_TITLE: ${{ steps.set_title.outputs.RELEASE_TITLE }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set Docker Homebridge version
+      id: docker_version
+      run: |
+        if [[ "${{ inputs.release_stream }}" == "stable" ]]; then
+          export HOMEBRIDGE_VM_IMAGE_VERSION="$(date +%Y-%m-%d)"
+        else
+          export HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.release_stream }}-$(date +%Y-%m-%d)"
+        fi
+        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> $GITHUB_OUTPUT
+
+    - name: Set Release Title
+      id: set_title
+      run: |
+        if [[ "${{ inputs.release_stream }}" == "beta" ]]; then
+          echo "RELEASE_TITLE=BETA: Homebridge VM Image Release ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+        elif [[ "${{ inputs.release_stream }}" == "alpha" ]]; then
+          echo "RELEASE_TITLE=ALPHA: Homebridge VM Image Release ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+        else
+          echo "RELEASE_TITLE=Homebridge VM Image Release ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Output versions
+      run: |
+        echo "::group::Version Information"
+        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}""
+        echo "RELEASE_TITLE=${{ steps.set_title.outputs.RELEASE_TITLE }}"
+        echo "::endgroup::"
+
+  build-img-file:
+    needs: set-versions
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+        include:
+          - arch: arm64
+            runs-on: ubuntu-24.04-arm
+          - arch: amd64
+            runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Start the build process - bash ./build.sh "$ARCH" "${RELEASE_STREAM}" "${HOMEBRIDGE_VM_IMAGE_VERSION}"
+      - name: run build.sh script
+        run: |
+          ./build.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+
+      # Step 3: Packaging the image file for Virtual Box
+      - name: Package image for VirtualBox
+        id: package_appliance
+        run: |
+          scripts/package-for-virtual-box.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+          echo "OVA_FILE=${OVA_FILE}" >> $GITHUB_OUTPUT
+
+      # Step 4: Validate the VirtualBox Appliance Image
+      - name: Upload image and manifest artifacts
+        run: |
+          ./validate-virtual-box-package.sh ${{ steps.package_appliance.outputs.OVA_FILE }}
+
+      # Step 5: Upload the OVA file as an artifact
+      - name: Upload Build and Package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          retention-days: 7
+          name: ${{ matrix.arch }}
+          path: output/*
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [set-versions, build-img-file]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Download manifest artifact
+      uses: actions/download-artifact@v5
+      with:
+        path: .
+
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG_NAME=${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+        # Copy manifest for release asset with proper name
+        cp manifest.md Docker.manifest
+        gh release create "${TAG_NAME}" \
+          --title "${{ needs.set-versions.outputs.RELEASE_TITLE }}" \
+          --notes-file manifest.md \
+          --draft=false \
+          Docker.manifest
+
+    - name: Release created
+      run: |
+        echo "::notice::Release ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ needs.set-versions.outputs.RELEASE_TITLE }} created successfully." 

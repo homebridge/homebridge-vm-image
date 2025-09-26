@@ -163,6 +163,8 @@ main() {
   echo "  $(cat ${MANIFEST_FILE}| grep 'Release Version: ')"
   echo "  RAM: ${VM_RAM}MB"
   echo "  OVA File: $OVA_FILE"
+
+  export OVA_FILE=$OVA_FILE
 }
 
 main "$@"
