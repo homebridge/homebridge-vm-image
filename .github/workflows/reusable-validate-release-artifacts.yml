@@ -73,8 +73,6 @@ jobs:
           VBoxManage modifyvm "${{ env.VM_NAME }}" --natpf1 "www,tcp,,80,,80"
           VBoxManage modifyvm "${{ env.VM_NAME }}" --natpf1 "hbui,tcp,,8581,,8581"
           VBoxManage modifyvm "${{ env.VM_NAME }}" --natpf1 "homekit,tcp,,51826,,51826"
-          # Set up port forwarding for Homebridge UI (8581)
-          VBoxManage modifyvm "${{ env.VM_NAME }}" --natpf1 "hbui,tcp,,8581,,8581"
           VBoxManage startvm "${{ env.VM_NAME }}" --type headless
           # Wait for VM to power on (max 60s)
           for i in {1..12}; do
@@ -122,15 +120,15 @@ jobs:
             cp "$log" "$LOG_DIR/" 2>/dev/null || true
           done
           # Also collect the serial output log if present
-          for build_log in ./output/*.log; do
-            if [[ -f "$build_log" ]]; then
-              cp "$build_log" "$LOG_DIR/"
+          for serial_log in ./output/*.log; do
+            if [[ -f "$serial_log" ]]; then
+              cp "$serial_log" "$LOG_DIR/"
             fi
           done
           # List collected logs
           ls -l "$LOG_DIR" || true
 
-      - name: Upload VM and Build Logs
+      - name: Upload VM and Serial Logs
         uses: actions/upload-artifact@v4
         with:
           name: virtualbox-validation-logs-${{ inputs.arch }}-${{ inputs.release_stream }}
