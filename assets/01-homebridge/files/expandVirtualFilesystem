@@ -1,0 +1,111 @@
+#!/bin/bash
+
+# Script to automatically expand root (/) ext4 filesystem to maximum available space
+# For use after resizing virtual disk in UTM/QEMU
+
+set -e  # Exit on error
+
+# Define color codes for logging
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Log helper functions
+log() { echo -e "$*" >&2; }
+warn() { echo -e "${YELLOW}WARN:${NC} $*" >&2; }
+error() { echo -e "${RED}ERROR:${NC} $*" >&2; }
+info() { echo -e "$*" >&2; }
+
+# Set up logging to file
+LOGFILE="/var/log/diskexpand.log"
+exec > >(tee -a "$LOGFILE") 2>&1
+
+info "================================"
+info "Auto-Expand Root Filesystem"
+info "================================"
+info ""
+info "Log file: $LOGFILE"
+info "Started at: $(date)"
+info ""
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then 
+    error "This script must be run as root"
+    error "Please run: sudo $0"
+    exit 1
+fi
+
+# Find the device mounted at /
+ROOT_PARTITION=$(df / | tail -1 | awk '{print $1}')
+info "Root partition: ${GREEN}$ROOT_PARTITION${NC}"
+
+# Extract device name and partition number
+# Handle both /dev/sda1 and /dev/vda1, /dev/nvme0n1p1 formats
+if [[ $ROOT_PARTITION =~ (.*[^0-9])([0-9]+)$ ]]; then
+    DEVICE="${BASH_REMATCH[1]}"
+    PART_NUM="${BASH_REMATCH[2]}"
+elif [[ $ROOT_PARTITION =~ (.*)p([0-9]+)$ ]]; then
+    # Handle nvme style (nvme0n1p1)
+    DEVICE="${BASH_REMATCH[1]}"
+    PART_NUM="${BASH_REMATCH[2]}"
+else
+    error "Could not parse partition information from $ROOT_PARTITION"
+    exit 1
+fi
+
+info "Device: ${BLUE}$DEVICE${NC}"
+info "Partition number: ${BLUE}$PART_NUM${NC}"
+info ""
+
+# Verify filesystem type
+FS_TYPE=$(lsblk -no FSTYPE "$ROOT_PARTITION")
+info "Filesystem type: ${GREEN}$FS_TYPE${NC}"
+
+if [ "$FS_TYPE" != "ext4" ]; then
+    error "Root filesystem is $FS_TYPE, not ext4"
+    error "This script only supports ext4 filesystems"
+    exit 1
+fi
+
+info ""
+info "Current disk usage:"
+df -h /
+info ""
+
+# Install growpart if needed
+if ! command -v growpart &> /dev/null; then
+    warn "growpart not found, installing cloud-guest-utils..."
+    apt-get update -qq
+    apt-get install -y cloud-guest-utils
+    info ""
+fi
+
+# Expand the partition
+info "Expanding partition $ROOT_PARTITION..."
+if growpart "$DEVICE" "$PART_NUM" 2>&1 | grep -q "NOCHANGE"; then
+    warn "Partition is already at maximum size"
+else
+    info "${GREEN}Partition expanded successfully${NC}"
+fi
+
+# Force kernel to re-read partition table
+info ""
+info "Updating kernel partition table..."
+partprobe "$DEVICE" 2>/dev/null || true
+
+# Resize the filesystem
+info ""
+info "Expanding ext4 filesystem..."
+resize2fs "$ROOT_PARTITION"
+
+info ""
+info "New disk usage:"
+df -h /
+
+info ""
+info "================================"
+info "${GREEN}Root filesystem expansion complete!${NC}"
+info "================================"
+info "Completed at: $(date)"

@@ -10,12 +10,8 @@ BOLD='\e[1m'
 NC='\033[0m'
 
 is_pi () {
-  ARCH=$(dpkg --print-architecture)
-  if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
-    return 0
-  else
-    return 1
-  fi
+  # Always return false for VM - not a physical Pi
+  return 1
 }
 
 is_pione() {
@@ -163,95 +159,51 @@ do_finish() {
   exit 0
 }
 
-do_stop_services() {
-  systemctl stop homebridge
-}
-
-do_start_services() {
-  systemctl start homebridge
-}
-
-do_restart_services() {
-  whiptail --yesno "Would you like to restart Homebridge now?" 10 60 2
-  RET=$?
-  if [ $RET -eq 0 ]; then
-    printf "Restarting Homebridge...\n"
-    systemctl restart homebridge
-  fi
+get_first_user() {
+  printf "$(getent passwd 1000 | cut -d: -f1)"
 }
 
 do_homebridge_update() {
-  printf "Updating Homebridge, please wait...\n"
-  npm install -g --unsafe-perm homebridge@latest homebridge-config-ui-x@latest
-  whiptail --msgbox "Homebridge is up-to-date." 10 60 1
-  do_restart_services
-}
-
-do_nodejs_update() {
-  printf "Updating Node.js to LTS, please wait...\n"
-
-  INDEX=$(curl -s https://nodejs.org/dist/index.json)
-  LTS=$(echo $INDEX | jq -r 'map(select(.lts))[0].version')
-  CURRENT=$(node -v || echo "0.0.0")
-
-  echo "Installed: $CURRENT"
-  echo "Current Node.js LTS: $LTS"
-
-  if [ $LTS != $CURRENT ]; then
-    echo "Updating Node.js to $LTS..."
-
-    PREFIX=$(npm -g prefix || echo "/usr/local")
-
-    tempDir=$(mktemp -d)
-    echo "Downloading to $tempDir/node-$LTS-linux-armv6l.tar.gz ..."
-    curl -Lf# -o "$tempDir/node-$LTS-linux-armv6l.tar.gz" "https://unofficial-builds.nodejs.org/download/release/$LTS/node-$LTS-linux-armv6l.tar.gz"
-
-    if [ $? -ne 0 ]; then
-      echo "Failed to download node-$LTS-linux-armv6l.tar.gz. See logs above."
-      exit 1
-    fi
-
-    echo "Cleaning up old version of npm..."
-    sudo rm -rf "$PREFIX/lib/node_modules/npm"
-
-    echo "Extracting node-$LTS-linux-armv6l.tar.gz to $PREFIX ..."
-    sudo tar xz -f "$tempDir/node-$LTS-linux-armv6l.tar.gz" -C /usr/local --strip-components=1 --no-same-owner
-
-    echo "Removing $tempDir/node-$LTS-linux-armv6l.tar.gz ..."
-    sudo rm -rf "$tempDir/node-$LTS-linux-armv6l.tar.gz"
-
-    echo "Node.js $(node -v)"
-    echo "npm $(npm -v)"
-
-    echo "Node.js updated to $LTS"
-
-    echo "Rebuilding modules..."
-    cd "$PREFIX/lib/node_modules"
-    sudo npm --unsafe-perm rebuild
-
-    whiptail --msgbox "Node.js upgraded from $CURRENT to $LTS." 10 60 1
-    do_restart_services
-  else
-    whiptail --msgbox "Node.js $CURRENT is already up-to-date" 10 60 1
+  pstree -s $$ | grep "hb-service" > /dev/null
+  if [ "$?" -eq 0 ]; then
+    whiptail --title "Error" --msgbox "You cannot run this command from the Homebridge UI Terminal.\n\nPlease connect using SSH (see wiki for instructions) and try again." 20 60 1
+    printf "\n"
+    return
   fi
+
+  curl -sfL https://repo.homebridge.io/KEY.gpg | sudo gpg --dearmor | sudo tee /usr/share/keyrings/homebridge.gpg  > /dev/null
+  echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io stable main" | sudo tee /etc/apt/sources.list.d/homebridge.list > /dev/null
+  apt-get update --allow-releaseinfo-change
+  apt-get install -y homebridge
 }
 
 do_restore_config() {
-  whiptail --yesno "This will remove all custom Homebridge config and restore it to the factory default. You will need to manually remove any existing connections to this instance in the iOS Home app.\n\nAre you sure you want to proceed?" 20 60 2
+  pstree -s $$ | grep "hb-service" > /dev/null
+  if [ "$?" -eq 0 ]; then
+    whiptail --title "Error" --msgbox "You cannot run this command from the Homebridge UI Terminal.\n\nPlease connect using SSH (see wiki for instructions) and try again." 20 60 1
+    printf "\n"
+    return
+  fi
+
+  whiptail --yesno "This will remove all custom Homebridge config, plugins and restore to the factory default. You will need to manually remove any existing connections to this instance in the iOS Home app.\n\nAre you sure you want to proceed?" 20 60 2
   RET=$?
   if [ $RET -eq 0 ]; then
-    do_stop_services
-    rm -rf /var/lib/homebridge/persist
-    rm -rf /var/lib/homebridge/accessories
-    rm -rf /var/lib/homebridge/config.json
-    do_start_services
+    apt-get purge -y homebridge
+    do_homebridge_update
   fi
 }
 
+do_nodejs_update() {
+  hb-service update-node
+  exit 0
+}
+
 do_install_pihole() {
-  whiptail --title "Warning" --yesno "Please make sure you are NOT attempting to run this command from the Homebridge UI web terminal.\n\nFor a successful installation of Pi-Hole you must be logged in using SSH (see wiki for instructions).\n\nIf you are already connected via SSH, you can proceed with the installation." 20 60 1 --no-button "Cancel" --yes-button "Continue"
-  if [ $? -ne 0 ]; then
-    return;
+  pstree -s $$ | grep "hb-service" > /dev/null
+  if [ "$?" -eq 0 ]; then
+    whiptail --title "Error" --msgbox "You must not install Pi Hole via the Homebridge UI Terminal.\n\nFor a successful installation of Pi-Hole you must be logged in using SSH (see wiki for instructions)." 20 60 1
+    printf "\n"
+    return
   fi
 
   whiptail --title "Warning" --yesno "Installing Pi-Hole will prevent you from accessing the Homebridge UI on port 80.\n\nYou will still be able to access the Homebridge UI on port $(cat /etc/hb-ui-port) and via:\n\n* http://homebridge.local:$(cat /etc/hb-ui-port)\n* https://homebridge.local\n\nWARNING: Failing to configure Pi-Hole correctly or attempting to uninstall Pi-Hole may result in Homebridge not working correctly. You should take a backup of your Homebridge instance via the UI before proceeding.\n\nAre you sure you want to continue?" 20 60 1
@@ -275,79 +227,6 @@ do_install_pihole() {
     printf "\nYou can still access the Homebridge UI by going to:\n"
     get_web_addresses http $(cat /etc/hb-ui-port)
     get_web_addresses https 443
-    printf "\n"
-    exit 0
-  fi
-}
-
-do_install_nodered() {
-  whiptail --title "Warning" --yesno "This will install Node-RED on your system as a service running on port 1880.\n\nAre you sure you want to continue?" 20 60 1
-  RET=$?
-  if [ $RET -eq 0 ]; then
-    npm install -g --unsafe-perm node-red node-red-node-pi-gpio node-red-node-random node-red-node-ping node-red-contrib-play-audio node-red-node-smooth node-red-node-serialport node-red-contrib-homebridge-automation
-
-    # add helper shortcuts
-    if curl -f https://raw.githubusercontent.com/node-red/linux-installers/master/resources/node-red-icon.svg >/dev/null 2>&1; then
-        sudo curl -sL -o /usr/share/icons/hicolor/scalable/apps/node-red-icon.svg https://raw.githubusercontent.com/node-red/linux-installers/master/resources/node-red-icon.svg 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo curl -sL -o /usr/share/applications/Node-RED.desktop https://raw.githubusercontent.com/node-red/linux-installers/master/resources/Node-RED.desktop 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo curl -sL -o /usr/bin/node-red-start https://raw.githubusercontent.com/node-red/linux-installers/master/resources/node-red-start 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo curl -sL -o /usr/bin/node-red-stop https://raw.githubusercontent.com/node-red/linux-installers/master/resources/node-red-stop 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo curl -sL -o /usr/bin/node-red-restart https://raw.githubusercontent.com/node-red/linux-installers/master/resources/node-red-restart 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo curl -sL -o /usr/bin/node-red-reload https://raw.githubusercontent.com/node-red/linux-installers/master/resources/node-red-reload 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo curl -sL -o /usr/bin/node-red-log https://raw.githubusercontent.com/node-red/linux-installers/master/resources/node-red-log 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo curl -sL -o /etc/logrotate.d/nodered https://raw.githubusercontent.com/node-red/linux-installers/master/resources/nodered.rotate 2>&1 | sudo tee -a /var/log/nodered-install.log >>/dev/null
-        sudo chmod +x /usr/bin/node-red-start
-        sudo chmod +x /usr/bin/node-red-stop
-        sudo chmod +x /usr/bin/node-red-restart
-        sudo chmod +x /usr/bin/node-red-reload
-        sudo chmod +x /usr/bin/node-red-log
-        printf "Added shortcut commands\r\n"
-    else
-        printf "Could not add shortcut commands\r\n"
-    fi
-
-    cat > /etc/systemd/system/nodered.service <<EOL
-# systemd service file to start Node-RED
-
-[Unit]
-Description=Node-RED graphical event wiring tool
-Wants=network.target
-Documentation=http://nodered.org/docs/hardware/raspberrypi.html
-
-[Service]
-Type=simple
-# Run as normal pi user - change to the user name you wish to run Node-RED as
-User=pi
-Group=pi
-WorkingDirectory=/home/pi
-
-Nice=5
-Environment="NODE_OPTIONS=--max_old_space_size=256"
-# uncomment and edit next line if you need an http proxy
-#Environment="HTTP_PROXY=my.httpproxy.server.address"
-# uncomment the next line for a more verbose log output
-#Environment="NODE_RED_OPTIONS=-v"
-#ExecStart=/usr/bin/env node $NODE_OPTIONS red.js $NODE_RED_OPTIONS
-ExecStart=/usr/bin/env node-red-pi $NODE_OPTIONS $NODE_RED_OPTIONS
-# Use SIGINT to stop
-KillSignal=SIGINT
-# Auto restart on crash
-Restart=on-failure
-# Tag things in the log
-SyslogIdentifier=Node-RED
-#StandardOutput=syslog
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-    systemctl daemon-reload
-    systemctl enable nodered.service
-    systemctl start nodered.service
-
-    printf "\n${BOLD}Node-RED has been installed${NC}\n"
-    printf "Access Node-RED in your browser by going to:\n"
-    get_web_addresses http 1880
     printf "\n"
     exit 0
   fi
@@ -404,9 +283,9 @@ do_install_deconz() {
       echo "Setting up for RaspBee..."
       isRaspbee="1"
 
-      # Install deps
+      # Install deps for VM
       apt update --allow-releaseinfo-change
-      sudo apt install -y i2c-tools build-essential raspberrypi-kernel-headers
+      sudo apt install -y i2c-tools build-essential
 
       # WiringPi (Pi4 Only)
       if [ is_pifour ]; then
@@ -477,7 +356,7 @@ do_install_deconz() {
     mkdir -p /etc/systemd/system/deconz.service.d
     cat > /etc/systemd/system/deconz.service.d/override.conf <<EOL
 [Service]
-User=pi
+User=$(get_first_user)
 ExecStart=
 ExecStart=/usr/bin/deCONZ -platform minimal --http-port=4530 --ws-port=4531
 EOL
@@ -529,14 +408,14 @@ do_install_desktop_and_vnc() {
     RET=$?
     if [ $RET -eq 0 ]; then
 
-      # install desktop
-      if is_installed raspberrypi-ui-mods; then
-        echo "Raspbian Desktop Already Installed"
+      # install desktop for VM
+      if is_installed task-desktop; then
+        echo "Desktop Environment Already Installed"
       else
-        whiptail --title "Warning" --yesno "The Raspbian Desktop will now be installed.\n\nThis may take between 5 and 45 minutes to complete depending on your device." 20 60 2 --no-button "Cancel" --yes-button "Continue"
+        whiptail --title "Warning" --yesno "A desktop environment will now be installed.\n\nThis may take between 5 and 45 minutes to complete depending on your device." 20 60 2 --no-button "Cancel" --yes-button "Continue"
         if [ $? -eq 0 ]; then
           apt update --allow-releaseinfo-change
-          apt install -y raspberrypi-ui-mods
+          apt install -y task-desktop
         else
           return 0;
         fi
@@ -544,29 +423,29 @@ do_install_desktop_and_vnc() {
 
       # install and setup VNC
       if is_installed realvnc-vnc-server || (apt update --allow-releaseinfo-change && apt install -y realvnc-vnc-server); then
-        cat > /etc/systemd/system/vncserver-pi.service <<EOL
-[Unit]
-Description=VNC Virtual Desktop Service
-After=syslog.target network.target
+#        cat > /etc/systemd/system/vncserver-pi.service <<EOL
+#[Unit]
+#Description=VNC Virtual Desktop Service
+#After=syslog.target network.target
 
-[Service]
-Type=forking
-User=pi
-Group=pi
-WorkingDirectory=/home/pi
+#[Service]
+#Type=forking
+#User=$(get_first_user)
+#Group=$(get_first_user)
+#WorkingDirectory=/home/$(get_first_user)
 
-PIDFile=/home/pi/.vnc/%H:12.pid
-ExecStartPre=-/usr/bin/vncserver -kill :12 > /dev/null 2>&1
-ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x800 :12
-ExecStop=/usr/bin/vncserver -kill :12
+#PIDFile=/home/$(get_first_user)/.vnc/%H:12.pid
+#ExecStartPre=-/usr/bin/vncserver -kill :12 > /dev/null 2>&1
+#ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x800 :12
+#ExecStop=/usr/bin/vncserver -kill :12
 
-[Install]
-WantedBy=multi-user.target
-EOL
+#[Install]
+#WantedBy=multi-user.target
+#EOL
         systemctl enable vncserver-x11-serviced.service &&
         systemctl start vncserver-x11-serviced.service &&
-        systemctl enable vncserver-pi.service &&
-        systemctl start vncserver-pi.service &&
+#        systemctl enable vncserver-pi.service &&
+#        systemctl start vncserver-pi.service &&
         STATUS=enabled
       else
         return 1
@@ -575,8 +454,8 @@ EOL
       if is_installed realvnc-vnc-server; then
           systemctl disable vncserver-x11-serviced.service
           systemctl stop vncserver-x11-serviced.service
-          systemctl disable vncserver-pi.service
-          systemctl stop vncserver-pi.service
+#          systemctl disable vncserver-pi.service
+#          systemctl stop vncserver-pi.service
       fi
       STATUS=disabled
     else
@@ -596,12 +475,11 @@ EOL
 }
 
 do_extra_packages() {
-  FUN=$(whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --menu "Advanced Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Back --ok-button Select \
+  FUN=$(whiptail --title "Homebridge VM Configuration Tool (hb-config)" --menu "Advanced Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Back --ok-button Select \
     "A0 AdGuard Home" "Install / Uninstall AdGuard Home" \
     "A1 Pi-hole" "Install / Reconfigure Pi-hole" \
-    "A2 Node-RED" "Install / Update Node-RED" \
-    "A3 deCONZ / Phoscon" "Install / Update to manage your ConBee or RaspBee device" \
-    "A4 RealVNC Server" "Enable / Disable desktop access over VNC" \
+    "A2 deCONZ / Phoscon" "Install / Update to manage your ConBee or RaspBee device" \
+    "A3 RealVNC Server" "Enable / Disable desktop access over VNC" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
@@ -610,9 +488,8 @@ do_extra_packages() {
     case "$FUN" in
       A0\ *) do_install_adguard_home ;;
       A1\ *) do_install_pihole ;;
-      A2\ *) do_install_nodered ;;
-      A3\ *) do_install_deconz ;;
-      A4\ *) do_install_desktop_and_vnc ;;
+      A2\ *) do_install_deconz ;;
+      A3\ *) do_install_desktop_and_vnc ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   fi
@@ -623,7 +500,7 @@ do_configure_nginx() {
   RET=$?
   tempDir=$(mktemp -d)
   if [ $RET -eq 0 ]; then
-    whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --separate-output --checklist "\nNGINX Options:"  20 80 5 --cancel-button Cancel --ok-button Save \
+    whiptail --title "Homebridge VM Configuration Tool (hb-config)" --separate-output --checklist "\nNGINX Options:"  20 80 5 --cancel-button Cancel --ok-button Save \
       "1" "Listen on port 80 - http://        " 1  \
       "2" "Listen on port 443 - https://      " 1 \
       "3" "Redirect http:// to https://       " 0 2>$tempDir/results
@@ -749,13 +626,18 @@ $NGINX_REDIRECT_HTTP_TO_HTTPS
   fi
 }
 
-do_configure_raspbian() {
-  raspi-config
+do_configure_system() {
+  # Use the system configuration tools available on the VM
+  if command -v dpkg-reconfigure >/dev/null 2>&1; then
+    dpkg-reconfigure tzdata
+  else
+    whiptail --title "Error" --msgbox "System configuration tool not available." 20 60 1
+  fi
 }
 
 do_update() {
   tempDir=$(mktemp -d)
-  scriptUrl=https://raw.githubusercontent.com/homebridge/homebridge-raspbian-image/latest/stage3_homebridge/01-homebridge/files/hb-config
+  scriptUrl=https://raw.githubusercontent.com/homebridge/homebridge-vm-image/latest/assets/01-homebridge/files/hb-config-new
 
   # download the update to a temporary directory
   scriptUrl=$scriptUrl?$(date --iso-8601)
@@ -771,7 +653,7 @@ do_update() {
     if bash -n $tempDir/hb-config; then
       chmod +x $tempDir/hb-config
       mv $tempDir/hb-config /usr/local/sbin/hb-config
-      whiptail --title "Success" --msgbox "The hb-config tool has been updated and will now exit.\n\nIf you like the Homebridge Raspberry Pi image please show your support by starring the project on GitHub:\n\nhttps://github.com/homebridge/homebridge-raspbian-image" 20 60 1
+      whiptail --title "Success" --msgbox "The hb-config tool has been updated and will now exit.\n\nIf you like the Homebridge VM image please show your support by starring the project on GitHub:\n\nhttps://github.com/homebridge/homebridge-vm-image" 20 60 1
       exit 0
     else
       whiptail --title "Error" --msgbox "The downloaded script was corrupted and did not pass the syntax check." 20 60 1
@@ -779,11 +661,19 @@ do_update() {
   fi
 }
 
+do_nmtui() {
+  if systemctl is-active --quiet NetworkManager; then
+    nmtui
+  else
+    whiptail --title "Error" --msgbox "These network options not available when WiFi was configured via VM image setup.\n\nSee the VM documentation for network configuration options." 20 60 1
+  fi
+}
+
 do_about() {
   IMAGE_VERSION=$(cat /etc/hb-release)
 
   whiptail --title "About" --msgbox "\
-This tool provides a straight-forward way of managing Homebridge on a Raspberry Pi. Although it can be run at any time, some of the options may have difficulties if you have heavily customised your installation.
+This tool provides a straight-forward way of managing Homebridge on a VM. Although it can be run at any time, some of the options may have difficulties if you have heavily customised your installation.
 
 Image Version: $IMAGE_VERSION
 
@@ -793,8 +683,8 @@ https://github.com/homebridge/homebridge
 Homebridge Config UI X - @oznu
 https://github.com/oznu/homebridge-config-ui-x
 
-Homebridge Raspbian Image - @oznu
-https://github.com/homebridge/homebridge-raspbian-image
+Homebridge VM Image - @homebridge
+https://github.com/homebridge/homebridge-vm-image
 
 
 \
@@ -815,25 +705,25 @@ if [ "$INTERACTIVE" = True ]; then
   calc_wt_size
   while true; do
     if is_pi ; then
-      FUN=$(whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --backtitle "$(cat /proc/device-tree/model)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
-        "1 Upgrade Node.js" "Upgrade Node.js to the latest LTS version" \
-        "2 Update Homebridge" "Update Homebridge to the latest version" \
+      FUN=$(whiptail --title "Homebridge VM Image Configuration Tool (hb-config)" --backtitle "Homebridge VM Image" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
+        "1 Update Node.js" "Update Node.js to the latest LTS version" \
+        "2 Update Homebridge" "Update Homebridge and Node.js to the latest version" \
         "3 Restore Config" "Restores the Homebridge config to the factory default" \
-        "4 Extra Packages" "Optional packages, eg. Pi-Hole, Node-RED, UniFi Controller" \
+        "4 Extra Packages" "Optional packages, eg. Pi-Hole, UniFi Controller" \
         "5 Nginx Options" "Configure Homebridge Nginx settings" \
-        "6 Configure OS" "Open the Raspbian Configuration Tool" \
+        "6 Configure OS" "Open the System Configuration Tool" \
         "7 Networking" "Open the NetworkManager UI" \
         "8 Update" "Update this tool to the latest version" \
         "9 About" "Information about this configuration tool" \
         3>&1 1>&2 2>&3)
     else
-      FUN=$(whiptail --title "Homebridge Raspbian Configuration Tool (hb-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
-        "1 Upgrade Node.js" "Upgrade Node.js to the latest LTS version" \
-        "2 Update Homebridge" "Update Homebridge to the latest version" \
+      FUN=$(whiptail --title "Homebridge VM Image Configuration Tool (hb-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
+        "1 Update Node.js" "Update Node.js to the latest LTS version" \
+        "2 Update Homebridge" "Update Homebridge and Node.js to the latest version" \
         "3 Restore Config" "Restores the Homebridge config to the factory default" \
-        "4 Extra Packages" "Optional packages, eg. Pi-Hole, Node-RED, UniFi Controller" \
+        "4 Extra Packages" "Optional packages, eg. Pi-Hole, UniFi Controller" \
         "5 Nginx Options" "Configure Homebridge Nginx settings" \
-        "6 Configure OS" "Open the Raspbian Configuration Tool" \
+        "6 Configure OS" "Open the System Configuration Tool" \
         "7 Networking" "Open the NetworkManager UI" \
         "8 Update" "Update this tool to the latest version" \
         "9 About" "Information about this configuration tool" \
@@ -850,8 +740,8 @@ if [ "$INTERACTIVE" = True ]; then
           3\ *) do_restore_config ;;
           4\ *) do_extra_packages ;;
           5\ *) do_configure_nginx ;;
-          6\ *) do_configure_raspbian ;;
-          7\ *) nmtui ;;
+          6\ *) do_configure_system ;;
+          7\ *) do_nmtui ;;
           8\ *) do_update ;;
           9\ *) do_about ;;
           *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
@@ -863,8 +753,8 @@ if [ "$INTERACTIVE" = True ]; then
           3\ *) do_restore_config ;;
           4\ *) do_extra_packages ;;
           5\ *) do_configure_nginx ;;
-          6\ *) do_configure_raspbian ;;
-          7\ *) nmtui ;;
+          6\ *) do_configure_system ;;
+          7\ *) do_nmtui ;;
           8\ *) do_update ;;
           9\ *) do_about ;;
           *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;

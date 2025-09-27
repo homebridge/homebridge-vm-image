@@ -3,7 +3,7 @@
 # Configuration
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DISTRO="bookworm"
-readonly SIZE_MB=3072
+readonly SIZE_MB=51200  # 50GB total disk size
 readonly ESP_SIZE_MB=256
 
 # Debug settings - set DEBUG=1 for verbose output
@@ -31,10 +31,14 @@ group_log() {
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
         echo -e "::group::$*"
     else
-        log "$*"
+        log "---> $* <---"
     fi
 }
-group_end() { echo -e "::endgroup::"; }
+group_end() {
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        echo -e "::endgroup::"
+    fi
+}
 
 # Cleanup function
 cleanup() {
@@ -112,11 +116,11 @@ create_image() {
     local img_path="$1"
     local size_mb="$2"
     
-    info "Creating ${size_mb}MB disk image: $img_path"
+    info "Creating ${size_mb}MB sparse disk image: $img_path"
     
-    # Use fallocate for faster allocation
-    fallocate -l "${size_mb}M" "$img_path" || dd if=/dev/zero of="$img_path" bs=1M count="$size_mb"
-    
+    # Create sparse file - only allocates space as needed
+    truncate -s "${size_mb}M" "$img_path"
+    info "Sparse image created (actual size will grow as data is written)"
     # Create partitions
     parted -s "$img_path" -- \
         mklabel gpt \
@@ -217,7 +221,7 @@ mount_for_chroot() {
 configure_base_system() {
     local arch="$1"
     
-    log "Configuring base system"
+    group_log "Configuring base system"
     
     # Copy GRUB modules for amd64 compatibility
     if [[ "${ARCH}" == "amd64" && -d "/usr/lib/grub/x86_64-efi" ]]; then
@@ -266,40 +270,64 @@ else
   apt-utils locales systemd systemd-sysv > /dev/null 2>&1
 fi
 
+LANG=en_GB.UTF-8
 
+sed -i "s/# *\(${LANG} UTF-8\)/\1/" /etc/locale.gen
 # Configure locale early
-locale-gen en_CA.UTF-8
-echo 'LANG=en_CA.UTF-8' > /etc/default/locale
+locale-gen
+update-locale LANG=${LANG}
 
 log "Installing kernel, bootloader, and utilities"
+# Define package lists
+KERNEL_PACKAGES=(
+  linux-image-${ARCH}
+  linux-headers-${ARCH}
+  grub-efi-${ARCH}
+  grub-efi-${ARCH}-bin
+  grub-common
+  grub2-common
+)
+
+SYSTEM_UTILITIES=(
+  wget
+  psmisc
+  procps
+  iputils-ping
+  logrotate
+  openssl
+  sudo
+  nano
+  net-tools
+  libnss-mdns
+  dbus
+  gnupg
+  iproute2
+  dhcpcd5
+  ssh
+  zstd
+  avahi-daemon
+  vim
+  dialog
+  file
+  whiptail
+)
+
+VIRTUALIZATION_SUPPORT=(
+  hyperv-daemons
+  spice-vdagent
+  qemu-guest-agent
+  cloud-guest-utils
+)
+
+# Install packages
 if [[ $DEBUG -eq 1 ]]; then
-  # Install kernel and bootloader
-  apt-get install -y $APT_QUIET \
-      linux-image-${ARCH} linux-headers-${ARCH} \
-      grub-efi-${ARCH} grub-efi-${ARCH}-bin grub-common grub2-common
-
-  # Install system utilities
-  apt-get install -y $APT_QUIET \
-      wget psmisc procps iputils-ping logrotate openssl sudo nano \
-      net-tools libnss-mdns dbus gnupg iproute2 dhcpcd5 ssh zstd \
-      avahi-daemon
-
-  # Install virtualization support
-  apt-get install -y $APT_QUIET hyperv-daemons || true
+  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}"
+  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}"
+  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" || true
 else
-  # Install kernel and bootloader
-  apt-get install -y $APT_QUIET \
-      linux-image-${ARCH} linux-headers-${ARCH} \
-      grub-efi-${ARCH} grub-efi-${ARCH}-bin grub-common grub2-common > /dev/null 2>&1
-
-  # Install system utilities
-  apt-get install -y $APT_QUIET \
-      wget psmisc procps iputils-ping logrotate openssl sudo nano \
-      net-tools libnss-mdns dbus gnupg iproute2 dhcpcd5 ssh zstd \
-      avahi-daemon > /dev/null 2>&1
-
-  # Install virtualization support
-  apt-get install -y $APT_QUIET hyperv-daemons > /dev/null 2>&1 || true
+  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}" > /dev/null 2>&1
+  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}" > /dev/null 2>&1
+  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" > /dev/null 2>&1 || true
 fi
 
 log "Setting up GRUB bootloader"
@@ -313,15 +341,17 @@ grub-install \
     --removable \
     --recheck
 
-# GRUB configuration with serial console
+# GRUB configuration with serial console and resolution
 cat > /etc/default/grub <<GRUB_EOF
 GRUB_DEFAULT=0
-GRUB_TIMEOUT=5
+GRUB_TIMEOUT=0
 GRUB_DISTRIBUTOR="Homebridge VM on ${ARCH}"
 GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
 GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
 GRUB_TERMINAL="console serial"
 GRUB_SERIAL_COMMAND="serial --speed=921600 --unit=0 --word=8 --parity=no --stop=1"
+GRUB_GFXMODE=1024x768
+GRUB_GFXPAYLOAD_LINUX=keep
 GRUB_EOF
 
 update-grub
@@ -368,6 +398,7 @@ CHROOT_EOF
 
     sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < /tmp/chroot_setup.sh
     rm -f /tmp/chroot_setup.sh
+    group_end
 }
 
 # Install staged assets with better error handling
@@ -466,9 +497,7 @@ main() {
     mount_for_chroot
     group_end
 
-    group_log "Configuring base system"
     configure_base_system "${ARCH}"
-    group_end
     
     group_log "Installing Homebridge VM customizations"
     # Install customizations, these are copied from homebridge-raspbian-image
@@ -517,11 +546,18 @@ main() {
 
     sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
-    # filepath: [build.sh](http://_vscodecontentref_/0)
-    echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    # Append environment variables to source.sh
+    # Only append source-vm.sh sourcing block if not already present
+    if ! sudo grep -q "source /opt/homebridge/source-vm.sh" "${ROOTFS}/opt/homebridge/source.sh"; then
+        echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+        echo "if [ -f '/opt/homebridge/source-vm.sh' ]; then" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+        echo "  source /opt/homebridge/source-vm.sh" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+        echo "fi" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    fi
+    # Create or overwrite source-vm.sh with the required exports
+    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
+    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
+    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
 
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
@@ -532,6 +568,8 @@ main() {
     done < ${MANIFEST_FILE}
     log ""
 }
+
+
 
 # Run main function
 main "$@"

@@ -8,7 +8,7 @@
 # Executables Files
 #
 
-install -m 755 files/hb-config-new "${ROOTFS_DIR}/usr/local/sbin/hb-config"
+install -m 755 files/hb-config "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 
 
 # Pre-start files
@@ -18,6 +18,7 @@ install -m 755 files/20-hb-nginx-check "${ROOTFS_DIR}/etc/hb-service/homebridge/
 # First boot service
 install -m 644 files/first-boot-homebridge.service "${ROOTFS_DIR}/etc/systemd/system/"
 install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
+# install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
 
 #
 # MOTD
@@ -56,7 +57,7 @@ chown -R ${FIRST_USER_NAME}:${FIRST_USER_NAME} /var/lib/homebridge
 [ -e /root/.homebridge ] || ln -fs /var/lib/homebridge /root/.homebridge
 
 # include homebridge bashrc in first user's bashrc
-cat /tmp/bashrc.partial >> /home/${FIRST_USER_NAME}/.bashrc
+# cat /tmp/bashrc.partial >> /home/${FIRST_USER_NAME}/.bashrc
 rm -rf /tmp/bashrc.partial
 
 # set ui port for use in motd message

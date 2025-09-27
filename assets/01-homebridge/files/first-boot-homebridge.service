@@ -1,10 +1,17 @@
 [Unit]
-Description=Homebridge image first boot startup script
-Before=NetworkManager.service wifi-connect.service
+Description=First Boot Homebridge Setup
+After=multi-user.target
+Before=getty@tty1.service
+# ConditionPathExists=/etc/first-boot-homebridge
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/first-boot-homebridge
+StandardInput=tty
+StandardOutput=inherit
+StandardError=inherit
+TTYPath=/dev/tty1
+RemainAfterExit=true
 
 [Install]
 WantedBy=multi-user.target
