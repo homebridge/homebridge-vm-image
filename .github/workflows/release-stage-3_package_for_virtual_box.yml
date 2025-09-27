@@ -69,11 +69,6 @@ jobs:
             ./output/*.manifest
             ./output/*.img
 
-        # This does not work in a runner
-  #    - name: Validate VirtualBox Appliance Image
-  #      run: |
-  #        ./scripts/validate-virtual-box-package.sh ${{ steps.package_appliance.outputs.OVA_FILE }}
-
       - name: Packaging and Validation complete
         run: |
           echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
@@ -134,4 +129,28 @@ jobs:
 
     - name: Release created
       run: |
-        echo "::notice::Release ${{ steps.set_title.outputs.RELEASE_TITLE }} created successfully." 
+        echo "::notice::Release ${{ steps.set_title.outputs.RELEASE_TITLE }} created successfully."
+
+  invoke-package-and-validate:
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        arch: [amd64]
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    # Step 2: Trigger Packaging and Validation Workflow
+    - name: Trigger Packaging and Validation Workflow
+      run: |
+        gh workflow run "reusable-validate-release-artifacts.yml" \
+          --ref "latest" \
+          --field release_stream="${{ inputs.release_stream }}" \
+          --field release_tag="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" \
+          --field arch="${{ matrix.arch }}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
