@@ -100,16 +100,14 @@ jobs:
       run: |
         for img in ./output/*.img; do
           base_name=$(basename "$img" .img)
-          echo "Converting $img to QCOW2"
-          qemu-img convert -O qcow2 "$img" "./output/${base_name}.qcow2"
-          echo "Converting $img to VDI"
-          qemu-img convert -O vdi "$img" "./output/${base_name}.vdi"
-          echo "Converting $img to VHDX"
-          qemu-img convert -O vhdx "$img" "./output/${base_name}.vhdx"
-          # echo "Converting $img to VMDK"
-          # qemu-img convert -O vmdk "$img" "./output/${base_name}.vmdk"
-          ls -l ./output/
+          for ext in qcow2 vdi vhdx vmdk; do
+            echo "Converting $img to $ext format" 
+            qemu-img convert -O $ext "$img" "./output/${base_name}.$ext" && gzip -k "./output/${base_name}.$ext"
+            ls -l ./output/
+          done
         done
+        # Cleanup original IMG files to save space
+        rm ./output/*.img
 
     - name: Set Release Title
       id: set_title
@@ -121,10 +119,6 @@ jobs:
         else
           echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
         fi
-
-    - name: Compress IMG Files for Release
-      run: |
-        rm ./output/*.img
 
     - name: Create GitHub Prerelease
       id: create_release
@@ -141,8 +135,7 @@ jobs:
           ./output/*.qcow2
           ./output/*.vdi
           ./output/*.vhdx
-          # ./output/*.vmdk
-          # ./output/*.img.gz
+          ./output/*.vmdk
 
         body: |
           This is a test release only. Please test the VirtualBox appliance and report any issues you find.
