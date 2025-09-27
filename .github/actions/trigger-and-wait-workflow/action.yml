@@ -8,7 +8,7 @@ inputs:
     description: 'The git ref to run the workflow on'
     required: true
     default: 'latest'
-  release-type:
+  release_stream:
     description: 'The release type parameter to pass to the workflow'
     required: true
   scheduled:
@@ -47,7 +47,7 @@ runs:
         
         gh workflow run "${{ inputs.workflow-file }}" \
           --ref "${{ inputs.ref }}" \
-          --field release_type="${{ inputs.release-type }}" \
+          --field release_stream="${{ inputs.release-type }}" \
           --field Scheduled="${{ inputs.scheduled }}" || { 
           echo "::error::Failed to trigger ${{ inputs.release-type }} workflow"; 
           exit 1; 
