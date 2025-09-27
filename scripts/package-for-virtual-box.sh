@@ -100,7 +100,7 @@ package_as_ova() {
   fi
 
   log "📦 Packaging VirtualBox Appliance (OVA)..."
-  VBoxManage createvm --name "$VM_NAME" --register
+  VBoxManage createvm --name "$VM_NAME" --register --os-type="Debian12_${ARCH}" --platform-architecture=$( [[ "$ARCH" == "arm64" ]] && echo "arm" || echo "x86" )
   VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
     --cpus 1 \
