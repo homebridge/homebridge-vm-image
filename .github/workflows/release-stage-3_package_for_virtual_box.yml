@@ -108,6 +108,7 @@ jobs:
           qemu-img convert -O vhdx "$img" "./output/${base_name}.vhdx"
           # echo "Converting $img to VMDK"
           # qemu-img convert -O vmdk "$img" "./output/${base_name}.vmdk"
+          ls -l ./output/
         done
 
     - name: Set Release Title
@@ -123,7 +124,7 @@ jobs:
 
     - name: Compress IMG Files for Release
       run: |
-        gzip -9 ./output/*.img
+        rm ./output/*.img
 
     - name: Create GitHub Prerelease
       id: create_release
@@ -141,7 +142,7 @@ jobs:
           ./output/*.vdi
           ./output/*.vhdx
           # ./output/*.vmdk
-          ./output/*.img.gz
+          # ./output/*.img.gz
 
         body: |
           This is a test release only. Please test the VirtualBox appliance and report any issues you find.
