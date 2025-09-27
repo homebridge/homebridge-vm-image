@@ -38,7 +38,7 @@ fi
 VM_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}" 
 VM_RAM="1024"
 OUTPUT_DIR="${REPO_ROOT}/output"
-VMDK_FILE="$OUTPUT_DIR/${VM_NAME}.vmdk"
+VDI_FILE="$OUTPUT_DIR/${VM_NAME}.vdi"
 OVA_FILE="$OUTPUT_DIR/${VM_NAME}.ova"
 MANIFEST_FILE="$OUTPUT_DIR/${VM_NAME}.manifest"
 
@@ -65,12 +65,13 @@ check_dependencies() {
   fi
 }
 
-convert_image_to_vmdk() {
+convert_image_to_vdi() {
   local img_gz_file="$OUTPUT_DIR/${VM_NAME}.img.gz"
   local img_file="$OUTPUT_DIR/${VM_NAME}.img"
+  local VDI_FILE="$OUTPUT_DIR/${VM_NAME}.vdi"
 
-  if [[ -f "$VMDK_FILE" ]]; then
-    log "✅ VMDK file already exists: $VMDK_FILE"
+  if [[ -f "$VDI_FILE" ]]; then
+    log "✅ VDI file already exists: $VDI_FILE"
     return
   fi
 
@@ -80,13 +81,16 @@ convert_image_to_vmdk() {
   fi
 
   if [[ -f "$img_file" ]]; then
-    log "🔄 Converting IMG to VMDK..."
-    if command -v qemu-img &> /dev/null; then
-      qemu-img convert -f raw -O vmdk "$img_file" "$VMDK_FILE"
+    log "🔄 Converting IMG to VDI..."
+    if command -v VBoxManage &> /dev/null; then
+      VBoxManage convertfromraw "$img_file" "$VDI_FILE" --format VDI
+    elif command -v qemu-img &> /dev/null; then
+      qemu-img convert -f raw -O vdi "$img_file" "$VDI_FILE"
     else
-      VBoxManage convertfromraw "$img_file" "$VMDK_FILE" --format VMDK
+      error "Neither VBoxManage nor qemu-img found for conversion."
+      exit 1
     fi
-    log "✅ Conversion to VMDK completed: $VMDK_FILE"
+    log "✅ Conversion to VDI completed: $VDI_FILE"
   else
     error "No IMG file found for conversion: $img_gz_file or $img_file"
     exit 1
@@ -124,15 +128,13 @@ package_as_ova() {
     --port 0 \
     --device 0 \
     --type hdd \
-    --medium "$VMDK_FILE"
+    --medium "$VDI_FILE"
 
   log "Configuring VM settings..."
   VBoxManage modifyvm "$VM_NAME" \
     --clipboard-mode bidirectional \
     --draganddrop bidirectional
-  VBoxManage modifyvm "$VM_NAME" \
-    --uart1 0x3F8 4 \
-    --uartmode1 file "$OUTPUT_DIR/${VM_NAME}.log"
+
   VBoxManage modifyvm "$VM_NAME" --iconfile "${REPO_ROOT}/assets/homebridge-icon.png"
   VBoxManage modifyvm "$VM_NAME" --os-type="Debian12_${ARCH}"
   VBoxManage modifyvm "$VM_NAME" --description "$(cat ${MANIFEST_FILE})"
@@ -151,7 +153,7 @@ main() {
   log "Output Directory: $OUTPUT_DIR"
 
   check_dependencies
-  convert_image_to_vmdk
+  convert_image_to_vdi
   package_as_ova
 
   log "🎉 Packaging completed successfully!"

@@ -7,21 +7,32 @@ set -euo${BASH_DEBUG} pipefail
 # VirtualBox OVA Validation Script
 # Validates that the OVA file boots and serves the Homebridge web interface.
 
-OVA_FILE="${1:-}"
-VM_NAME="homebridge-validation-vm"
-VM_RAM="1024"
-WAIT_TIMEOUT=300 # Timeout in seconds for homebridge-vm.local to become available
-
 # Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
 
 # Logging functions
 log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
 error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
+info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
+group_log() {
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        echo -e "::group::$*"
+    else
+        log "$*"
+    fi
+}
+group_end() { echo -e "::endgroup::"; }
+
+OVA_FILE="${1:-}"
+VM_NAME="homebridge-validation-vm"
+VM_RAM="1024"
+
+TEST_URL="http://localhost:8581"
 
 check_dependencies() {
   log "🔍 Checking dependencies..."
@@ -43,9 +54,14 @@ import_ova() {
     exit 1
   fi
 
-  log "📦 Importing OVA file into VirtualBox..."
+  group_log "📦 Importing OVA file into VirtualBox..."
   VBoxManage import "$OVA_FILE" --vsys 0 --vmname "$VM_NAME"
-  log "✅ OVA imported successfully: $VM_NAME"
+  VBoxManage modifyvm "${VM_NAME}" --nic1 nat
+  VBoxManage modifyvm "${VM_NAME}" --natpf1 "www,tcp,,80,,80"
+  VBoxManage modifyvm "${VM_NAME}" --natpf1 "hbui,tcp,,8581,,8581"
+  VBoxManage modifyvm "${VM_NAME}" --natpf1 "homekit,tcp,,51826,,51826"
+  group_end
+  log "✅ OVA imported successfully: ${VM_NAME}"
 }
 
 start_vm() {
@@ -55,22 +71,22 @@ start_vm() {
 }
 
 wait_for_homebridge() {
-  log "⏳ Waiting for homebridge-vm.local to become available..."
-  local start_time=$(date +%s)
-  while true; do
-    if ping -c 1 homebridge-vm.local &> /dev/null; then
-      log "✅ homebridge-vm.local is reachable"
-      break
-    fi
-
-    local current_time=$(date +%s)
-    if (( current_time - start_time > WAIT_TIMEOUT )); then
-      error "Timed out waiting for homebridge-vm.local to become available"
-      exit 1
-    fi
-
+  log "⏳ Waiting for ${TEST_URL} to become available..."
+  for i in {1..12}; do
     sleep 5
+    STATUS=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" ${TEST_URL}|| echo "000")
+    echo "HTTP status from Homebridge UI: $STATUS"
+    if [[ "$STATUS" == "200" ]]; then
+      echo "::notice::Homebridge UI responded with HTTP 200"
+      break
+    else
+      echo "Waiting for Homebridge UI to respond... Current HTTP status: $STATUS"
+    fi
   done
+  if [[ "$STATUS" != "200" ]]; then
+    echo "::error::Homebridge UI did not respond with HTTP 200"
+    exit 1
+  fi
 }
 
 check_json_field() {
@@ -94,10 +110,10 @@ check_json_field() {
 check_homebridge_web_interface() {
   log "🌐 Checking Homebridge web interface..."
 
-  local url="http://homebridge-vm.local:8581/api/auth/settings"
+  local url="${TEST_URL}/api/auth/settings"
   log "🌐 Fetching JSON from $url..."
   local response
-  response=$(curl -s "$url")
+  response=$(curl --max-time 5 -s "$url")
 
   if [[ -z "$response" ]]; then
     error "No response received from $url"
@@ -115,10 +131,11 @@ check_homebridge_web_interface() {
 }
 
 cleanup_vm() {
-  log "🧹 Cleaning up VM..."
+  group_log "🧹 Cleaning up VM..."
   VBoxManage controlvm "$VM_NAME" poweroff || true
   VBoxManage unregistervm "$VM_NAME" --delete || true
   log "✅ VM removed: $VM_NAME"
+  group_end
 }
 
 main() {
