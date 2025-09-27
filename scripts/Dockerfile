@@ -8,7 +8,7 @@ RUN set -e; \
   apt-get update -qq; \
   apt-get install -y -qq \
   debootstrap parted e2fsprogs dosfstools \
-  dialog $GRUB_EFI_PKG \
+  dialog $GRUB_EFI_PKG qemu-utils \
   qemu-user-static gzip \
   sudo udev kpartx psmisc jq; \
   apt-get clean; \

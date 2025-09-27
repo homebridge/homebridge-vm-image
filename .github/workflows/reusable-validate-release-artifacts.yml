@@ -69,7 +69,7 @@ jobs:
           echo "::group::Importing OVA and Starting VM"
           set -e
           # Import OVA
-          VBoxManage import "${{ env.OVA_FILE }}" --vsys 0 --vmname "${{ env.VM_NAME }}"
+          VBoxManage import "${{ env.OVA_FILE }}" --vsys 0 --vmname "${{ env.VM_NAME }}" --options importtovdi
           VBoxManage modifyvm "${{ env.VM_NAME }}" --nic1 nat
           VBoxManage modifyvm "${{ env.VM_NAME }}" --natpf1 "www,tcp,,80,,80"
           VBoxManage modifyvm "${{ env.VM_NAME }}" --natpf1 "hbui,tcp,,8581,,8581"
