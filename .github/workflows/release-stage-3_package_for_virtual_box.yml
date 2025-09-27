@@ -100,10 +100,14 @@ jobs:
       run: |
         for img in ./output/*.img; do
           base_name=$(basename "$img" .img)
+          echo "Converting $img to QCOW2"
           qemu-img convert -O qcow2 "$img" "./output/${base_name}.qcow2"
+          echo "Converting $img to VDI"
           qemu-img convert -O vdi "$img" "./output/${base_name}.vdi"
+          echo "Converting $img to VHDX"
           qemu-img convert -O vhdx "$img" "./output/${base_name}.vhdx"
-          qemu-img convert -O vmdk "$img" "./output/${base_name}.vmdk"
+          # echo "Converting $img to VMDK"
+          # qemu-img convert -O vmdk "$img" "./output/${base_name}.vmdk"
         done
 
     - name: Set Release Title
@@ -136,7 +140,7 @@ jobs:
           ./output/*.qcow2
           ./output/*.vdi
           ./output/*.vhdx
-          ./output/*.vmdk
+          # ./output/*.vmdk
           ./output/*.img.gz
 
         body: |
