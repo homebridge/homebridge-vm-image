@@ -26,7 +26,11 @@ group_log() {
         log "$*"
     fi
 }
-group_end() { echo -e "::endgroup::"; }
+group_end() {
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        echo -e "::endgroup::"
+    fi
+}
 
 OVA_FILE="${1:-}"
 VM_NAME="homebridge-validation-vm"
@@ -34,16 +38,20 @@ VM_RAM="1024"
 
 TEST_URL="http://localhost:8581"
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUTPUT_DIR="${REPO_ROOT}/output"
+mkdir -p "$OUTPUT_DIR"
+
 check_dependencies() {
   log "🔍 Checking dependencies..."
   if ! command -v VBoxManage &> /dev/null; then
     error "VirtualBox is required but not installed"
-    echo "Please install VirtualBox: https://www.virtualbox.org/wiki/Downloads"
+    error "Please install VirtualBox: https://www.virtualbox.org/wiki/Downloads"
     exit 1
   fi
   if ! command -v curl &> /dev/null; then
     error "curl is required but not installed"
-    echo "Please install curl: https://curl.se/"
+    error "Please install curl: https://curl.se/"
     exit 1
   fi
 }
@@ -60,6 +68,10 @@ import_ova() {
   VBoxManage modifyvm "${VM_NAME}" --natpf1 "www,tcp,,80,,80"
   VBoxManage modifyvm "${VM_NAME}" --natpf1 "hbui,tcp,,8581,,8581"
   VBoxManage modifyvm "${VM_NAME}" --natpf1 "homekit,tcp,,51826,,51826"
+  VBoxManage modifyvm "$VM_NAME" \
+    --uart1 0x3F8 4 \
+    --uartmode1 file "${OUTPUT_DIR}/${VM_NAME}-serial.log"
+  info 'Serial output will be logged to: '"${OUTPUT_DIR}/${VM_NAME}-serial.log"
   group_end
   log "✅ OVA imported successfully: ${VM_NAME}"
 }
@@ -67,7 +79,23 @@ import_ova() {
 start_vm() {
   log "🚀 Starting VM..."
   VBoxManage startvm "$VM_NAME" --type headless
-  log "✅ VM started: $VM_NAME"
+  VM_LOG_FOLDER="$(VBoxManage showvminfo "${VM_NAME}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)"
+  info "VM log folder: '$VM_LOG_FOLDER'"
+  # Wait for VM to power on (max 60s)
+  for i in {1..12}; do
+    sleep 5
+    VM_STATE=$(VBoxManage showvminfo "${VM_NAME}" --machinereadable | grep -E '^VMState=' | cut -d'"' -f2)
+    if [[ "$VM_STATE" == "running" ]]; then
+      log "${VM_NAME} started successfully."
+      break
+    else
+      log "Waiting for VM to start... Current state: $VM_STATE"
+    fi
+  done
+  if [[ "$VM_STATE" != "running" ]]; then
+    error "VM failed to start."
+    exit 1
+  fi
 }
 
 wait_for_homebridge() {
@@ -75,16 +103,16 @@ wait_for_homebridge() {
   for i in {1..12}; do
     sleep 5
     STATUS=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" ${TEST_URL}|| echo "000")
-    echo "HTTP status from Homebridge UI: $STATUS"
+    log "HTTP status from Homebridge UI: $STATUS"
     if [[ "$STATUS" == "200" ]]; then
-      echo "::notice::Homebridge UI responded with HTTP 200"
+      log "Homebridge UI responded with HTTP 200"
       break
     else
-      echo "Waiting for Homebridge UI to respond... Current HTTP status: $STATUS"
+      log "Waiting for Homebridge UI to respond... Current HTTP status: $STATUS"
     fi
   done
   if [[ "$STATUS" != "200" ]]; then
-    echo "::error::Homebridge UI did not respond with HTTP 200"
+    error "Homebridge UI did not respond with HTTP 200"
     exit 1
   fi
 }
@@ -139,8 +167,8 @@ cleanup_vm() {
 }
 
 main() {
-  echo "🔍 Validating Homebridge OVA"
-  echo "============================="
+  log "🔍 Validating Homebridge OVA"
+  log "============================="
   log "OVA File: $OVA_FILE"
   log "VM Name: $VM_NAME"
 

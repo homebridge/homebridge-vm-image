@@ -8,7 +8,7 @@
 # Executables Files
 #
 
-install -m 755 files/hb-config-new "${ROOTFS_DIR}/usr/local/sbin/hb-config"
+install -m 755 files/hb-config "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 
 
 # Pre-start files

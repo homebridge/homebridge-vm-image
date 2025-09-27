@@ -5,20 +5,21 @@ GREEN='\033[0;32m'
 BOLD='\e[1m'
 NC='\033[0m'
 
-MODEL=$(tr -d '\0' </proc/device-tree/model)
+# Get system info appropriate for VM
+HOSTNAME=$(hostname)
 
 IP=$(hostname -I)
 UI_PORT=$(cat /etc/hb-ui-port)
 IMAGE_VERSION=$(cat /etc/hb-release)
 
-printf "\n${RED}*** Homebridge Raspbian $IMAGE_VERSION - $MODEL ***${NC}\n\n"
+printf "\n${RED}*** Homebridge VM Image $IMAGE_VERSION ***${NC}\n\n"
 
 printf "homebridge was created by nfarina and licensed under the Apache License 2.0.\n" | fold -s
 printf "homebridge-config-ui-x was created by oznu and licensed under the MIT License.\n\n" | fold -s
 
 printf "To configure Homebridge browse to the one of the following addresses from another device on your network:" | fold -s
 printf "\n\n"
-printf "${BOLD}*${NC} ${GREEN}http://$(hostname).local:${UI_PORT}${NC}\n"
+printf "${BOLD}*${NC} ${GREEN}http://${HOSTNAME}.local:${UI_PORT}${NC}\n"
 
 for ip in $IP; do
   if [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

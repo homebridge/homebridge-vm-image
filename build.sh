@@ -34,7 +34,11 @@ group_log() {
         log "$*"
     fi
 }
-group_end() { echo -e "::endgroup::"; }
+group_end() {
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        echo -e "::endgroup::"
+    fi
+}
 
 # Cleanup function
 cleanup() {
