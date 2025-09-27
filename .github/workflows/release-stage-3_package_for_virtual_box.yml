@@ -96,19 +96,6 @@ jobs:
     - name: Install QEMU
       run: sudo apt-get install -y qemu-utils
 
-    - name: Create QCOW2, VDI, VHDX amd VMDK images from IMG
-      run: |
-        for img in ./output/*.img; do
-          base_name=$(basename "$img" .img)
-          for ext in qcow2 vdi vhdx vmdk; do
-            echo "Converting $img to $ext format" 
-            qemu-img convert -O $ext "$img" "./output/${base_name}.$ext" && gzip -k "./output/${base_name}.$ext"
-            ls -l ./output/
-          done
-        done
-        # Cleanup original IMG files to save space
-        rm ./output/*.img
-
     - name: Set Release Title
       id: set_title
       run: |
@@ -132,15 +119,38 @@ jobs:
         files: |
           ./output/*.manifest
           ./output/*.ova
-          ./output/*.qcow2
-          ./output/*.vdi
-          ./output/*.vhdx
-          ./output/*.vmdk
-
         body: |
           This is a test release only. Please test the VirtualBox appliance and report any issues you find.
         clear_attachments: true
-        fail_on_no_files: true
+        fail_on_no_files: false
+
+    - name:  Initial Cleanup of Upload Files
+      run: |
+        rm -f ./output/*.ova ./output/*.manifest
+
+    - name: Convert, Compress, and Upload Each Disk Format
+      run: |
+        set -e
+        RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
+        for img in ./output/*.img; do
+          base_name=$(basename "$img" .img)
+          for ext in qcow2 vdi vhdx vmdk; do
+            out_file="./output/${base_name}.${ext}"
+            gz_file="${out_file}.gz"
+            echo "Converting $img to $ext format"
+            qemu-img convert -O $ext "$img" "$out_file"
+            echo "Compressing $out_file"
+            gzip -k "$out_file"
+            echo "Uploading $gz_file to release"
+            gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$gz_file" --clobber
+            echo "Deleting $out_file and $gz_file to save space"
+            rm -f "$out_file" "$gz_file"
+          done
+        done
+        echo "Deleting original IMG files"
+        rm -f ./output/*.img
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Release created
       run: |
