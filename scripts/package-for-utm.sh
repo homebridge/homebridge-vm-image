@@ -83,6 +83,7 @@ fi
 MANIFEST="$OUTPUT_DIR/${VM_NAME}.manifest"
 OUTPUT_PATH="$OUTPUT_DIR/${VM_NAME}.utm.zip"
 ICON_PATH="${REPO_ROOT}/assets/homebridge-icon.png"
+TEMPLATE="${REPO_ROOT}/assets/template-utm-config.plist"
 
 # Function to check if utmctl is in PATH
 check_utmctl() {
@@ -118,12 +119,11 @@ check_disk_image() {
 
 # Function to check if template-utm-config.plist exists
 check_template() {
-    local template="template-utm-config.plist"
-    if [[ ! -f "$template" ]]; then
+    if [[ ! -f "${TEMPLATE}" ]]; then
         error "template-utm-config.plist not found in script directory."
         exit 1
     fi
-    info "Template found: $template"
+    info "Template found: ${TEMPLATE}"
 }
 
 # Function to check if homebridge-icon.png exists
@@ -196,7 +196,6 @@ get_architecture() {
 # Function to configure the VM
 configure_vm() {
     local plist="${VM_DIR}/config.plist"
-    local template="template-utm-config.plist"
     local cpu_cores=2
     local ram_mb="$VM_RAM"
     local disk_filename="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.qcow2"
@@ -242,8 +241,8 @@ configure_vm() {
     chmod 644 "${VM_DIR}/Data/homebridge-icon.png"
 
     # Copy and edit template plist
-    info "Copying and editing $template to $plist"
-    cp "$template" "$plist"
+    info "Copying and editing ${TEMPLATE} to $plist"
+    cp "${TEMPLATE}" "$plist"
     chmod 644 "$plist"
     /usr/libexec/PlistBuddy -c "Set :Information:Name ${VM_NAME}" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Information:UUID $uuid" "$plist"
