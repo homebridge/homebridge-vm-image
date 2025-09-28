@@ -52,13 +52,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Step 4: Install dependencies
+      - name: Cache Homebrew dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            /usr/local/Homebrew
+            /usr/local/Cellar
+            /usr/local/Caskroom
+          key: ${{ runner.os }}-brew-${{ hashFiles('Brewfile') }}
+          restore-keys: |
+            ${{ runner.os }}-brew-
+
       - name: Install dependencies
         run: |
           echo "::group::Installing qemu"
-          brew install qemu
+          brew install qemu || true
           echo "::endgroup::"
           echo "::group::Installing UTM"
-          brew install --cask utm
+          brew install --cask utm || true
           echo "::endgroup::"
           if ! command -v utmctl &> /dev/null; then
             echo "utmctl not found. Ensure UTM is installed on the runner."
