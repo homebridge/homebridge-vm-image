@@ -48,6 +48,8 @@ jobs:
           gh release download ${{ inputs.RELEASE_TAG }} --dir ./output --repo ${{ github.repository }} --pattern "homebridge-vm-image-${{ inputs.RELEASE_STREAM }}-${{ inputs.ARCH }}.qcow2.gz"
           echo "Downloaded artifact:"
           ls -l ./output
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Step 4: Install dependencies
       - name: Install dependencies
