@@ -70,6 +70,7 @@ jobs:
       - name: Uzip the image
         run: |
           gunzip ./output/homebridge-vm-image-${{ inputs.RELEASE_STREAM }}-${{ inputs.ARCH }}.qcow2.gz
+          ls -lR ./output
 
       # Step 6: Run the script
       - name: Run package-for-utm.sh
