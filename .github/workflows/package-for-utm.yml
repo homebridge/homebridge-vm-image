@@ -11,6 +11,9 @@ on:
         description: "Architecture (arm64, amd64)"
         required: false
         default: arm64
+      release_tag:
+        description: "Release tag to download image files from"
+        required: true
 
 jobs:
   package-utm-vm:
@@ -27,8 +30,17 @@ jobs:
         run: |
           echo "RELEASE_STREAM=${{ github.event.inputs.release_stream }}" >> $GITHUB_ENV
           echo "ARCH=${{ github.event.inputs.arch }}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
 
-      # Step 3: Install dependencies
+      # Step 3: Download image files from the release
+      - name: Download specific image file from release
+        run: |
+          echo "Downloading specific artifact from release tag: ${{ inputs.RELEASE_TAG }}"
+          gh release download ${{ inputs.RELEASE_TAG }} --dir ./output --repo ${{ github.repository }} --pattern "homebridge-vm-image-${{ inputs.RELEASE_STREAM }}-${{ inputs.ARCH }}.qcow2.gz"
+          echo "Downloaded artifact:"
+          ls -l ./output
+
+      # Step 4: Install dependencies
       - name: Install dependencies
         run: |
           brew install qemu
@@ -38,14 +50,22 @@ jobs:
           fi
           echo "Dependencies installed."
 
-      # Step 4: Run the script
+      # Step 5: Run the script
       - name: Run package-for-utm.sh
         run: |
           chmod +x ./scripts/package-for-utm.sh
-          ./scripts/package-for-utm.sh ${{ env.RELEASE_STREAM }} ${{ env.ARCH }}
+          ./scripts/package-for-utm.sh ${{ inputs.RELEASE_STREAM }} ${{ inputs.ARCH }}
 
-      # Step 5: Verify output
+      # Step 6: Verify output
       - name: Verify output
         run: |
           echo "Checking output directory..."
           ls -l ./output
+
+      # Step 7: Upload UTM package as artifact
+      - name: Upload UTM package
+        uses: actions/upload-artifact@v3
+        with:
+          name: utm-package
+          path: ./output/*.utm.gz
+          retention-days: 7

@@ -1,14 +1,17 @@
 [Unit]
-Description=Homebridge Image First Boot Startup Script
-After=network.target
+Description=First Boot Homebridge Setup
+After=multi-user.target
+Before=getty@tty1.service
+# ConditionPathExists=/etc/first-boot-homebridge
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/first-boot-homebridge
-RemainAfterExit=yes
-StandardOutput=tty
 StandardInput=tty
+StandardOutput=inherit
+StandardError=inherit
 TTYPath=/dev/tty1
+RemainAfterExit=true
 
 [Install]
 WantedBy=multi-user.target
