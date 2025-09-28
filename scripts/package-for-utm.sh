@@ -106,7 +106,7 @@ check_plistbuddy() {
 # Function to check if the disk image exists
 check_disk_image() {
     if [[ ! -f "${DISK_PATH}" ]]; then
-        error "${DISK_PATH} image not found at ${DISK_PATH}"
+        error "Disk image not found at ${DISK_PATH}"
         exit 1
     fi
     if [[ ! "${DISK_PATH}" =~ \.(img|gcow2)$ ]]; then
