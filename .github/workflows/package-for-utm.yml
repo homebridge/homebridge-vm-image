@@ -32,7 +32,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       # Step 2: Set up environment
       - name: Set up environment variables
@@ -74,7 +74,7 @@ jobs:
 
       # Step 7: Upload UTM package as artifact
       - name: Upload UTM package
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: utm-package
           path: ./output/*.utm.gz
