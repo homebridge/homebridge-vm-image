@@ -221,7 +221,7 @@ mount_for_chroot() {
 configure_base_system() {
     local arch="$1"
     
-    log "Configuring base system"
+    group_log "Configuring base system"
     
     # Copy GRUB modules for amd64 compatibility
     if [[ "${ARCH}" == "amd64" && -d "/usr/lib/grub/x86_64-efi" ]]; then
@@ -270,40 +270,61 @@ else
   apt-utils locales systemd systemd-sysv > /dev/null 2>&1
 fi
 
+LANG=en_GB.UTF-8
 
+sed -i "s/# *\(${LANG} UTF-8\)/\1/" /etc/locale.gen
 # Configure locale early
-locale-gen en_CA.UTF-8
-echo 'LANG=en_CA.UTF-8' > /etc/default/locale
+locale-gen
+update-locale LANG=${LANG}
 
 log "Installing kernel, bootloader, and utilities"
+# Define package lists
+KERNEL_PACKAGES=(
+  linux-image-${ARCH}
+  linux-headers-${ARCH}
+  grub-efi-${ARCH}
+  grub-efi-${ARCH}-bin
+  grub-common
+  grub2-common
+)
+
+SYSTEM_UTILITIES=(
+  wget
+  psmisc
+  procps
+  iputils-ping
+  logrotate
+  openssl
+  sudo
+  nano
+  net-tools
+  libnss-mdns
+  dbus
+  gnupg
+  iproute2
+  dhcpcd5
+  ssh
+  zstd
+  avahi-daemon
+  vim
+  dialog
+  file
+  whiptail
+)
+
+VIRTUALIZATION_SUPPORT=(
+  hyperv-daemons
+)
+
+# Install packages
 if [[ $DEBUG -eq 1 ]]; then
-  # Install kernel and bootloader
-  apt-get install -y $APT_QUIET \
-      linux-image-${ARCH} linux-headers-${ARCH} \
-      grub-efi-${ARCH} grub-efi-${ARCH}-bin grub-common grub2-common
-
-  # Install system utilities
-  apt-get install -y $APT_QUIET \
-      wget psmisc procps iputils-ping logrotate openssl sudo nano \
-      net-tools libnss-mdns dbus gnupg iproute2 dhcpcd5 ssh zstd \
-      avahi-daemon
-
-  # Install virtualization support
-  apt-get install -y $APT_QUIET hyperv-daemons || true
+  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}"
+  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}"
+  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" || true
 else
-  # Install kernel and bootloader
-  apt-get install -y $APT_QUIET \
-      linux-image-${ARCH} linux-headers-${ARCH} \
-      grub-efi-${ARCH} grub-efi-${ARCH}-bin grub-common grub2-common > /dev/null 2>&1
-
-  # Install system utilities
-  apt-get install -y $APT_QUIET \
-      wget psmisc procps iputils-ping logrotate openssl sudo nano \
-      net-tools libnss-mdns dbus gnupg iproute2 dhcpcd5 ssh zstd \
-      avahi-daemon > /dev/null 2>&1
-
-  # Install virtualization support
-  apt-get install -y $APT_QUIET hyperv-daemons > /dev/null 2>&1 || true
+  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}" > /dev/null 2>&1
+  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}" > /dev/null 2>&1
+  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" > /dev/null 2>&1 || true
 fi
 
 log "Setting up GRUB bootloader"
@@ -372,6 +393,7 @@ CHROOT_EOF
 
     sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < /tmp/chroot_setup.sh
     rm -f /tmp/chroot_setup.sh
+    group_end
 }
 
 # Install staged assets with better error handling
@@ -470,9 +492,7 @@ main() {
     mount_for_chroot
     group_end
 
-    group_log "Configuring base system"
     configure_base_system "${ARCH}"
-    group_end
     
     group_log "Installing Homebridge VM customizations"
     # Install customizations, these are copied from homebridge-raspbian-image
