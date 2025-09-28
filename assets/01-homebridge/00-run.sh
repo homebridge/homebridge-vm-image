@@ -56,7 +56,7 @@ chown -R ${FIRST_USER_NAME}:${FIRST_USER_NAME} /var/lib/homebridge
 [ -e /root/.homebridge ] || ln -fs /var/lib/homebridge /root/.homebridge
 
 # include homebridge bashrc in first user's bashrc
-cat /tmp/bashrc.partial >> /home/${FIRST_USER_NAME}/.bashrc
+# cat /tmp/bashrc.partial >> /home/${FIRST_USER_NAME}/.bashrc
 rm -rf /tmp/bashrc.partial
 
 # set ui port for use in motd message

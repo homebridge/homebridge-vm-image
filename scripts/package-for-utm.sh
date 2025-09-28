@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # Script to configure and export a UTM Virtual Machine on macOS for Homebridge
-# Copies and edits template-utm-config.plist, boots from a user-specified disk image,
+# Copies and edits template-utm-config.plist, boots from a disk image in output/,
 # uses bridged networking, supports user-specified or host architecture (defaults to arm64 on Apple Silicon),
 # copies homebridge-icon.png, and sets manifest contents (same basename as disk image, preserving newlines) as Information:Notes.
 # Prerequisites: UTM installed, utmctl in PATH, template-utm-config.plist in script directory,
-# ../assets/homebridge-icon.png, disk image, and corresponding .manifest file.
-# Usage: ./configure_and_export_utm_vm.sh <path_to_disk_image> <export_output_path> [arm64|amd64]
+# ../assets/homebridge-icon.png, disk image and .manifest in output/.
+# Usage: ./configure_and_export_utm_vm.sh [RELEASE_STREAM] [ARCH]
+# RELEASE_STREAM: alpha, beta, stable (default: stable)
+# ARCH: arm64, amd64 (default: host architecture)
 
 # Exit on error
 set -e
@@ -35,6 +37,46 @@ group_end() {
     fi
 }
 
+# Determine repository root
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Auto-detect architecture based on host system
+detect_default_arch() {
+    case "$(uname -m)" in
+        arm64|aarch64) echo "arm64" ;;
+        x86_64) echo "amd64" ;;
+        *) echo "amd64" ;; # fallback to amd64 for unknown architectures
+    esac
+}
+
+# Set inputs with defaults
+ARCH="${2:-$(detect_default_arch)}"
+RELEASE_STREAM="${1:-stable}" # Default to "stable" if not provided
+
+# Validate architecture
+if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
+    error "Unsupported architecture: $ARCH"
+    error "Supported architectures: amd64, arm64"
+    exit 1
+fi
+
+# Validate release stream
+if [[ "$RELEASE_STREAM" != "alpha" && "$RELEASE_STREAM" != "beta" && "$RELEASE_STREAM" != "stable" ]]; then
+    error "Unsupported release stream: $RELEASE_STREAM"
+    error "Supported release streams: alpha, beta, stable"
+    exit 1
+fi
+
+# Define file paths and VM settings
+VM_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}"
+VM_DIR="$HOME/UTM/Homebridge-VM-${RELEASE_STREAM}-${ARCH}.utm"
+VM_RAM="1024"
+OUTPUT_DIR="${REPO_ROOT}/output"
+DISK_PATH="$OUTPUT_DIR/${VM_NAME}.img"
+MANIFEST="$OUTPUT_DIR/${VM_NAME}.manifest"
+OUTPUT_PATH="$OUTPUT_DIR/${VM_NAME}.utm.zip"
+ICON_PATH="${REPO_ROOT}/assets/homebridge-icon.png"
+
 # Function to check if utmctl is in PATH
 check_utmctl() {
     if ! command -v utmctl &> /dev/null; then
@@ -56,16 +98,15 @@ check_plistbuddy() {
 
 # Function to check if the disk image exists
 check_disk_image() {
-    local disk_path="$1"
-    if [[ ! -f "$disk_path" ]]; then
-        error "Disk image not found at $disk_path"
+    if [[ ! -f "${DISK_PATH}" ]]; then
+        error "Disk image not found at ${DISK_PATH}"
         exit 1
     fi
-    if [[ ! "$disk_path" =~ \.(qcow2|img)$ ]]; then
-        error "Disk image must be a .qcow2 or .img file"
+    if [[ ! "${DISK_PATH}" =~ \.(img)$ ]]; then
+        error "Disk image must be a .img file"
         exit 1
     fi
-    info "Disk image validated: $disk_path"
+    info "Disk image validated: ${DISK_PATH}"
 }
 
 # Function to check if template-utm-config.plist exists
@@ -80,22 +121,20 @@ check_template() {
 
 # Function to check if homebridge-icon.png exists
 check_icon() {
-    local icon_path="../assets/homebridge-icon.png"
-    if [[ ! -f "$icon_path" ]]; then
-        error "homebridge-icon.png not found at $icon_path"
+    if [[ ! -f "${ICON_PATH}" ]]; then
+        error "homebridge-icon.png not found at ${ICON_PATH}"
         exit 1
     fi
-    info "Icon found: $icon_path"
+    info "Icon found: ${ICON_PATH}"
 }
 
 # Function to check if manifest file exists
 check_manifest() {
-    local manifest="$1"
-    if [[ ! -f "$manifest" ]]; then
-        error "Manifest file not found at $manifest"
+    if [[ ! -f "${MANIFEST}" ]]; then
+        error "Manifest file not found at ${MANIFEST}"
         exit 1
     fi
-    info "Manifest found: $manifest"
+    info "Manifest found: ${MANIFEST}"
 }
 
 # Function to check if UTM directory exists
@@ -115,12 +154,11 @@ generate_mac_address() {
 
 # Function to determine architecture (maps to UTM config values)
 get_architecture() {
-    local input_arch="$1"
     local host_arch
     host_arch=$(uname -m)
     info "Detected host architecture: $host_arch"
 
-    if [[ -z "$input_arch" ]]; then
+    if [[ -z "${ARCH}" ]]; then
         if [[ "$host_arch" == "arm64" ]]; then
             info "Defaulting to aarch64 (host is arm64)"
             echo "aarch64"
@@ -132,10 +170,10 @@ get_architecture() {
             exit 1
         fi
     else
-        if [[ "$input_arch" == "arm64" ]]; then
+        if [[ "${ARCH}" == "arm64" ]]; then
             info "User specified arm64 (maps to aarch64)"
             echo "aarch64"
-        elif [[ "$input_arch" == "amd64" ]]; then
+        elif [[ "${ARCH}" == "amd64" ]]; then
             if [[ "$host_arch" == "arm64" ]]; then
                 warn "Specifying amd64 on an arm64 host may cause issues if the disk image is arm64-based."
             fi
@@ -150,71 +188,72 @@ get_architecture() {
 
 # Function to configure the VM
 configure_vm() {
-    local disk_path="$1"
-    local arch="$2"
-    local vm_name="Homebridge-VM"
-    local vm_dir="$HOME/UTM/$vm_name.utm"
-    local plist="$vm_dir/config.plist"
+    local plist="${VM_DIR}/config.plist"
     local template="template-utm-config.plist"
-    local icon_path="../assets/homebridge-icon.png"
-    local disk_basename
-    disk_basename=$(basename "$disk_path" .qcow2 2>/dev/null || basename "$disk_path" .img)
-    local manifest="${disk_path%.*}.manifest"
     local cpu_cores=2
-    local disk_filename="homebridge-vm-image-$arch.qcow2"
+    local ram_mb="$VM_RAM"
+    local disk_filename="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.qcow2"
     local uuid
     uuid=$(uuidgen)
     local mac_address
     mac_address=$(generate_mac_address)
 
-    group_log "Starting UTM VM configuration for $vm_name with architecture $arch"
+    group_log "Starting UTM VM configuration for ${VM_NAME} with architecture ${ARCH}"
     check_utmctl
     check_plistbuddy
-    check_disk_image "$disk_path"
+    check_disk_image
     check_template
     check_icon
-    check_manifest "$manifest"
+    check_manifest
     check_utm_dir
 
     # Clean up if VM already exists
-    if [[ -d "$vm_dir" ]]; then
-        info "Removing existing VM directory: $vm_dir"
-        rm -rf "$vm_dir"
+    if [[ -d "${VM_DIR}" ]]; then
+        info "Removing existing VM directory: ${VM_DIR}"
+        rm -rf "${VM_DIR}"
     fi
 
     # Create bundle structure
-    info "Creating VM directory: $vm_dir/Data"
-    mkdir -p "$vm_dir/Data"
+    info "Creating VM directory: ${VM_DIR}/Data"
+    mkdir -p "${VM_DIR}/Data"
 
-    # Copy disk image
-    info "Copying disk image to $vm_dir/Data/$disk_filename"
-    cp "$disk_path" "$vm_dir/Data/$disk_filename"
-    chmod 644 "$vm_dir/Data/$disk_filename"
+    # Convert disk image to qcow2 format
+    info "Converting disk image to qcow2 format and resizing to 40GB"
+    qcow2_disk_path="${VM_DIR}/Data/${disk_filename}"
+    qemu-img convert -f raw -O qcow2 -c "${DISK_PATH}" "$qcow2_disk_path"
+    qemu-img resize "$qcow2_disk_path" 40G
+
+    # Set permissions for the qcow2 disk image
+    chmod 644 "$qcow2_disk_path"
+
+    # Log the completion of the conversion
+    info "Disk image converted and saved as $qcow2_disk_path"
 
     # Copy icon
-    info "Copying icon to $vm_dir/Data/homebridge-icon.png"
-    cp "$icon_path" "$vm_dir/Data/homebridge-icon.png"
-    chmod 644 "$vm_dir/Data/homebridge-icon.png"
+    info "Copying icon to ${VM_DIR}/Data/homebridge-icon.png"
+    cp "${ICON_PATH}" "${VM_DIR}/Data/homebridge-icon.png"
+    chmod 644 "${VM_DIR}/Data/homebridge-icon.png"
 
     # Copy and edit template plist
     info "Copying and editing $template to $plist"
     cp "$template" "$plist"
     chmod 644 "$plist"
-    /usr/libexec/PlistBuddy -c "Set :Information:Name $vm_name" "$plist"
+    /usr/libexec/PlistBuddy -c "Set :Information:Name ${VM_NAME}" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Information:UUID $uuid" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Information:Icon homebridge-icon.png" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Information:IconCustom true" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:ImageName $disk_filename" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:Identifier $uuid" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Network:0:MacAddress $mac_address" "$plist"
-    /usr/libexec/PlistBuddy -c "Set :System:Architecture $arch" "$plist"
+    /usr/libexec/PlistBuddy -c "Set :System:Architecture ${UTM_ARCHITECTURE}" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:CPUCount $cpu_cores" "$plist"
+    /usr/libexec/PlistBuddy -c "Set :System:MemorySize $ram_mb" "$plist"
 
     # Read manifest and set as Information:Notes, preserving newlines
-    info "Reading manifest from $manifest"
+    info "Reading manifest from ${MANIFEST}"
     local manifest_content
     # Escape quotes and backslashes to make content PlistBuddy-compatible
-    manifest_content=$(cat "$manifest" | sed 's/"/\\"/g' | sed 's/\\/\\\\/g')
+    manifest_content=$(cat "${MANIFEST}" | sed 's/"/\\"/g' | sed 's/\\/\\\\/g')
     /usr/libexec/PlistBuddy -c "Delete :Information:Notes" "$plist" 2>/dev/null || true
     # Use a temporary file to handle multiline content
     echo "$manifest_content" > /tmp/manifest_content.txt
@@ -226,21 +265,21 @@ configure_vm() {
     local plist_arch
     plist_arch=$(/usr/libexec/PlistBuddy -c "Print :System:Architecture" "$plist")
     info "Configured VM architecture in config.plist: $plist_arch"
-    if [[ "$plist_arch" != "$arch" ]]; then
-        error "config.plist architecture ($plist_arch) does not match requested ($arch)"
+    if [[ "$plist_arch" != "${UTM_ARCHITECTURE}" ]]; then
+        error "config.plist architecture ($plist_arch) does not match requested (${UTM_ARCHITECTURE})"
         exit 1
     fi
 
     # Register VM with UTM
-    info "Registering VM with UTM by opening $vm_dir"
-    open -a UTM "$vm_dir" || warn "Failed to open VM in UTM GUI; attempting utmctl start anyway"
+    info "Registering VM with UTM by opening ${VM_DIR}"
+    open -a UTM "${VM_DIR}" || warn "Failed to open VM in UTM GUI; attempting utmctl start anyway"
 
     # Start the VM with retry
-    info "Starting VM: $vm_name"
+    info "Starting VM: ${VM_NAME}"
     local retries=3
     local delay=5
     for ((i=1; i<=retries; i++)); do
-        if utmctl start "$vm_name"; then
+        if utmctl start "${VM_NAME}"; then
             info "VM started successfully"
             break
         fi
@@ -249,54 +288,52 @@ configure_vm() {
         if [[ $i -eq $retries ]]; then
             error "Failed to start VM after $retries attempts. Check ~/Library/Logs/UTM/ for errors or ensure UTM has permissions."
             error "Run 'utmctl list' to verify VM registration. VM directory contents:"
-            ls -l "$vm_dir" >&2
-            ls -l "$vm_dir/Data" >&2
+            ls -l "${VM_DIR}" >&2
+            ls -l "${VM_DIR}/Data" >&2
             utmctl list >&2
             exit 1
         fi
     done
 
     log "VM configuration completed successfully!"
-    log "The VM '$vm_name' is running with bridged networking, architecture $arch, and set to boot from the provided disk image."
+    log "The VM '${VM_NAME}' is running with bridged networking, architecture ${UTM_ARCHITECTURE}, and set to boot from the provided disk image."
     group_end
 }
 
 # Function to export the VM
 export_vm() {
-    local vm_name="Homebridge-VM"
-    local output_path="$1"
-    local vm_dir="$HOME/UTM/$vm_name.utm"
-
-    group_log "Exporting VM: $vm_name to $output_path"
+    group_log "Exporting VM: ${VM_NAME} to ${OUTPUT_PATH}"
     # Stop the VM if running
     info "Stopping VM if running..."
-    utmctl stop "$vm_name" || true
+    utmctl stop "${VM_NAME}" || true
 
     # Ensure output directory exists
-    info "Creating output directory: $(dirname "$output_path")"
-    mkdir -p "$(dirname "$output_path")"
+    info "Creating output directory: $(dirname "${OUTPUT_PATH}")"
+    mkdir -p "$(dirname "${OUTPUT_PATH}")"
 
     # Compress the VM bundle
-    info "Compressing VM to $output_path"
-    zip -r "$output_path" "$vm_dir"
+    info "Compressing VM to ${OUTPUT_PATH}"
+    zip -r "${OUTPUT_PATH}" "${VM_DIR}"
 
-    log "VM exported successfully to $output_path"
+    log "VM exported successfully to ${OUTPUT_PATH}"
     group_end
 }
 
 # Check for arguments
-if [[ $# -lt 2 ]] || [[ $# -gt 3 ]]; then
-    error "Usage: $0 <path_to_disk_image> <export_output_path> [arm64|amd64]"
+if [[ $# -gt 2 ]]; then
+    error "Usage: $0 [RELEASE_STREAM] [ARCH]"
+    error "RELEASE_STREAM: alpha, beta, stable (default: stable)"
+    error "ARCH: arm64, amd64 (default: host architecture)"
     exit 1
 fi
 
 # Get architecture (user-provided or host default)
 group_log "Determining architecture"
-architecture=$(get_architecture "$3")
+UTM_ARCHITECTURE=$(get_architecture)
 group_end
 
 # Run the configuration and export
-configure_vm "$1" "$architecture"
-export_vm "$2"
+configure_vm
+export_vm
 
-log "Process completed! VM configured with bridged networking, architecture $architecture, set to boot from provided disk image, and exported to $2"
+log "Process completed! VM configured with bridged networking, architecture ${UTM_ARCHITECTURE}, set to boot from $DISK_PATH, and exported to $OUTPUT_PATH"

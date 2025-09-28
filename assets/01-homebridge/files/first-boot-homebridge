@@ -1,7 +1,138 @@
-#!/bin/sh
+#!/bin/bash
 
-# Stub for first boot tasks, was used to configure wifi on RPI first boot
+# Define color codes for logging
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# disable this service so it does not run again
+# Log helper functions
+log() { echo -e "$*" >&2; }
+warn() { echo -e "${YELLOW}WARN:${NC} $*" >&2; }
+error() { echo -e "${RED}ERROR:${NC} $*" >&2; }
+info() { echo -e "$*" >&2; }
+
+# Clear the screen for a clean setup experience
+clear
+
+# Ensure the script is running as root
+if [ "$(id -u)" -ne 0 ]; then
+    error "This script must be run as root. Please use sudo or run as root."
+    sleep 30
+    exit 1
+fi
+
+info "============================================================="
+info "Homebridge VM First Boot Setup"
+info "============================================================="
+info "This script will guide you through creating a new user account"
+info "for your Homebridge VM. You'll need to provide a username and"
+info "password. The script will retry invalid inputs up to 3 times."
+info "============================================================="
+echo
+
+# Function to prompt for username with retry logic
+prompt_username() {
+    local retries=3
+    local attempt=1
+    while [ $attempt -le $retries ]; do
+        read -p "Enter the username for the new account: " USERNAME
+        # Validate username (non-empty and alphanumeric)
+        if [ -z "$USERNAME" ] || ! [[ "$USERNAME" =~ ^[a-zA-Z0-9]+$ ]]; then
+            warn "Invalid username: Must be non-empty and contain only alphanumeric characters."
+            if [ $attempt -lt $retries ]; then
+                warn "Please try again ($((retries - attempt)) attempts remaining)."
+            else
+                error "Maximum retries reached. Exiting."
+                sleep 30
+                exit 1
+            fi
+        elif id "$USERNAME" >/dev/null 2>&1; then
+            warn "User '$USERNAME' already exists."
+            if [ $attempt -lt $retries ]; then
+                warn "Please choose a different username ($((retries - attempt)) attempts remaining)."
+            else
+                error "Maximum retries reached. Exiting."
+                sleep 30
+                exit 1
+            fi
+        else
+            info "Username '$USERNAME' is valid."
+            return 0
+        fi
+        ((attempt++))
+    done
+}
+
+# Function to prompt for password with retry logic
+prompt_password() {
+    local retries=3
+    local attempt=1
+    while [ $attempt -le $retries ]; do
+        echo
+        read -s -p "Enter password for $USERNAME: " PASSWORD
+        echo
+        read -s -p "Confirm password: " PASSWORD_CONFIRM
+        echo
+        # Validate password
+        if [ -z "$PASSWORD" ]; then
+            warn "Password cannot be empty."
+            if [ $attempt -lt $retries ]; then
+                warn "Please try again ($((retries - attempt)) attempts remaining)."
+            else
+                error "Maximum retries reached. Exiting."
+                sleep 30
+                exit 1
+            fi
+        elif [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
+            warn "Passwords do not match."
+            if [ $attempt -lt $retries ]; then
+                warn "Please try again ($((retries - attempt)) attempts remaining)."
+            else
+                error "Maximum retries reached. Exiting."
+                sleep 30
+                exit 1
+            fi
+        else
+            info "Password confirmed successfully."
+            return 0
+        fi
+        ((attempt++))
+    done
+}
+
+# Prompt for username
+info "Step 1: Creating a new user account"
+info "-----------------------------------"
+prompt_username
+
+# Prompt for password
+info "Step 2: Setting up the password"
+info "-----------------------------------"
+prompt_password
+
+# Create the user with a home directory and set the password
+info "Step 3: Adding user to the system"
+info "-----------------------------------"
+info "Creating user '$USERNAME' with a home directory and sudo privileges..."
+useradd -m -s /bin/bash -G sudo "$USERNAME"
+echo "$USERNAME:$PASSWORD" | chpasswd
+
+# Check if user creation was successful
+if [ $? -eq 0 ]; then
+    info "User '$USERNAME' created successfully with sudo privileges."
+else
+    error "Failed to create user '$USERNAME'."
+    error "Please check system logs for details. Exiting."
+    sleep 30
+    exit 1
+fi
+
+info "First-boot setup complete! The system will now use the new user account."
+info "You can login or ssh in with the username '$USERNAME' and the password you provided."
+info "This message will close in 30 seconds."
+sleep 30
+
 systemctl disable first-boot-homebridge
 systemctl daemon-reload
