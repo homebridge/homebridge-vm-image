@@ -11,7 +11,7 @@ on:
           - alpha
           - beta
           - stable
-        default: stable
+        default: beta
       arch:
         description: "Architecture (arm64, amd64)"
         required: false
