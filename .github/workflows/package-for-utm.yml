@@ -6,10 +6,19 @@ on:
       release_stream:
         description: "Release stream (alpha, beta, stable)"
         required: false
+        type: choice
+        options:
+          - alpha
+          - beta
+          - stable
         default: stable
       arch:
         description: "Architecture (arm64, amd64)"
         required: false
+        type: choice
+        options:
+          - arm64
+          - amd64
         default: arm64
       release_tag:
         description: "Release tag to download image files from"
@@ -17,7 +26,7 @@ on:
 
 jobs:
   package-utm-vm:
-    runs-on: macos-12
+    runs-on: macos-latest
     name: Run package-for-utm.sh on macOS ARM64
 
     steps:
@@ -44,6 +53,7 @@ jobs:
       - name: Install dependencies
         run: |
           brew install qemu
+          brew install --cask utm
           if ! command -v utmctl &> /dev/null; then
             echo "utmctl not found. Ensure UTM is installed on the runner."
             exit 1
