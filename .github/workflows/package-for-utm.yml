@@ -66,19 +66,24 @@ jobs:
           fi
           echo "Dependencies installed."
 
-      # Step 5: Run the script
+      # Step 5: unzip the image
+      - name: Uzip the image
+        run: |
+          gunzip ./output/homebridge-vm-image-${{ inputs.RELEASE_STREAM }}-${{ inputs.ARCH }}.qcow2.gz
+
+      # Step 6: Run the script
       - name: Run package-for-utm.sh
         run: |
           chmod +x ./scripts/package-for-utm.sh
           ./scripts/package-for-utm.sh ${{ inputs.RELEASE_STREAM }} ${{ inputs.ARCH }}
 
-      # Step 6: Verify output
+      # Step 7: Verify output
       - name: Verify output
         run: |
           echo "Checking output directory..."
           ls -l ./output
 
-      # Step 7: Upload UTM package as artifact
+      # Step 8: Upload UTM package as artifact
       - name: Upload UTM package
         uses: actions/upload-artifact@v4
         with:

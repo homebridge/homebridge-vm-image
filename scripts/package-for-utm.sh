@@ -72,7 +72,14 @@ VM_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}"
 VM_DIR="$HOME/UTM/Homebridge-VM-${RELEASE_STREAM}-${ARCH}.utm"
 VM_RAM="1024"
 OUTPUT_DIR="${REPO_ROOT}/output"
-DISK_PATH="$OUTPUT_DIR/${VM_NAME}.img"
+if [[ -f "$OUTPUT_DIR/${VM_NAME}.img" ]]; then
+  DISK_PATH="$OUTPUT_DIR/${VM_NAME}.img"
+elif [[ -f "$OUTPUT_DIR/${VM_NAME}.qcow2" ]]; then
+  DISK_PATH="$OUTPUT_DIR/${VM_NAME}.qcow2"
+else
+  error "Neither .img nor .qcow2 file found for VM: $VM_NAME in $OUTPUT_DIR"
+  exit 1
+fi
 MANIFEST="$OUTPUT_DIR/${VM_NAME}.manifest"
 OUTPUT_PATH="$OUTPUT_DIR/${VM_NAME}.utm.zip"
 ICON_PATH="${REPO_ROOT}/assets/homebridge-icon.png"
