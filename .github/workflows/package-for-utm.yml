@@ -54,8 +54,12 @@ jobs:
       # Step 4: Install dependencies
       - name: Install dependencies
         run: |
+          echo "::group::Installing qemu"
           brew install qemu
+          echo "::endgroup::"
+          echo "::group::Installing UTM"
           brew install --cask utm
+          echo "::endgroup::"
           if ! command -v utmctl &> /dev/null; then
             echo "utmctl not found. Ensure UTM is installed on the runner."
             exit 1
