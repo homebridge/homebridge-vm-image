@@ -109,7 +109,7 @@ check_disk_image() {
         error "Disk image not found at ${DISK_PATH}"
         exit 1
     fi
-    if [[ ! "${DISK_PATH}" =~ \.(img|gcow2)$ ]]; then
+    if [[ ! "${DISK_PATH}" =~ \.(img|qcow2)$ ]]; then
         error "${DISK_PATH} image must be a .img  or .qcow2 file"
         exit 1
     fi
