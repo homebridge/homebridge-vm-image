@@ -1,0 +1,51 @@
+name: Package for UTM
+
+on:
+  workflow_dispatch: # Allows manual triggering of the workflow
+    inputs:
+      release_stream:
+        description: "Release stream (alpha, beta, stable)"
+        required: false
+        default: stable
+      arch:
+        description: "Architecture (arm64, amd64)"
+        required: false
+        default: arm64
+
+jobs:
+  package-utm-vm:
+    runs-on: macos-12
+    name: Run package-for-utm.sh on macOS ARM64
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up environment
+      - name: Set up environment variables
+        run: |
+          echo "RELEASE_STREAM=${{ github.event.inputs.release_stream }}" >> $GITHUB_ENV
+          echo "ARCH=${{ github.event.inputs.arch }}" >> $GITHUB_ENV
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          brew install qemu
+          if ! command -v utmctl &> /dev/null; then
+            echo "utmctl not found. Ensure UTM is installed on the runner."
+            exit 1
+          fi
+          echo "Dependencies installed."
+
+      # Step 4: Run the script
+      - name: Run package-for-utm.sh
+        run: |
+          chmod +x ./scripts/package-for-utm.sh
+          ./scripts/package-for-utm.sh ${{ env.RELEASE_STREAM }} ${{ env.ARCH }}
+
+      # Step 5: Verify output
+      - name: Verify output
+        run: |
+          echo "Checking output directory..."
+          ls -l ./output
