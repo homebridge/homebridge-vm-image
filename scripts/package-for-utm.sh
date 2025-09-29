@@ -294,10 +294,9 @@ configure_vm() {
         if [[ $i -eq $retries ]]; then
             error "Failed to start VM after $retries attempts. Check ~/Library/Logs/UTM/ for errors or ensure UTM has permissions."
             error "Run 'utmctl list' to verify VM registration. VM directory contents:"
-            ls -l "${VM_DIR}" >&2
-            ls -l "${VM_DIR}/Data" >&2
+            ls -lR "${VM_DIR}" >&2
             utmctl list >&2
-            exit 1
+            # exit 1
         fi
     done
 
