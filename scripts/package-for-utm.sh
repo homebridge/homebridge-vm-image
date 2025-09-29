@@ -300,6 +300,8 @@ configure_vm() {
                 # exit 1
             fi
         done
+    else
+        info "Skipping VM start in GitHub Actions environment"
     fi
     log "VM configuration completed successfully!"
     log "The VM '${VM_NAME}' is running with bridged networking, architecture ${UTM_ARCHITECTURE}, and set to boot from the provided disk image."
@@ -309,9 +311,13 @@ configure_vm() {
 # Function to export the VM
 export_vm() {
     group_log "Exporting VM: ${VM_NAME} to ${OUTPUT_PATH}"
-    # Stop the VM if running
-    info "Stopping VM if running..."
-    utmctl stop "${VM_NAME}" || true
+        if [[ ! "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        # Stop the VM if running
+        info "Stopping VM if running..."
+        utmctl stop "${VM_NAME}" || true
+    else
+        info "Skipping VM stop in GitHub Actions environment"
+    fi
 
     # Ensure output directory exists
     info "Creating output directory: $(dirname "${OUTPUT_PATH}")"

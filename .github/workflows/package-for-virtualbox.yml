@@ -18,7 +18,7 @@ on:
           - alpha
         default: beta
       HOMEBRIDGE_VM_IMAGE_VERSION:
-        description: 'Homebridge VM image version'
+        description: 'Homebridge VM image version aka release tag'
         required: true
         type: string
 
@@ -69,7 +69,7 @@ jobs:
             ./output/*.manifest
             ./output/*.img
 
-      - name: Convert, Compress, and Upload Each Disk Format
+      - name: Upload OVA to GitHub Release
         run: |
           set -e
           RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
@@ -77,7 +77,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Packaging and Validation complete
+      - name: Packaging complete
         run: |
           echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
           echo "::notice::Run ID: ${{ inputs.run_id }}"

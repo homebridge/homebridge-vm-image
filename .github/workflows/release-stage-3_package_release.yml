@@ -1,5 +1,5 @@
-name: Release Stage 3 - Package and Validate Homebridge VM VirtualBox Appliance
-run-name: Release Stage 3 - Package and Validate VirtualBox - Run ${{ inputs.run_id }}
+name: Release Stage 3 - Package Release 
+run-name: Release Stage 3 - Package Release - Run ${{ inputs.run_id }}
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ on:
           - alpha
         default: beta
       HOMEBRIDGE_VM_IMAGE_VERSION:
-        description: 'Homebridge VM image version'
+        description: 'Homebridge VM image version aka release tag'
         required: true
         type: string
 
@@ -45,11 +45,12 @@ jobs:
     - name: List Downloaded Artifacts
       run: ls -lR ./output
 
-    - name: List Downloaded Artifacts
-      run: ls -lR ./output
-
     - name: Install QEMU
-      run: sudo apt-get install -y qemu-utils
+      run: |
+        echo "::group::Installing QEMU"
+        sudo apt-get update
+        sudo apt-get install -y qemu-utils
+        echo "::endgroup::"
 
     - name: Set Release Title
       id: set_title
@@ -78,10 +79,6 @@ jobs:
         clear_attachments: true
         fail_on_no_files: false
 
-    - name:  Initial Cleanup of Upload Files
-      run: |
-        rm -f ./output/*.ova ./output/*.manifest
-
     - name: Convert, Compress, and Upload Each Disk Format
       run: |
         set -e
@@ -91,7 +88,7 @@ jobs:
           # Convert to qcow2 format
           ext=qcow2
           out_file="./output/${base_name}.${ext}"
-          qemu-img convert -O $ext "$img" "$out_file"
+          qemu-img convert -c -O $ext "$img" "$out_file"
           echo "Uploading $out_file to release"
           gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$out_file" --clobber
           rm -f "$out_file"

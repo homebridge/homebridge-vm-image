@@ -18,7 +18,7 @@ on:
           - alpha
         default: beta
       HOMEBRIDGE_VM_IMAGE_VERSION:
-        description: 'Homebridge VM image version'
+        description: 'Homebridge VM image version aka release tag'
         required: true
         type: string
 
