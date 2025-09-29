@@ -75,7 +75,7 @@ jobs:
           ls -l /usr/local/Homebrew || true
           ls -l /usr/local/Cellar || true
           ls -l /usr/local/Caskroom || true
-          ls -l /opt/homebrew || true
+          ls -lR /opt/homebrew || true
 
       # Step 6: Install dependencies
       - name: Install dependencies
