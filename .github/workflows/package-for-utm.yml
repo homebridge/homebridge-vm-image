@@ -115,5 +115,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: utm-package
-          path: ./output/*.utm.gz
+          path: ./output/*.utm.tgz
           retention-days: 7

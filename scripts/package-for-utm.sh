@@ -81,7 +81,7 @@ else
   exit 1
 fi
 MANIFEST="$OUTPUT_DIR/${VM_NAME}.manifest"
-OUTPUT_PATH="$OUTPUT_DIR/${VM_NAME}.utm.zip"
+OUTPUT_PATH="$OUTPUT_DIR/${VM_NAME}.utm.tgz"
 ICON_PATH="${REPO_ROOT}/assets/homebridge-icon.png"
 TEMPLATE="${REPO_ROOT}/assets/template-utm-config.plist"
 
@@ -318,7 +318,7 @@ export_vm() {
 
     # Compress the VM bundle
     info "Compressing VM to ${OUTPUT_PATH}"
-    gzip -r "${OUTPUT_PATH}" "${VM_DIR}"
+    tar -czf "${OUTPUT_PATH}" -C "$(dirname "${VM_DIR}")" "$(basename "${VM_DIR}")"
 
     log "VM exported successfully to ${OUTPUT_PATH}"
     group_end
