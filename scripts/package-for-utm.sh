@@ -277,29 +277,30 @@ configure_vm() {
     fi
 
     # Register VM with UTM
-    info "Registering VM with UTM by opening ${VM_DIR}"
-    open -a UTM "${VM_DIR}" || warn "Failed to open VM in UTM GUI; attempting utmctl start anyway"
+    if [[ ! "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        info "Registering VM with UTM by opening ${VM_DIR}"
+        open -a UTM "${VM_DIR}" || warn "Failed to open VM in UTM GUI; attempting utmctl start anyway"
 
-    # Start the VM with retry
-    info "Starting VM: ${VM_NAME}"
-    local retries=3
-    local delay=5
-    for ((i=1; i<=retries; i++)); do
-        if utmctl start "${VM_NAME}"; then
-            info "VM started successfully"
-            break
-        fi
-        warn "Attempt $i/$retries: Failed to start VM. Retrying after $delay seconds..."
-        sleep $delay
-        if [[ $i -eq $retries ]]; then
-            error "Failed to start VM after $retries attempts. Check ~/Library/Logs/UTM/ for errors or ensure UTM has permissions."
-            error "Run 'utmctl list' to verify VM registration. VM directory contents:"
-            ls -lR "${VM_DIR}" >&2
-            utmctl list >&2
-            # exit 1
-        fi
-    done
-
+        # Start the VM with retry
+        info "Starting VM: ${VM_NAME}"
+        local retries=3
+        local delay=5
+        for ((i=1; i<=retries; i++)); do
+            if utmctl start "${VM_NAME}"; then
+                info "VM started successfully"
+                break
+            fi
+            warn "Attempt $i/$retries: Failed to start VM. Retrying after $delay seconds..."
+            sleep $delay
+            if [[ $i -eq $retries ]]; then
+                error "Failed to start VM after $retries attempts. Check ~/Library/Logs/UTM/ for errors or ensure UTM has permissions."
+                error "Run 'utmctl list' to verify VM registration. VM directory contents:"
+                ls -lR "${VM_DIR}" >&2
+                utmctl list >&2
+                # exit 1
+            fi
+        done
+    fi
     log "VM configuration completed successfully!"
     log "The VM '${VM_NAME}' is running with bridged networking, architecture ${UTM_ARCHITECTURE}, and set to boot from the provided disk image."
     group_end
