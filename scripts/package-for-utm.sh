@@ -318,7 +318,7 @@ export_vm() {
 
     # Compress the VM bundle
     info "Compressing VM to ${OUTPUT_PATH}"
-    zip -r "${OUTPUT_PATH}" "${VM_DIR}"
+    gzip -r "${OUTPUT_PATH}" "${VM_DIR}"
 
     log "VM exported successfully to ${OUTPUT_PATH}"
     group_end

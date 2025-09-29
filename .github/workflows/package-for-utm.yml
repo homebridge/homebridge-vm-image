@@ -108,7 +108,7 @@ jobs:
       - name: Verify output
         run: |
           echo "Checking output directory..."
-          ls -l ./output
+          ls -lR ./output
 
       # Step 8: Upload UTM package as artifact
       - name: Upload UTM package
