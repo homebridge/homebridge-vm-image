@@ -27,68 +27,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  package-for-virtual-box:
-    runs-on: ubuntu-22.04
-    strategy:
-      max-parallel: 1
-      fail-fast: false
-      matrix:
-        arch: [arm64, amd64]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-   
-      - name: Download Artifacts
-        uses: actions/download-artifact@v5
-        with:
-          name: homebridge-image-${{ matrix.arch }}
-          path: ./output
-          run-id: ${{ inputs.run_id }}
-          merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: List Downloaded Artifacts
-        run: ls -lR ./output
-
-      - name: Install VirtualBox
-        uses: ./.github/actions/install-virtualbox
-
-      - name: Package VirtualBox Appliance
-        id: package_appliance
-        run: |
-          ./scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "OVA_FILE=./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.ova" >> $GITHUB_OUTPUT
-
-      - name: Upload image and manifest artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 7
-          name: virtualbox-appliance-${{ matrix.arch }}
-          path: |
-            ${{ steps.package_appliance.outputs.OVA_FILE }}
-            ./output/*.manifest
-            ./output/*.img
-
-      - name: Packaging and Validation complete
-        run: |
-          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "::notice::Run ID: ${{ inputs.run_id }}"
-          echo "::notice::Architecture: ${{ matrix.arch }}"
-          echo "::notice::Release Stream: ${{ inputs.release_stream }}" 
-
   create-release:
     runs-on: ubuntu-latest
-    needs: [package-for-virtual-box]
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Download release artifacts
+    - name: Download Artifacts
       uses: actions/download-artifact@v5
       with:
-        pattern: virtualbox-appliance*
+        pattern: homebridge-image-*
         path: ./output
+        run-id: ${{ inputs.run_id }}
         merge-multiple: true
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: List Downloaded Artifacts
+      run: ls -lR ./output
 
     - name: List Downloaded Artifacts
       run: ls -lR ./output
@@ -118,7 +73,6 @@ jobs:
         name: ${{ steps.set_title.outputs.release_title }}
         files: |
           ./output/*.manifest
-          ./output/*.ova
         body: |
           This is a test release only. Please test the VirtualBox appliance and report any issues you find.
         clear_attachments: true
@@ -134,7 +88,15 @@ jobs:
         RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
         for img in ./output/*.img; do
           base_name=$(basename "$img" .img)
-          for ext in qcow2 vdi vhdx vmdk; do
+          # Convert to qcow2 format
+          ext=qcow2
+          out_file="./output/${base_name}.${ext}"
+          qemu-img convert -O $ext "$img" "$out_file"
+          echo "Uploading $out_file to release"
+          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$out_file" --clobber
+          rm -f "$out_file"
+          # Remaining files don't have the -c option for qemu-img
+          for ext in vdi vhdx vmdk; do
             out_file="./output/${base_name}.${ext}"
             gz_file="${out_file}.gz"
             echo "Converting $img to $ext format"
@@ -156,14 +118,14 @@ jobs:
       run: |
         echo "::notice::Release ${{ steps.set_title.outputs.RELEASE_TITLE }} created successfully."
 
-  invoke-package-and-validate:
+  invoke-appliance-packaging:
     needs: [create-release]
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
       fail-fast: false
       matrix:
-        arch: [amd64]
+        packaging_workflow: [package-for-utm.yml, package-for-virtualbox.yml]
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
@@ -172,10 +134,10 @@ jobs:
     # Step 2: Trigger Packaging and Validation Workflow
     - name: Trigger Packaging and Validation Workflow
       run: |
-        gh workflow run "reusable-validate-release-artifacts.yml" \
+        gh workflow run "${{ matrix.packaging_workflow }}" \
           --ref "latest" \
           --field release_stream="${{ inputs.release_stream }}" \
-          --field release_tag="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" \
-          --field arch="${{ matrix.arch }}"
+          --field run_id="${{ inputs.run_id }}" \
+          --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

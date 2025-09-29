@@ -1,32 +1,39 @@
-name: Package for UTM
+name: Release Stage 3.5 - Package for UTM
+run-name: Release Stage 3.5 - Package for UTM - Run ${{ github.run_id }}
 
 on:
   workflow_dispatch: # Allows manual triggering of the workflow
     inputs:
-      release_stream:
-        description: "Release stream (alpha, beta, stable)"
-        required: false
-        type: choice
-        options:
-          - alpha
-          - beta
-          - stable
-        default: beta
-      arch:
-        description: "Architecture (arm64, amd64)"
-        required: false
-        type: choice
-        options:
-          - arm64
-          - amd64
-        default: arm64
-      release_tag:
-        description: "Release tag to download image files from"
+      run_id:
+        description: 'GitHub Run ID of the build workflow that produced the artifacts'
         required: true
+        type: string
+      release_stream:
+        description: 'Release stream (stable, beta, alpha)'
+        required: true
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+        default: beta
+      HOMEBRIDGE_VM_IMAGE_VERSION:
+        description: 'Homebridge VM image version'
+        required: true
+        type: string
+
+concurrency:
+  group: package-and-validate-utm
+  cancel-in-progress: false
 
 jobs:
-  package-utm-vm:
+  package-for-utm-vm:
     runs-on: macos-latest
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        arch: [arm64]
     name: Run package-for-utm.sh on macOS ARM64
 
     steps:
@@ -34,24 +41,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # Step 2: Set up environment
-      - name: Set up environment variables
-        run: |
-          echo "RELEASE_STREAM=${{ github.event.inputs.release_stream }}" >> $GITHUB_ENV
-          echo "ARCH=${{ github.event.inputs.arch }}" >> $GITHUB_ENV
-          echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
 
-      # Step 3: Download image files from the release
-      - name: Download specific image file from release
-        run: |
-          echo "Downloading specific artifact from release tag: ${{ inputs.RELEASE_TAG }}"
-          gh release download ${{ inputs.RELEASE_TAG }} --dir ./output --repo ${{ github.repository }} --pattern "homebridge-vm-image-${{ inputs.RELEASE_STREAM }}-${{ inputs.ARCH }}.qcow2.gz"
-              # Download the manifest file
-          gh release download ${{ inputs.RELEASE_TAG }} --dir ./output --repo ${{ github.repository }} --pattern "homebridge-vm-image-${{ inputs.RELEASE_STREAM }}-${{ inputs.ARCH }}.manifest"
-          echo "Downloaded artifact:"
-          ls -l ./output
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download Artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: homebridge-image-${{ matrix.arch }}
+          path: ./output
+          run-id: ${{ inputs.run_id }}
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # Step 6: Install dependencies
       - name: Install dependencies
@@ -68,17 +66,12 @@ jobs:
           fi
           echo "Dependencies installed."
 
-      # Step 5: unzip the image
-      - name: Uzip the image
-        run: |
-          gunzip ./output/homebridge-vm-image-${{ inputs.RELEASE_STREAM }}-${{ inputs.ARCH }}.qcow2.gz
-          ls -lR ./output
 
       # Step 6: Run the script
       - name: Run package-for-utm.sh
         run: |
           chmod +x ./scripts/package-for-utm.sh
-          ./scripts/package-for-utm.sh ${{ inputs.RELEASE_STREAM }} ${{ inputs.ARCH }}
+          ./scripts/package-for-utm.sh ${{ inputs.RELEASE_STREAM }} ${{ matrix.ARCH }}
 
       # Step 7: Verify output
       - name: Verify output
@@ -93,3 +86,18 @@ jobs:
           name: utm-package
           path: ./output/*.utm.tgz
           retention-days: 7
+
+      - name: Upload UTM to GitHub Release
+        run: |
+          set -e
+          RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
+          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "./output/*.utm.tgz" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Packaging complete
+        run: |
+          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          echo "::notice::Run ID: ${{ inputs.run_id }}"
+          echo "::notice::Architecture: ${{ matrix.arch }}"
+          echo "::notice::Release Stream: ${{ inputs.release_stream }}" 

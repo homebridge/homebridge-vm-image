@@ -106,9 +106,9 @@ jobs:
       uses: actions/checkout@v5
 
     # Step 2: Trigger Packaging and Validation Workflow
-    - name: Trigger Packaging and Validation Workflow
+    - name: Trigger Release Packaging Workflow
       run: |
-        gh workflow run "release-stage-3_package_for_virtual_box.yml" \
+        gh workflow run "release-stage-3_package_release.yml" \
           --ref "latest" \
           --field release_stream="${{ inputs.release_stream }}" \
           --field run_id="${{ github.run_id }}" \
