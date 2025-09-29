@@ -7,7 +7,20 @@
 	<key>ConfigurationVersion</key>
 	<integer>4</integer>
 	<key>Display</key>
-	<array/>
+	<array>
+		<dict>
+			<key>DownscalingFilter</key>
+			<string>Linear</string>
+			<key>DynamicResolution</key>
+			<true/>
+			<key>Hardware</key>
+			<string>virtio-gpu-pci</string>
+			<key>NativeResolution</key>
+			<false/>
+			<key>UpscalingFilter</key>
+			<string>Nearest</string>
+		</dict>
+	</array>
 	<key>Drive</key>
 	<array>
 		<dict>
