@@ -53,30 +53,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 4: Cache Homebrew dependencies
-      - name: Cache Homebrew dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            /usr/local/Homebrew
-            /usr/local/Cellar
-            /usr/local/Caskroom
-            /opt/homebrew
-            /opt/homebrew/Cellar
-            /opt/homebrew/Caskroom
-          key: ${{ runner.os }}-brew-${{ env.ARCH }}
-          restore-keys: |
-            ${{ runner.os }}-brew-
-
-      # Step 5: Debug Cache
-      - name: Debug Cache
-        run: |
-          echo "Checking cache directories..."
-          ls -l /usr/local/Homebrew || true
-          ls -l /usr/local/Cellar || true
-          ls -l /usr/local/Caskroom || true
-          ls -lR /opt/homebrew || true
-
       # Step 6: Install dependencies
       - name: Install dependencies
         run: |
