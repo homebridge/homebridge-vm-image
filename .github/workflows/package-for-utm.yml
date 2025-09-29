@@ -80,7 +80,7 @@ jobs:
           ls -lR ./output
 
       # Step 8: Upload UTM package as artifact
-      - name: Upload UTM package
+      - name: Upload UTM package as artifact
         uses: actions/upload-artifact@v4
         with:
           name: utm-package

@@ -22,6 +22,9 @@ on:
         required: true
         type: string
 
+env:
+  VDISK_SIZE: 40G  # Size of the virtual disk for each VM
+
 concurrency:
   group: package-and-validate-virtualbox
   cancel-in-progress: false
@@ -89,6 +92,7 @@ jobs:
           ext=qcow2
           out_file="./output/${base_name}.${ext}"
           qemu-img convert -c -O $ext "$img" "$out_file"
+          qemu-img resize "$out_file" ${VDISK_SIZE}
           echo "Uploading $out_file to release"
           gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$out_file" --clobber
           rm -f "$out_file"
@@ -98,6 +102,7 @@ jobs:
             gz_file="${out_file}.gz"
             echo "Converting $img to $ext format"
             qemu-img convert -O $ext "$img" "$out_file"
+            qemu-img resize "$out_file" ${VDISK_SIZE}
             echo "Compressing $out_file"
             gzip -k "$out_file"
             echo "Uploading $gz_file to release"
