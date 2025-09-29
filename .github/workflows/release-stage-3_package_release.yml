@@ -102,7 +102,7 @@ jobs:
             gz_file="${out_file}.gz"
             echo "Converting $img to $ext format"
             qemu-img convert -O $ext "$img" "$out_file"
-            qemu-img resize "$out_file" ${VDISK_SIZE}
+            qemu-img resize "$out_file" ${VDISK_SIZE} || true
             echo "Compressing $out_file"
             gzip -k "$out_file"
             echo "Uploading $gz_file to release"
