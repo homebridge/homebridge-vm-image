@@ -82,7 +82,7 @@
 		<key>BalloonDevice</key>
 		<false/>
 		<key>DebugLog</key>
-		<false/>
+		<true/>
 		<key>Hypervisor</key>
 		<true/>
 		<key>PS2Controller</key>
@@ -110,12 +110,7 @@
 		<false/>
 	</dict>
 	<key>Sound</key>
-	<array>
-		<dict>
-			<key>Hardware</key>
-			<string>intel-hda</string>
-		</dict>
-	</array>
+	<array/>
 	<key>System</key>
 	<dict>
 		<key>Architecture</key>
