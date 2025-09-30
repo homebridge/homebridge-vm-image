@@ -69,7 +69,7 @@ fi
 
 # Define file paths and VM settings
 VM_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}"
-VM_DIR="$HOME/UTM/Homebridge-VM-${RELEASE_STREAM}-${ARCH}.utm"
+VM_DIR="$HOME/UTM/${VM_NAME}.utm"
 VM_RAM="1024"
 OUTPUT_DIR="${REPO_ROOT}/output"
 if [[ -f "$OUTPUT_DIR/${VM_NAME}.img" ]]; then

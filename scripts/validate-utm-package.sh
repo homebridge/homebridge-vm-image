@@ -141,28 +141,40 @@ start_vm() {
   log "Waiting for VM to start (state: running)..."
   for i in {1..12}; do
     sleep 5
-    VM_STATE=$(utmctl list | grep "$VM_NAME" | awk '{print $3}')
-    if [[ "$VM_STATE" == "running" ]]; then
-      log "VM '$VM_NAME' is running."
+    VM_STATE=$(utmctl list | grep "$VM_NAME" | awk '{print $2}')
+    if [[ "$VM_STATE" == "started" ]]; then
+      log "VM '$VM_NAME' is $VM_STATE."
       break
     else
       log "Waiting for VM to start... Current state: $VM_STATE ($i/12)"
+      utmctl start "$VM_NAME" || true
     fi
   done
-  if [[ "$VM_STATE" != "running" ]]; then
+  if [[ "$VM_STATE" != "started" ]]; then
     error "VM '$VM_NAME' did not reach 'running' state after 60 seconds."
     exit 1
   fi
 
   log "Collecting VM IP address with utmctl ip-address..."
-  VM_IP=$(utmctl ip-address "$VM_NAME" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1)
-  if [[ -n "$VM_IP" ]]; then
-    log "VM IP address: $VM_IP"
-    TEST_URL="http://${VM_IP}:8581"
-    export TEST_URL
-  else
-    warn "Could not determine VM IP address. TEST_URL remains as $TEST_URL"
-  fi
+  while true; do
+    VM_IP=$(utmctl ip-address "$VM_NAME" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1)
+    
+    if [[ -n "$VM_IP" ]]; then
+      log "VM IP address detected: $VM_IP. Testing connectivity..."
+      if ping -c 1 -W 1 "$VM_IP" &> /dev/null; then
+        log "VM IP address is reachable: $VM_IP"
+        TEST_URL="http://${VM_IP}:8581"
+        export TEST_URL
+        break
+      else
+        warn "VM IP address $VM_IP is not reachable. Retrying..."
+      fi
+    else
+      warn "Could not determine VM IP address. Retrying..."
+    fi
+    
+    sleep 2 # Wait before retrying
+  done
 }
 
 wait_for_homebridge() {
