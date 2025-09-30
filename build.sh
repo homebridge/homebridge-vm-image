@@ -31,7 +31,7 @@ group_log() {
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
         echo -e "::group::$*"
     else
-        log "$*"
+        log "--- $* ---"
     fi
 }
 group_end() {
@@ -314,6 +314,7 @@ SYSTEM_UTILITIES=(
 
 VIRTUALIZATION_SUPPORT=(
   hyperv-daemons
+  qemu-guest-agent
 )
 
 # Install packages

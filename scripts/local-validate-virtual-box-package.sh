@@ -23,7 +23,7 @@ group_log() {
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
         echo -e "::group::$*"
     else
-        log "$*"
+        log "--- $* ---"
     fi
 }
 group_end() {
