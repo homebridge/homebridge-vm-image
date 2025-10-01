@@ -314,7 +314,9 @@ SYSTEM_UTILITIES=(
 
 VIRTUALIZATION_SUPPORT=(
   hyperv-daemons
+  spice-vdagent
   qemu-guest-agent
+  libguestfs-tools
 )
 
 # Install packages

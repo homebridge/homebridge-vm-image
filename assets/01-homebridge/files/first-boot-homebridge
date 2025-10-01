@@ -19,120 +19,141 @@ clear
 # Ensure the script is running as root
 if [ "$(id -u)" -ne 0 ]; then
     error "This script must be run as root. Please use sudo or run as root."
-    sleep 30
+    sleep 5
     exit 1
 fi
 
-info "============================================================="
-info "Homebridge VM First Boot Setup"
-info "============================================================="
-info "This script will guide you through creating a new user account"
-info "for your Homebridge VM. You'll need to provide a username and"
-info "password. The script will retry invalid inputs up to 3 times."
-info "============================================================="
-echo
+validate_user() {
+    RET=0
+    MSG="Entered username is invalid:"
+    if [ -z "$USERNAME" ] || [ ${#USERNAME} -gt 32 ]; then
+        MSG="$MSG\nLength be between 1 and 32 characters."
+        RET=1
+    fi
+    if ! echo "$USERNAME" | grep -q '^[a-z]\{1\}[a-z0-9\-]*$'; then
+        MSG="$MSG\nMust only contain lower-case letters, digits and hyphens, and must start with a letter."
+        RET=1
+    fi
+    if [ "$USERNAME" = "root" ] ; then
+        MSG="$MSG\nCannot be root."
+        RET=1
+    fi
+    if [ "$RET" -ne 0 ]; then
+        echo "$MSG"
+    fi
+    return "$RET"
+}
 
-# Function to prompt for username with retry logic
+validate_password() {
+    PASSWORD="$1"
+    MSG=""
+    if [ -z "$PASSWORD" ]; then
+        echo "Password cannot be empty."
+        return 1
+    fi
+    if [ ${#PASSWORD} -le 5 ] || [ ${#PASSWORD} -gt 32 ]; then
+        echo "Length be between 6 and 32 characters."
+        return 1
+    fi
+}
+
+display_message() {
+    whiptail --title "Homebridge VM Image Setup" --msgbox "$1" 20 60
+}
+
+# Function to prompt for username with retry logic using whiptail
 prompt_username() {
     local retries=3
     local attempt=1
     while [ $attempt -le $retries ]; do
-        read -p "Enter the username for the new account: " USERNAME
-        # Validate username (non-empty and alphanumeric)
-        if [ -z "$USERNAME" ] || ! [[ "$USERNAME" =~ ^[a-zA-Z0-9]+$ ]]; then
-            warn "Invalid username: Must be non-empty and contain only alphanumeric characters."
-            if [ $attempt -lt $retries ]; then
-                warn "Please try again ($((retries - attempt)) attempts remaining)."
-            else
-                error "Maximum retries reached. Exiting."
-                sleep 30
-                exit 1
-            fi
-        elif id "$USERNAME" >/dev/null 2>&1; then
-            warn "User '$USERNAME' already exists."
-            if [ $attempt -lt $retries ]; then
-                warn "Please choose a different username ($((retries - attempt)) attempts remaining)."
-            else
-                error "Maximum retries reached. Exiting."
-                sleep 30
-                exit 1
-            fi
-        else
-            info "Username '$USERNAME' is valid."
+        USERNAME=$(whiptail --title "Homebridge VM Image Setup" --inputbox "Enter the username for the new account:" 10 60 3>&1 1>&2 2>&3)
+        exitstatus=$?
+        if [ $exitstatus -ne 0 ]; then
+            error "User canceled the setup. Exiting."
+            sleep 30
+            exit 1
+        fi
+
+        if MSG=$(validate_user); then
             return 0
+        else
+            whiptail --msgbox "$MSG" 20 60
         fi
         ((attempt++))
     done
+    error "Maximum retries reached. Exiting."
+    sleep 5
+    exit 1
 }
 
-# Function to prompt for password with retry logic
+# Function to prompt for password with retry logic using whiptail
 prompt_password() {
     local retries=3
     local attempt=1
     while [ $attempt -le $retries ]; do
-        echo
-        read -s -p "Enter password for $USERNAME: " PASSWORD
-        echo
-        read -s -p "Confirm password: " PASSWORD_CONFIRM
-        echo
-        # Validate password
-        if [ -z "$PASSWORD" ]; then
-            warn "Password cannot be empty."
-            if [ $attempt -lt $retries ]; then
-                warn "Please try again ($((retries - attempt)) attempts remaining)."
-            else
-                error "Maximum retries reached. Exiting."
-                sleep 30
-                exit 1
-            fi
-        elif [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
-            warn "Passwords do not match."
-            if [ $attempt -lt $retries ]; then
-                warn "Please try again ($((retries - attempt)) attempts remaining)."
-            else
-                error "Maximum retries reached. Exiting."
-                sleep 30
-                exit 1
-            fi
-        else
-            info "Password confirmed successfully."
+        PASSWORD=$(whiptail --title "Homebridge VM Image Setup" --passwordbox "Enter password for $USERNAME:" 10 60 3>&1 1>&2 2>&3)
+        exitstatus=$?
+        if [ $exitstatus -ne 0 ]; then
+            error "User canceled the setup. Exiting."
+            sleep 5
+            exit 1
+        fi
+
+        PASSWORD_CONFIRM=$(whiptail --title "Homebridge VM Image Setup" --passwordbox "Confirm password for $USERNAME:" 10 60 3>&1 1>&2 2>&3)
+        exitstatus=$?
+        if [ $exitstatus -ne 0 ]; then
+            error "User canceled the setup. Exiting."
+            sleep 5
+            exit 1
+        fi
+
+        # Validate password using validate_password
+        if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
+            whiptail --msgbox "Passwords do not match.\nPlease try again." 10 60
+        elif validate_password "$PASSWORD"; then
             return 0
+        else
+            whiptail --msgbox "Invalid password: $(validate_password "$PASSWORD" 2>&1)\nPlease try again." 10 60
         fi
         ((attempt++))
     done
+    error "Maximum retries reached. Exiting."
+    sleep 5
+    exit 1
 }
 
-# Prompt for username
-info "Step 1: Creating a new user account"
-info "-----------------------------------"
+display_message "Welcome to the Homebridge VM Image Setup!\n\nThis setup will guide you through creating a new user account for your Homebridge VM."
 prompt_username
-
-# Prompt for password
-info "Step 2: Setting up the password"
-info "-----------------------------------"
 prompt_password
 
-# Create the user with a home directory and set the password
-info "Step 3: Adding user to the system"
-info "-----------------------------------"
-info "Creating user '$USERNAME' with a home directory and sudo privileges..."
 useradd -m -s /bin/bash -G sudo "$USERNAME"
 echo "$USERNAME:$PASSWORD" | chpasswd
 
+
 # Check if user creation was successful
 if [ $? -eq 0 ]; then
-    info "User '$USERNAME' created successfully with sudo privileges."
+    display_message "User '$USERNAME' created successfully!\n\nYou can now log in with this username and the password you provided."
 else
-    error "Failed to create user '$USERNAME'."
-    error "Please check system logs for details. Exiting."
-    sleep 30
+    display_message "Failed to create user '$USERNAME'. Please check the system logs for more details."
     exit 1
 fi
 
-info "First-boot setup complete! The system will now use the new user account."
-info "You can login or ssh in with the username '$USERNAME' and the password you provided."
-info "This message will close in 30 seconds."
-sleep 30
-
 systemctl disable first-boot-homebridge
 systemctl daemon-reload
+
+# Display an are you sure message before expanding the filesystem, and allow the user to cancel
+if ! whiptail --title "Expand Filesystem" --yesno "The next step will expand the filesystem to utilize the full disk space. This operation is generally safe but may take a few minutes. Do you want to proceed?" 10 60; then
+    display_message "Filesystem expansion canceled. You can manually expand the filesystem later if needed."
+    exit 0
+fi
+
+expandVirtualFilesystem
+
+# Display log file with an option to exit
+if whiptail --title "Filesystem Expansion Log" --yesno "Filesystem expansion completed. Would you like to view the log file at /var/log/diskexpand.log?" 10 60; then
+    less /var/log/diskexpand.log
+fi
+display_message "Setup complete! You can now log in with the username '$USERNAME'.\n\nIt's recommended to reboot the system to ensure all changes take effect."
+sleep 5
+exit 0
+reboot
