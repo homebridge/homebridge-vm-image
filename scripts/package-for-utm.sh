@@ -224,10 +224,10 @@ configure_vm() {
     mkdir -p "${VM_DIR}/Data"
 
     # Convert disk image to qcow2 format
-    info "Converting disk image to qcow2 format and resizing to 40GB"
+    info "Converting disk image to qcow2 format and resizing to 50GB"
     qcow2_disk_path="${VM_DIR}/Data/${disk_filename}"
     qemu-img convert -f raw -O qcow2 -c "${DISK_PATH}" "$qcow2_disk_path"
-    # qemu-img resize "$qcow2_disk_path" 40G
+    qemu-img resize "$qcow2_disk_path" 50G
 
     # Set permissions for the qcow2 disk image
     chmod 644 "$qcow2_disk_path"

@@ -3,7 +3,7 @@
 # Configuration
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DISTRO="bookworm"
-readonly SIZE_MB=51200  # 50GB total disk size
+readonly SIZE_MB=5120  # 5GB total disk size
 readonly ESP_SIZE_MB=256
 
 # Debug settings - set DEBUG=1 for verbose output
@@ -73,6 +73,19 @@ cleanup() {
     fi
     
     [[ $exit_code -eq 0 ]] && log "✅ Build completed successfully"
+    info "Zeroing unused blocks in sparse img files in ${OUTPUT_DIR}"
+    for img in "${OUTPUT_DIR}"/*.img; do
+        [[ -f "$img" ]] || continue
+        info "Running zerofree on $img"
+        # Setup loop device for zerofree
+        LOOP=$(sudo losetup --find --show "$img")
+        PART=$(sudo kpartx -av "$LOOP" | awk '/add map/ && /p2/ {print $3}')
+        [[ -z "$PART" ]] && { warn "Could not find root partition for $img"; sudo losetup -d "$LOOP"; continue; }
+        DEV="/dev/mapper/$PART"
+        sudo zerofree "$DEV" || warn "zerofree failed on $DEV"
+        sudo kpartx -d "$LOOP"
+        sudo losetup -d "$LOOP"
+    done
     exit $exit_code
 }
 

@@ -9,7 +9,7 @@ RUN set -e; \
   apt-get install -y -qq \
   debootstrap parted e2fsprogs dosfstools \
   dialog $GRUB_EFI_PKG qemu-utils \
-  qemu-user-static gzip \
+  qemu-user-static gzip zerofree\
   sudo udev kpartx psmisc jq; \
   apt-get clean; \
   rm -rf /var/lib/apt/lists/*
