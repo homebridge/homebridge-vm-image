@@ -1,10 +1,13 @@
 [Unit]
 Description=Timezone Update Service
-After=nginx.service
+After=network-online.target nginx.service
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/tzupdate
+TimeoutStartSec=30
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target

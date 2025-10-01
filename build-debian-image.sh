@@ -399,8 +399,8 @@ cat > /etc/hosts <<HOSTS_EOF
 ::1       localhost ip6-localhost ip6-loopback
 HOSTS_EOF
 
-# Set root password
-echo "root:root" | chpasswd
+# Lock root account (disable password-based login)
+passwd -l root
 
 # Clean package cache
 apt-get clean
