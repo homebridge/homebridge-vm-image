@@ -36,7 +36,8 @@ if [[ "$RELEASE_STREAM" != "alpha" && "$RELEASE_STREAM" != "beta" && "$RELEASE_S
 fi
 
 VM_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}" 
-VM_RAM="1024"
+VM_RAM="4096"
+VDISK_SIZE_MB="51200"
 OUTPUT_DIR="${REPO_ROOT}/output"
 VDI_FILE="$OUTPUT_DIR/${VM_NAME}.vdi"
 OVA_FILE="$OUTPUT_DIR/${VM_NAME}.ova"
@@ -90,6 +91,8 @@ convert_image_to_vdi() {
       error "Neither VBoxManage nor qemu-img found for conversion."
       exit 1
     fi
+    log "Resizing VDI to ${VDISK_SIZE_MB}..."
+    VBoxManage modifymedium "$VDI_FILE" --resize ${VDISK_SIZE_MB}
     log "✅ Conversion to VDI completed: $VDI_FILE"
   else
     error "No IMG file found for conversion: $img_gz_file or $img_file"
@@ -107,7 +110,7 @@ package_as_ova() {
   VBoxManage createvm --name "$VM_NAME" --register --ostype="Debian12_${ARCH}" --platform-architecture=$( [[ "$ARCH" == "arm64" ]] && echo "arm" || echo "x86" )
   VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
-    --cpus 1 \
+    --cpus 2 \
     --firmware bios \
     --boot1 disk \
     --nic1 bridged \
@@ -164,6 +167,7 @@ main() {
   echo "  Release Stream: $RELEASE_STREAM"
   echo "  $(cat ${MANIFEST_FILE}| grep 'Release Version: ')"
   echo "  RAM: ${VM_RAM}MB"
+  echo "  VDI Size: ${VDISK_SIZE_MB}MB"
   echo "  OVA File: $OVA_FILE"
 
   export OVA_FILE=$OVA_FILE

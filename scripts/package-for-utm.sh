@@ -70,7 +70,7 @@ fi
 # Define file paths and VM settings
 VM_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}"
 VM_DIR="$HOME/UTM/${VM_NAME}.utm"
-VM_RAM="1024"
+VM_RAM="4096"
 OUTPUT_DIR="${REPO_ROOT}/output"
 if [[ -f "$OUTPUT_DIR/${VM_NAME}.img" ]]; then
   DISK_PATH="$OUTPUT_DIR/${VM_NAME}.img"
@@ -154,11 +154,6 @@ check_utm_dir() {
     info "UTM directory verified: $utm_dir"
 }
 
-# Function to generate a random MAC address (locally administered, UTM-compatible)
-generate_mac_address() {
-    printf "FA:%02X:%02X:%02X:%02X:%02X" $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256))
-}
-
 # Function to determine architecture (maps to UTM config values)
 get_architecture() {
     local host_arch
@@ -197,12 +192,9 @@ get_architecture() {
 configure_vm() {
     local plist="${VM_DIR}/config.plist"
     local cpu_cores=2
-    local ram_mb="$VM_RAM"
     local disk_filename="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.qcow2"
     local uuid
     uuid=$(uuidgen)
-    local mac_address
-    mac_address=$(generate_mac_address)
 
     group_log "Starting UTM VM configuration for ${VM_NAME} with architecture ${ARCH}"
     check_utmctl
@@ -250,10 +242,9 @@ configure_vm() {
     /usr/libexec/PlistBuddy -c "Set :Information:IconCustom true" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:ImageName $disk_filename" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:Identifier $uuid" "$plist"
-    /usr/libexec/PlistBuddy -c "Set :Network:0:MacAddress $mac_address" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:Architecture ${UTM_ARCHITECTURE}" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:CPUCount $cpu_cores" "$plist"
-    /usr/libexec/PlistBuddy -c "Set :System:MemorySize $ram_mb" "$plist"
+    /usr/libexec/PlistBuddy -c "Set :System:MemorySize $VM_RAM" "$plist"
 
     # Read manifest and set as Information:Notes, preserving newlines
     info "Reading manifest from ${MANIFEST}"
