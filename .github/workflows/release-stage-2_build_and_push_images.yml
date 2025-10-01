@@ -80,7 +80,7 @@ jobs:
       # Step 2: Start the build process
       - name: run build-debian-image.sh script
         run: |
-          ./build_debian_image.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          ./build-debian-image.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
 
       # Step 3: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
