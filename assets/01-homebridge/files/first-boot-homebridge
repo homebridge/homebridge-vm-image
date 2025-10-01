@@ -140,20 +140,3 @@ fi
 
 systemctl disable first-boot-homebridge
 systemctl daemon-reload
-
-# Display an are you sure message before expanding the filesystem, and allow the user to cancel
-if ! whiptail --title "Expand Filesystem" --yesno "The next step will expand the filesystem to utilize the full disk space. This operation is generally safe but may take a few minutes. Do you want to proceed?" 10 60; then
-    display_message "Filesystem expansion canceled. You can manually expand the filesystem later if needed."
-    exit 0
-fi
-
-expandVirtualFilesystem
-
-# Display log file with an option to exit
-if whiptail --title "Filesystem Expansion Log" --yesno "Filesystem expansion completed. Would you like to view the log file at /var/log/diskexpand.log?" 10 60; then
-    less /var/log/diskexpand.log
-fi
-display_message "Setup complete! You can now log in with the username '$USERNAME'.\n\nIt's recommended to reboot the system to ensure all changes take effect."
-sleep 5
-exit 0
-reboot

@@ -3,7 +3,7 @@
 # Configuration
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DISTRO="bookworm"
-readonly SIZE_MB=3072
+readonly SIZE_MB=51200  # 50GB total disk size
 readonly ESP_SIZE_MB=256
 
 # Debug settings - set DEBUG=1 for verbose output
@@ -116,10 +116,11 @@ create_image() {
     local img_path="$1"
     local size_mb="$2"
     
-    info "Creating ${size_mb}MB disk image: $img_path"
+    info "Creating ${size_mb}MB sparse disk image: $img_path"
     
-    # Use fallocate for faster allocation
-    fallocate -l "${size_mb}M" "$img_path" || dd if=/dev/zero of="$img_path" bs=1M count="$size_mb"
+    # Create sparse file - only allocates space as needed
+    truncate -s "${size_mb}M" "$img_path"
+    info "Sparse image created (actual size will grow as data is written)"
     
     # Create partitions
     parted -s "$img_path" -- \
@@ -316,7 +317,7 @@ VIRTUALIZATION_SUPPORT=(
   hyperv-daemons
   spice-vdagent
   qemu-guest-agent
-  libguestfs-tools
+  cloud-guest-utils
 )
 
 # Install packages
@@ -341,15 +342,17 @@ grub-install \
     --removable \
     --recheck
 
-# GRUB configuration with serial console
+# GRUB configuration with serial console and resolution
 cat > /etc/default/grub <<GRUB_EOF
 GRUB_DEFAULT=0
-GRUB_TIMEOUT=5
+GRUB_TIMEOUT=0
 GRUB_DISTRIBUTOR="Homebridge VM on ${ARCH}"
 GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
 GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
 GRUB_TERMINAL="console serial"
 GRUB_SERIAL_COMMAND="serial --speed=921600 --unit=0 --word=8 --parity=no --stop=1"
+GRUB_GFXMODE=1024x768
+GRUB_GFXPAYLOAD_LINUX=keep
 GRUB_EOF
 
 update-grub
