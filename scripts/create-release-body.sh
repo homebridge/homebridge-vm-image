@@ -46,15 +46,18 @@ info "Creating release body at ${MANIFEST}"
 # Get the latest tag to compare against, filtered by release type
 if [[ "${PKG_RELEASE_STREAM:-stable}" == "beta" ]]; then
   # For beta releases, only look at beta tags
-  LATEST_TAG=$(git tag -l | grep -E "beta" | sort -V | tail -1 2>/dev/null || echo "")
+  LATEST_TAG=$(gh release list --limit 50 | cut -f3 | grep -E "beta" | sort -V | tail -1 2>/dev/null || echo "")
 elif [[ "${PKG_RELEASE_STREAM:-stable}" == "alpha" ]]; then
   # For alpha releases, only look at alpha tags
-  LATEST_TAG=$(git tag -l | grep -E "alpha" | sort -V | tail -1 2>/dev/null || echo "")
+  LATEST_TAG=$(gh release list --limit 50 | cut -f3 | grep -E "alpha" | sort -V | tail -1 2>/dev/null || echo "")
 else
   # For stable releases, only look at stable tags (no beta or alpha in name)
-  LATEST_TAG=$(git tag -l | grep -v -E "(beta|alpha)" | sort -V | tail -1 2>/dev/null || echo "")
+  LATEST_TAG=$(gh release list --limit 50 | cut -f3 | grep -v -E "(beta|alpha)" | sort -V | tail -1 2>/dev/null || echo "")
 fi
 
+log "All available tags: gh release list --limit 50 | cut -f3"
+gh release list --limit 50 | cut -f3
+log "All available tags: git tag -l"
 git tag -l
 log "Latest tag for stream '${PKG_RELEASE_STREAM:-stable}': ${LATEST_TAG:-none}"
 
