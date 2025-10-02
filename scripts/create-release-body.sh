@@ -55,6 +55,7 @@ else
   LATEST_TAG=$(git tag -l | grep -v -E "(beta|alpha)" | sort -V | tail -1 2>/dev/null || echo "")
 fi
 
+git tag -l
 log "Latest tag for stream '${PKG_RELEASE_STREAM:-stable}': ${LATEST_TAG:-none}"
 
 # Check for package manifest changes if we have a previous tag
