@@ -78,7 +78,16 @@ jobs:
         files: |
           ./output/*.manifest
         body: |
-          This is a test release only. Please test the VirtualBox appliance and report any issues you find.
+          This is a test release only. Please do not use in production.
+          This release contains the Homebridge VM images in various formats.
+          | File | Usage |
+          |:-------:|:-------:|
+          | OVA | Open Virtual Appliance optimized for VirtualBox |
+          | UTM | UTM Appliance |
+          | QCOW2 | QEMU/KVM Virtual Hard Diskt, also leveraged by Virtual Box |
+          | VDI | Virtual Disk Image |
+          | VHDX | Microsoft HyperV Virtual Hard Disk |
+          | VMDK | VMware Virtual Hard Disk |
         clear_attachments: true
         fail_on_no_files: false
 
