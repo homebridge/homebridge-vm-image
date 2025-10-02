@@ -70,7 +70,6 @@ jobs:
       id: release_body
       run: |
         ./scripts/create-release-body.sh "${{ inputs.release_stream }}"
-        echo "BODY_FILE=$(ls *.manifest | head -n 1)" >> $GITHUB_OUTPUT
 
     - name: Create GitHub Prerelease
       id: create_release
@@ -83,10 +82,18 @@ jobs:
         name: ${{ steps.set_title.outputs.release_title }}
         files: |
           ./output/*.manifest
-        body: ${{ steps.release_body.outputs.BODY_FILE }}
+        body: Placeholder, will be updated in next step
         if-no-files: true
         clear_attachments: true
         fail_on_no_files: false
+
+    - name: Update release body
+      uses: tubone24/update_release@v1.3.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG_NAME: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+      with:
+        body_path: ./output/release-body.md
 
     - name: Convert, Compress, and Upload Each Disk Format
       run: |
