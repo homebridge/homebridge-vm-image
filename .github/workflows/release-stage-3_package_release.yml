@@ -23,7 +23,7 @@ on:
         type: string
 
 env:
-  VDISK_SIZE: 40G  # Size of the virtual disk for each VM
+  VDISK_SIZE: 50G  # Size of the virtual disk for each VM
 
 concurrency:
   group: package-and-validate-virtualbox
@@ -66,6 +66,10 @@ jobs:
           echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
         fi
 
+    - name: Create Release Body
+      run: |
+        ./scripts/create-release-body.sh "${{ inputs.release_stream }}"
+
     - name: Create GitHub Prerelease
       id: create_release
       uses: docker://ghcr.io/mini-bomba/create-github-release:v1.2.0
@@ -78,16 +82,8 @@ jobs:
         files: |
           ./output/*.manifest
         body: |
-          This is a test release only. Please do not use in production.
-          This release contains the Homebridge VM images in various formats.
-          | File | Usage |
-          |:-------:|:-------:|
-          | OVA | Open Virtual Appliance optimized for VirtualBox |
-          | UTM | UTM Appliance |
-          | QCOW2 | QEMU/KVM Virtual Hard Diskt, also leveraged by Virtual Box |
-          | VDI | Virtual Disk Image |
-          | VHDX | Microsoft HyperV Virtual Hard Disk |
-          | VMDK | VMware Virtual Hard Disk |
+          $(cat ./output/release-body.md)
+        if-no-files: true
         clear_attachments: true
         fail_on_no_files: false
 

@@ -35,8 +35,9 @@ rm -rf "$PREVIOUS_DIR"
 mkdir -p "$PREVIOUS_DIR"
 
 OUTPUT_DIR="${REPO_ROOT}/output"
-MANIFEST="${OUTPUT_DIR}/RELEASE_BODY.md"
-rm -f "$MANIFEST"
+
+MANIFEST="${OUTPUT_DIR}/release-body.md"
+cp "${REPO_ROOT}/assets/release-body-header.md" "$MANIFEST"
 
 PKG_RELEASE_STREAM="${1:-beta}"
 
