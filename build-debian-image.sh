@@ -3,7 +3,7 @@
 # Configuration
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DISTRO="bookworm"
-readonly SIZE_MB=51200  # 50GB total disk size
+readonly SIZE_MB=5120  # 5GB total disk size
 readonly ESP_SIZE_MB=256
 
 # Debug settings - set DEBUG=1 for verbose output
@@ -73,6 +73,19 @@ cleanup() {
     fi
     
     [[ $exit_code -eq 0 ]] && log "✅ Build completed successfully"
+    info "Zeroing unused blocks in sparse img files in ${OUTPUT_DIR}"
+    for img in "${OUTPUT_DIR}"/*.img; do
+        [[ -f "$img" ]] || continue
+        info "Running zerofree on $img"
+        # Setup loop device for zerofree
+        LOOP=$(sudo losetup --find --show "$img")
+        PART=$(sudo kpartx -av "$LOOP" | awk '/add map/ && /p2/ {print $3}')
+        [[ -z "$PART" ]] && { warn "Could not find root partition for $img"; sudo losetup -d "$LOOP"; continue; }
+        DEV="/dev/mapper/$PART"
+        sudo zerofree "$DEV" || warn "zerofree failed on $DEV"
+        sudo kpartx -d "$LOOP"
+        sudo losetup -d "$LOOP"
+    done
     exit $exit_code
 }
 
@@ -121,7 +134,6 @@ create_image() {
     # Create sparse file - only allocates space as needed
     truncate -s "${size_mb}M" "$img_path"
     info "Sparse image created (actual size will grow as data is written)"
-    
     # Create partitions
     parted -s "$img_path" -- \
         mklabel gpt \
@@ -547,11 +559,18 @@ main() {
 
     sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
-    # filepath: [build.sh](http://_vscodecontentref_/0)
-    echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    # Append environment variables to source.sh
+    # Only append source-vm.sh sourcing block if not already present
+    if ! sudo grep -q "source /opt/homebridge/source-vm.sh" "${ROOTFS}/opt/homebridge/source.sh"; then
+        echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+        echo "if [ -f '/opt/homebridge/source-vm.sh' ]; then" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+        echo "  source /opt/homebridge/source-vm.sh" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+        echo "fi" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    fi
+    # Create or overwrite source-vm.sh with the required exports
+    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
+    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
+    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
 
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
@@ -562,6 +581,8 @@ main() {
     done < ${MANIFEST_FILE}
     log ""
 }
+
+
 
 # Run main function
 main "$@"

@@ -78,7 +78,7 @@ docker run --rm -it \
   --workdir /repo \
   --name homebridge-vm-build-${RELEASE_STREAM}-${ARCH} \
   "$DOCKER_IMAGE_TAG" \
-  bash ./build.sh "$ARCH" "${RELEASE_STREAM}" 
+  bash ./build-debian-image.sh "$ARCH" "${RELEASE_STREAM}" 
 
 ELAPSED=$(($(date +%s) - BUILD_START))
 log "==> Elapsed build time: $((ELAPSED/60))m $((ELAPSED%60))s"

@@ -138,5 +138,7 @@ else
     exit 1
 fi
 
+/usr/local/sbin/expandVirtualFilesystem
+
 systemctl disable first-boot-homebridge
 systemctl daemon-reload

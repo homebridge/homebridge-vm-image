@@ -74,13 +74,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog qemu-user-static gzip sudo udev kpartx psmisc jq          
+          sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog qemu-user-static gzip sudo udev kpartx psmisc jq zerofree        
           sudo apt-get install -y grub-efi-${{ matrix.arch }}-bin
 
       # Step 2: Start the build process
-      - name: run build.sh script
+      - name: run build-debian-image.sh script
         run: |
-          ./build.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          ./build-debian-image.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
 
       # Step 3: Upload the IMG file as an artifact
       - name: Upload Homebridge Image

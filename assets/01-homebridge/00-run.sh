@@ -18,7 +18,7 @@ install -m 755 files/20-hb-nginx-check "${ROOTFS_DIR}/etc/hb-service/homebridge/
 # First boot service
 install -m 644 files/first-boot-homebridge.service "${ROOTFS_DIR}/etc/systemd/system/"
 install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
-# install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
+install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
 
 #
 # MOTD
