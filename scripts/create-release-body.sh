@@ -158,13 +158,14 @@ if gh release download "$LATEST_TAG" --pattern "*.manifest" --dir ${PREVIOUS_DIR
   done
   
   # Show Docker image specific changes
-  echo -e "\n### Homebridge VM Image Changes" >> "$MANIFEST"
+
   # echo "See [commit history](https://github.com/homebridge/homebridge-vm-image/compare/$LATEST_TAG...${{ needs.set-versions.outputs.DOCKER_HOMEBRIDGE_VERSION }}) for Docker-specific changes." >> "$MANIFEST"
 else
   echo -e "\n## Changes Since Previous Release\n" >> "$MANIFEST"
   echo "Previous release manifest not available for comparison." >> "$MANIFEST"
 fi
 
+echo -e "\n### Homebridge VM Image Changes" >> "$MANIFEST"
 if [ -n "$LATEST_TAG" ]; then
   # Get commits since the latest tag of the same type
   CHANGELOG_COMMITS=$(git log --oneline --no-merges "$LATEST_TAG"..HEAD 2>/dev/null)
