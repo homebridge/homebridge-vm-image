@@ -1,0 +1,158 @@
+name: Release Stage 3.5 - Package for Hyper-V Appliance
+run-name: Release Stage 3.5 - Package for Hyper-V - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'GitHub Run ID of the build workflow that produced the artifacts'
+        required: true
+        type: string
+      release_stream:
+        description: 'Release stream (stable, beta, alpha)'
+        required: true
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+        default: beta
+      HOMEBRIDGE_VM_IMAGE_VERSION:
+        description: 'Homebridge VM image version aka release tag'
+        required: true
+        type: string
+
+concurrency:
+  group: package-and-validate-hyperv
+  cancel-in-progress: false
+
+jobs:
+  package-for-hyperv:
+    runs-on: windows-2022
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: homebridge-image-${{ matrix.arch }}
+          path: output
+          run-id: ${{ inputs.run_id }}
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List Downloaded Artifacts
+        run: dir output
+
+      - name: Install qemu-img
+        run: |
+          if (-not (Get-Command qemu-img.exe -ErrorAction SilentlyContinue)) {
+            choco install qemu -y
+          }
+          Write-Host "qemu-img installed."
+
+      - name: Convert IMG to VHDX with qemu-img
+        run: |
+          $imgPath = (Get-ChildItem -Path output -Filter *.img).FullName
+          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
+          # Find qemu-img.exe in common install locations
+          $qemuImgExe = "${env:ProgramFiles}\qemu\qemu-img.exe"
+          if (!(Test-Path $qemuImgExe)) {
+            $qemuImgExe = "${env:ProgramData}\chocolatey\bin\qemu-img.exe"
+          }
+          if (!(Test-Path $qemuImgExe)) {
+            throw "qemu-img.exe not found after installation"
+          }
+          Write-Host "Converting $imgPath to $vhdxPath using $qemuImgExe..."
+          & $qemuImgExe convert -f raw -O vhdx $imgPath $vhdxPath
+          Write-Host "Converted $imgPath to $vhdxPath"
+
+      - name: List Downloaded Artifacts
+        run: dir output
+
+      - name: Install Hyper-V PowerShell Module
+        run: |
+          Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
+          Import-Module Hyper-V
+
+      - name: Ensure Hyper-V Switch Exists
+        run: |
+          $switchName = "Default Switch"
+          if (-not (Get-VMSwitch -Name $switchName -ErrorAction SilentlyContinue)) {
+            New-VMSwitch -Name $switchName -SwitchType Internal
+          }
+          Write-Host "Using switch: $switchName"
+
+      - name: Create Hyper-V VM
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
+          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath
+          Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
+          Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
+          Write-Host "VM $vmName created and configured."
+
+      - name: Set VM Description (Notes)
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $manifestPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.manifest"
+          if (Test-Path $manifestPath) {
+            $description = Get-Content $manifestPath | Out-String
+            Set-VM -Name $vmName -Notes $description
+            Write-Host "Set VM description from manifest."
+          } else {
+            Write-Host "Manifest file not found, skipping VM description."
+          }
+
+      - name: Export Hyper-V VM
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $exportPath = "output\$vmName-export"
+          Export-VM -Name $vmName -Path $exportPath
+          Write-Host "Exported VM $vmName to $exportPath"
+
+      - name: List Exported Artifacts
+        run: dir output
+
+      - name: Zip Hyper-V Export with 7-Zip
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $exportPath = "output\$vmName-export"
+          $zipPath = "output\$vmName-hyperv.zip"
+          if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) {
+            choco install 7zip -y
+          }
+          # Only include files, not the source directory itself
+          & 7z a -tzip $zipPath "$exportPath\*" -xr!$exportPath
+          Write-Host "Zipped contents of $exportPath to $zipPath (excluding source directory)"
+
+      - name: List Exported Artifacts
+        run: dir output
+
+      - name: Upload Hyper-V Appliance as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperv-appliance-${{ matrix.arch }}
+          path: |
+            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip
+            output\*.manifest
+
+      - name: Upload VHDX, ZIP, and HyperV ZIP to GitHub Release
+        run: |
+          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" `
+            "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Packaging complete
+        run: |
+          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          echo "::notice::Run ID: ${{ inputs.run_id }}"
+          echo "::notice::Architecture: ${{ matrix.arch }}"
+          echo "::notice::Release Stream: ${{ inputs.release_stream }}"

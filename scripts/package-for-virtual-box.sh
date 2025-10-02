@@ -40,6 +40,7 @@ VM_RAM="4096"
 VDISK_SIZE_MB="51200"
 OUTPUT_DIR="${REPO_ROOT}/output"
 VDI_FILE="$OUTPUT_DIR/${VM_NAME}.vdi"
+TMP_VDI_FILE="$OUTPUT_DIR/tmp/${VM_NAME}.vdi"
 OVA_FILE="$OUTPUT_DIR/${VM_NAME}.ova"
 MANIFEST_FILE="$OUTPUT_DIR/${VM_NAME}.manifest"
 
@@ -69,11 +70,12 @@ check_dependencies() {
 convert_image_to_vdi() {
   local img_gz_file="$OUTPUT_DIR/${VM_NAME}.img.gz"
   local img_file="$OUTPUT_DIR/${VM_NAME}.img"
-  local VDI_FILE="$OUTPUT_DIR/${VM_NAME}.vdi"
 
-  if [[ -f "$VDI_FILE" ]]; then
-    log "✅ VDI file already exists: $VDI_FILE"
-    return
+  mkdir -p $OUTPUT_DIR/tmp
+
+  if [[ -f "$TMP_VDI_FILE" ]]; then
+    rm -f "$TMP_VDI_FILE"
+    log "Removed existing VDI file: $TMP_VDI_FILE"
   fi
 
   if [[ -f "$img_gz_file" ]]; then
@@ -84,26 +86,63 @@ convert_image_to_vdi() {
   if [[ -f "$img_file" ]]; then
     log "🔄 Converting IMG to VDI..."
     if command -v VBoxManage &> /dev/null; then
-      VBoxManage convertfromraw "$img_file" "$VDI_FILE" --format VDI
+      VBoxManage convertfromraw "$img_file" "$TMP_VDI_FILE" --format VDI
     elif command -v qemu-img &> /dev/null; then
-      qemu-img convert -f raw -O vdi "$img_file" "$VDI_FILE"
+      qemu-img convert -f raw -O vdi "$img_file" "$TMP_VDI_FILE"
     else
       error "Neither VBoxManage nor qemu-img found for conversion."
       exit 1
     fi
     log "Resizing VDI to ${VDISK_SIZE_MB}..."
-    VBoxManage modifymedium "$VDI_FILE" --resize ${VDISK_SIZE_MB}
-    log "✅ Conversion to VDI completed: $VDI_FILE"
+    VBoxManage modifymedium "$TMP_VDI_FILE" --resize ${VDISK_SIZE_MB}
+    log "✅ Conversion to VDI completed: $TMP_VDI_FILE"
+    mkdir -p $OUTPUT_DIR/tmp
+    cp -f "$TMP_VDI_FILE" "$VDI_FILE"
+    gzip -f "$VDI_FILE"
+    ls -l "$VDI_FILE.gz"
+    log "✅ VDI File Created: $VDI_FILE.gz"
   else
     error "No IMG file found for conversion: $img_gz_file or $img_file"
     exit 1
   fi
 }
 
+wait_for_vm_state() {
+  local VM_NAME="$1"
+  local DESIRED_STATE="$2"
+  local TIMEOUT="${3:-300}"  # Default timeout of 300 seconds
+  local INTERVAL=5           # Check every 5 seconds
+  local ELAPSED=0
+
+  log "Waiting for VM '$VM_NAME' to reach state '$DESIRED_STATE'..."
+
+  while true; do
+    # Get the current state of the VM
+    CURRENT_STATE=$(VBoxManage showvminfo "$VM_NAME" --machinereadable | grep -E '^VMState=' | cut -d'"' -f2)
+
+    if [[ "$CURRENT_STATE" == "$DESIRED_STATE" ]]; then
+      log "VM '$VM_NAME' reached state '$DESIRED_STATE'."
+      break
+    else 
+      log "Current state: '$CURRENT_STATE' != '$DESIRED_STATE'. Waiting..."
+    fi
+
+    # Check if we've exceeded the timeout
+    if (( ELAPSED >= TIMEOUT )); then
+      error "Timeout reached while waiting for VM '$VM_NAME' to reach state '$DESIRED_STATE'."
+      exit 1
+    fi
+
+    # Wait and increment elapsed time
+    sleep "$INTERVAL"
+    (( ELAPSED += INTERVAL ))
+  done
+}
+
 package_as_ova() {
   if [[ -f "$OVA_FILE" ]]; then
-    log "✅ OVA file already exists: $OVA_FILE"
-    return
+    rm -f "$OVA_FILE"
+    log "Removed existing OVA file: $OVA_FILE"
   fi
 
   log "📦 Packaging VirtualBox Appliance (OVA)..."
@@ -116,7 +155,7 @@ package_as_ova() {
     --nic1 bridged \
     --bridgeadapter1 "en0" \
     --cableconnected1 on \
-    --audio none \
+    --audio-driver none \
     --usb off \
     --graphicscontroller vmsvga \
     --vram 16 \
@@ -131,7 +170,7 @@ package_as_ova() {
     --port 0 \
     --device 0 \
     --type hdd \
-    --medium "$VDI_FILE"
+    --medium "$TMP_VDI_FILE"
 
   log "Configuring VM settings..."
   VBoxManage modifyvm "$VM_NAME" \

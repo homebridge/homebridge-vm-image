@@ -1,5 +1,5 @@
 name: Release Stage 3.5 - Package for UTM
-run-name: Release Stage 3.5 - Package for UTM - Run ${{ github.run_id }}
+run-name: Release Stage 3.5 - Package for UTM - Run ${{ github.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
 
 on:
   workflow_dispatch: # Allows manual triggering of the workflow

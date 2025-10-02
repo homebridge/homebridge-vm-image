@@ -1,5 +1,5 @@
 name: Release Stage 3 - Package Release 
-run-name: Release Stage 3 - Package Release - Run ${{ inputs.run_id }}
+run-name: Release Stage 3 - Package Release - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ on:
         type: string
 
 env:
-  VDISK_SIZE: 40G  # Size of the virtual disk for each VM
+  VDISK_SIZE: 50G  # Size of the virtual disk for each VM
 
 concurrency:
   group: package-and-validate-virtualbox
@@ -35,6 +35,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Download Artifacts
       uses: actions/download-artifact@v5
@@ -66,6 +68,13 @@ jobs:
           echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
         fi
 
+    - name: Create Release Body
+      id: release_body
+      run: |
+        ./scripts/create-release-body.sh "${{ inputs.release_stream }}"
+      env:
+        GH_TOKEN: ${{ github.token }}
+
     - name: Create GitHub Prerelease
       id: create_release
       uses: docker://ghcr.io/mini-bomba/create-github-release:v1.2.0
@@ -77,42 +86,22 @@ jobs:
         name: ${{ steps.set_title.outputs.release_title }}
         files: |
           ./output/*.manifest
-        body: |
-          This is a test release only. Please test the VirtualBox appliance and report any issues you find.
+        body: Placeholder, will be updated in next step
+        if-no-files: true
         clear_attachments: true
         fail_on_no_files: false
 
-    - name: Convert, Compress, and Upload Each Disk Format
+    - name: Update release body
+      uses: tubone24/update_release@v1.3.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG_NAME: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+      with:
+        body_path: ./output/release-body.md
+
+    - name: Convert, Compress, and Upload Each Virtual Disk Format
       run: |
-        set -e
-        RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
-        for img in ./output/*.img; do
-          base_name=$(basename "$img" .img)
-          # Convert to qcow2 format
-          ext=qcow2
-          out_file="./output/${base_name}.${ext}"
-          qemu-img convert -c -O $ext "$img" "$out_file"
-          qemu-img resize "$out_file" ${VDISK_SIZE}
-          echo "Uploading $out_file to release"
-          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$out_file" --clobber
-          rm -f "$out_file"
-          # Remaining files don't have the -c option for qemu-img
-          for ext in vdi vhdx vmdk; do
-            out_file="./output/${base_name}.${ext}"
-            gz_file="${out_file}.gz"
-            echo "Converting $img to $ext format"
-            qemu-img convert -O $ext "$img" "$out_file"
-            qemu-img resize "$out_file" ${VDISK_SIZE} || true
-            echo "Compressing $out_file"
-            gzip -k "$out_file"
-            echo "Uploading $gz_file to release"
-            gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$gz_file" --clobber
-            echo "Deleting $out_file and $gz_file to save space"
-            rm -f "$out_file" "$gz_file"
-          done
-        done
-        echo "Deleting original IMG files"
-        rm -f ./output/*.img
+        ./scripts/convert-img-to-virtual-disk.sh ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -143,3 +132,11 @@ jobs:
           --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Cleanup older beta and alpha release and tags
+      if: ${{ inputs.release_stream != 'stable' }}
+      uses: ./.github/actions/cleanup-old-releases-and-tags
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        release-type: ${{ inputs.release_stream }}
+        releases-to-keep: 5
