@@ -4,6 +4,10 @@ A preconfigured Debian Virtual Disk Image for X86 and Arm cpu architecture that 
 
 The virtual disk is created similar to how the Homebridge Raspbian image is created, and leverages Debian as the Operating System, with NodeJs, Homebridge and the Homebridge UI already installed.
 
+<p align="center">
+  <img src="assets/Console.png">
+</p>
+
 ## Virtual Images Available:
 
 | File | Usage |
@@ -21,10 +25,6 @@ The virtual disk is created similar to how the Homebridge Raspbian image is crea
 |:-------:|:-------:|
 | amd64 | 64 Bit Intel X86 and AMD Cpu's |
 | arm64 | 64 Bit Arm CPU's including M based Mac's |
-
-<p align="center">
-  <img src="assets/Console.png">
-</p>
 
 # Virtual Disk Image Specifications
 
