@@ -70,6 +70,8 @@ jobs:
       id: release_body
       run: |
         ./scripts/create-release-body.sh "${{ inputs.release_stream }}"
+      env:
+        GH_TOKEN: ${{ github.token }}
 
     - name: Create GitHub Prerelease
       id: create_release
