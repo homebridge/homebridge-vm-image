@@ -98,3 +98,67 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 <p align="center">
   <img src="assets/First Boot.png">
 </p>
+
+
+# Included Scripts
+
+This repository provides a set of scripts to automate building, packaging, validating, and expanding the Homebridge VM images for various platforms and architectures. Below is a summary of the key scripts and their purpose:
+
+---
+
+## Build and Packaging Scripts
+
+- **build-debian-image.sh**  
+  Main build script for creating the Debian-based Homebridge VM image. Handles disk image creation, OS installation, package setup, and final compression.  Called by Github Action workflows and scripts/local-build-in-docker.sh
+
+- **package-for-virtual-box.sh**  
+  Packages the raw disk image into a VirtualBox-compatible format (VDI), configures the VM, attaches Guest Additions ISO, and exports as an OVA appliance.
+
+- **package-for-utm.sh**  
+  Packages the disk image for UTM (macOS) by creating a UTM bundle, configuring VM settings, and exporting the bundle as a `.utm.tgz` file.
+
+---
+
+## Validation Scripts
+
+- **validate-utm-package.sh**  
+  Validates the UTM VM bundle by importing, configuring, starting the VM, and checking that Homebridge is accessible via its web interface.
+
+- **local-validate-virtual-box-package.sh**  
+  Validates the VirtualBox VM by starting the VM, checking its state, and verifying Homebridge UI is available.
+
+---
+
+## Image Scripts
+
+- **expandVirtualFilesystem**  
+  Expands the root filesystem inside the VM to utilize all available disk space. Typically run on first boot or after disk resize.
+
+- **first-boot-homebridge**  
+  Handles initial setup tasks on first boot, including user creation and basic configuration validation.
+
+---
+
+# Troubleshoot VM Boot issues
+
+```
+sudo journalctl -b
+```
+
+## first-boot-homebridge
+
+```
+sudo journalctl -u first-boot-homebridge -b
+```
+
+## install-vb-guest-additions
+
+```
+sudo journalctl -u install-vb-guest-additions -b
+```
+
+# tzupdate
+
+```
+sudo journalctl -u tzupdate -b
+```
