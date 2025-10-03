@@ -34,8 +34,8 @@ validate_user() {
         MSG="$MSG\nMust only contain lower-case letters, digits and hyphens, and must start with a letter."
         RET=1
     fi
-    if [ "$USERNAME" = "root" ] ; then
-        MSG="$MSG\nCannot be root."
+    if [ "$USERNAME" = "root" ] || [ "$USERNAME" = "homebridge" ]; then
+        MSG="$MSG\nCannot be root or homebridge."
         RET=1
     fi
     if [ "$RET" -ne 0 ]; then

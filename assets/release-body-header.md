@@ -8,3 +8,10 @@
 | VDI | Virtual Disk Image |
 | VHDX | Microsoft HyperV Virtual Hard Disk |
 | VMDK | VMware Virtual Hard Disk |
+
+## Supported CPU Architectures:
+
+| CPU Architecture | Description |
+|:-------:|:-------:|
+| amd64 | 64 Bit Intel X86 and AMD Cpu's |
+| arm64 | 64 Bit Arm CPU's including M based Mac's |
