@@ -145,7 +145,7 @@ package_as_ova() {
     --cpus 2 \
     --firmware bios \
     --boot1 disk \
-    --nic1 bridged \
+    --nic1 nat \
     --bridgeadapter1 "en0" \
     --cableconnected1 on \
     --audio none \
@@ -220,6 +220,10 @@ package_as_ova() {
     --port 1 \
     --device 0 \
     --medium none
+
+  log "Setting network to bridged mode..."
+  VBoxManage modifyvm "$VM_NAME" \
+    --nic1 bridged
 
   log "Exporting to OVA..."
   VBoxManage export "$VM_NAME" --output "$OVA_FILE"
