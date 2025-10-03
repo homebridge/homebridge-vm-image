@@ -23,7 +23,7 @@ The virtual disk is created similar to how the Homebridge Raspbian image is crea
 | arm64 | 64 Bit Arm CPU's including M based Mac's |
 
 <p align="center">
-  <img src="assets/console.png">
+  <img src="assets/Console.png">
 </p>
 
 # Virtual Disk Image Specifications
@@ -94,7 +94,6 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 5. During first boot in the console window, it will ask you to create a local account for access to the Virtual Machine.  Pls create an account, and remember your credentials.
 6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
 7. Manage Homebridge.
-
 
 <p align="center">
   <img src="assets/First Boot.png">
