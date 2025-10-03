@@ -1,0 +1,11 @@
+[Unit]
+Description=Install VirtualBox Guest Additions
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/install-vb-guest-additions.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

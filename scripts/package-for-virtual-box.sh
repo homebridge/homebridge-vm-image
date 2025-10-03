@@ -100,6 +100,38 @@ convert_image_to_vdi() {
   fi
 }
 
+wait_for_vm_state() {
+  local VM_NAME="$1"
+  local DESIRED_STATE="$2"
+  local TIMEOUT="${3:-300}"  # Default timeout of 300 seconds
+  local INTERVAL=5           # Check every 5 seconds
+  local ELAPSED=0
+
+  log "Waiting for VM '$VM_NAME' to reach state '$DESIRED_STATE'..."
+
+  while true; do
+    # Get the current state of the VM
+    CURRENT_STATE=$(VBoxManage showvminfo "$VM_NAME" --machinereadable | grep -E '^VMState=' | cut -d'"' -f2)
+
+    if [[ "$CURRENT_STATE" == "$DESIRED_STATE" ]]; then
+      log "VM '$VM_NAME' reached state '$DESIRED_STATE'."
+      break
+    else 
+      log "Current state: '$CURRENT_STATE' != '$DESIRED_STATE'. Waiting..."
+    fi
+
+    # Check if we've exceeded the timeout
+    if (( ELAPSED >= TIMEOUT )); then
+      error "Timeout reached while waiting for VM '$VM_NAME' to reach state '$DESIRED_STATE'."
+      exit 1
+    fi
+
+    # Wait and increment elapsed time
+    sleep "$INTERVAL"
+    (( ELAPSED += INTERVAL ))
+  done
+}
+
 package_as_ova() {
   if [[ -f "$OVA_FILE" ]]; then
     log "✅ OVA file already exists: $OVA_FILE"
@@ -141,6 +173,53 @@ package_as_ova() {
   VBoxManage modifyvm "$VM_NAME" --iconfile "${REPO_ROOT}/assets/homebridge-icon.png"
   VBoxManage modifyvm "$VM_NAME" --os-type="Debian12_${ARCH}"
   VBoxManage modifyvm "$VM_NAME" --description "$(cat ${MANIFEST_FILE})"
+
+  log "Attaching VirtualBox Guest Additions ISO..."
+
+  # Determine the operating system and set the path to the Guest Additions ISO
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    GUEST_ADDITIONS_ISO="/Applications/VirtualBox.app/Contents/MacOS/VBoxGuestAdditions.iso"
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # Linux
+    GUEST_ADDITIONS_ISO="/usr/share/virtualbox/VBoxGuestAdditions.iso"
+  else
+    error "Unsupported operating system: $OSTYPE"
+    exit 1
+  fi
+
+  # Check if the Guest Additions ISO exists
+  if [[ ! -f "$GUEST_ADDITIONS_ISO" ]]; then
+    error "VirtualBox Guest Additions ISO not found at $GUEST_ADDITIONS_ISO"
+    exit 1
+  fi
+
+  log "Using VirtualBox Guest Additions ISO at $GUEST_ADDITIONS_ISO"
+
+  VBoxManage storageattach "$VM_NAME" \
+    --storagectl "SATA" \
+    --port 1 \
+    --device 0 \
+    --type dvddrive \
+    --medium "$GUEST_ADDITIONS_ISO"
+
+  log "Starting the VM to install Guest Additions..."
+  VBoxManage startvm "$VM_NAME" --type headless
+
+  log "Waiting for the VM to boot..."
+  # Wait for the VM to start
+  wait_for_vm_state "$VM_NAME" "running"
+
+  log "Wait for the VM to stop.."
+  # Wait for the VM to stop
+  wait_for_vm_state "$VM_NAME" "poweroff"
+
+  log "Detaching Guest Additions ISO..."
+  VBoxManage storageattach "$VM_NAME" \
+    --storagectl "SATA" \
+    --port 1 \
+    --device 0 \
+    --medium none
 
   log "Exporting to OVA..."
   VBoxManage export "$VM_NAME" --output "$OVA_FILE"
