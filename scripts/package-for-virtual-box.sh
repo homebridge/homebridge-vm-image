@@ -40,6 +40,7 @@ VM_RAM="4096"
 VDISK_SIZE_MB="51200"
 OUTPUT_DIR="${REPO_ROOT}/output"
 VDI_FILE="$OUTPUT_DIR/${VM_NAME}.vdi"
+TMP_VDI_FILE="$OUTPUT_DIR/tmp/${VM_NAME}.vdi"
 OVA_FILE="$OUTPUT_DIR/${VM_NAME}.ova"
 MANIFEST_FILE="$OUTPUT_DIR/${VM_NAME}.manifest"
 
@@ -69,11 +70,12 @@ check_dependencies() {
 convert_image_to_vdi() {
   local img_gz_file="$OUTPUT_DIR/${VM_NAME}.img.gz"
   local img_file="$OUTPUT_DIR/${VM_NAME}.img"
-  local VDI_FILE="$OUTPUT_DIR/${VM_NAME}.vdi"
 
-  if [[ -f "$VDI_FILE" ]]; then
-    log "✅ VDI file already exists: $VDI_FILE"
-    return
+  mkdir -p $OUTPUT_DIR/tmp
+
+  if [[ -f "$TMP_VDI_FILE" ]]; then
+    rm -f "$TMP_VDI_FILE"
+    log "Removed existing VDI file: $TMP_VDI_FILE"
   fi
 
   if [[ -f "$img_gz_file" ]]; then
@@ -84,16 +86,21 @@ convert_image_to_vdi() {
   if [[ -f "$img_file" ]]; then
     log "🔄 Converting IMG to VDI..."
     if command -v VBoxManage &> /dev/null; then
-      VBoxManage convertfromraw "$img_file" "$VDI_FILE" --format VDI
+      VBoxManage convertfromraw "$img_file" "$TMP_VDI_FILE" --format VDI
     elif command -v qemu-img &> /dev/null; then
-      qemu-img convert -f raw -O vdi "$img_file" "$VDI_FILE"
+      qemu-img convert -f raw -O vdi "$img_file" "$TMP_VDI_FILE"
     else
       error "Neither VBoxManage nor qemu-img found for conversion."
       exit 1
     fi
     log "Resizing VDI to ${VDISK_SIZE_MB}..."
-    VBoxManage modifymedium "$VDI_FILE" --resize ${VDISK_SIZE_MB}
-    log "✅ Conversion to VDI completed: $VDI_FILE"
+    VBoxManage modifymedium "$TMP_VDI_FILE" --resize ${VDISK_SIZE_MB}
+    log "✅ Conversion to VDI completed: $TMP_VDI_FILE"
+    mkdir -p $OUTPUT_DIR/tmp
+    cp -f "$TMP_VDI_FILE" "$VDI_FILE"
+    gzip -f "$VDI_FILE"
+    ls -l "$VDI_FILE.gz"
+    log "✅ VDI File Created: $VDI_FILE.gz"
   else
     error "No IMG file found for conversion: $img_gz_file or $img_file"
     exit 1
@@ -134,8 +141,8 @@ wait_for_vm_state() {
 
 package_as_ova() {
   if [[ -f "$OVA_FILE" ]]; then
-    log "✅ OVA file already exists: $OVA_FILE"
-    return
+    rm -f "$OVA_FILE"
+    log "Removed existing OVA file: $OVA_FILE"
   fi
 
   log "📦 Packaging VirtualBox Appliance (OVA)..."
@@ -145,10 +152,10 @@ package_as_ova() {
     --cpus 2 \
     --firmware bios \
     --boot1 disk \
-    --nic1 nat \
+    --nic1 bridged \
     --bridgeadapter1 "en0" \
     --cableconnected1 on \
-    --audio none \
+    --audio-driver none \
     --usb off \
     --graphicscontroller vmsvga \
     --vram 16 \
@@ -163,7 +170,7 @@ package_as_ova() {
     --port 0 \
     --device 0 \
     --type hdd \
-    --medium "$VDI_FILE"
+    --medium "$TMP_VDI_FILE"
 
   log "Configuring VM settings..."
   VBoxManage modifyvm "$VM_NAME" \
@@ -173,57 +180,6 @@ package_as_ova() {
   VBoxManage modifyvm "$VM_NAME" --iconfile "${REPO_ROOT}/assets/homebridge-icon.png"
   VBoxManage modifyvm "$VM_NAME" --os-type="Debian12_${ARCH}"
   VBoxManage modifyvm "$VM_NAME" --description "$(cat ${MANIFEST_FILE})"
-
-  log "Attaching VirtualBox Guest Additions ISO..."
-
-  # Determine the operating system and set the path to the Guest Additions ISO
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    GUEST_ADDITIONS_ISO="/Applications/VirtualBox.app/Contents/MacOS/VBoxGuestAdditions.iso"
-  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Linux
-    GUEST_ADDITIONS_ISO="/usr/share/virtualbox/VBoxGuestAdditions.iso"
-  else
-    error "Unsupported operating system: $OSTYPE"
-    exit 1
-  fi
-
-  # Check if the Guest Additions ISO exists
-  if [[ ! -f "$GUEST_ADDITIONS_ISO" ]]; then
-    error "VirtualBox Guest Additions ISO not found at $GUEST_ADDITIONS_ISO"
-    exit 1
-  fi
-
-  log "Using VirtualBox Guest Additions ISO at $GUEST_ADDITIONS_ISO"
-
-  VBoxManage storageattach "$VM_NAME" \
-    --storagectl "SATA" \
-    --port 1 \
-    --device 0 \
-    --type dvddrive \
-    --medium "$GUEST_ADDITIONS_ISO"
-
-  log "Starting the VM to install Guest Additions..."
-  VBoxManage startvm "$VM_NAME" --type headless
-
-  log "Waiting for the VM to boot..."
-  # Wait for the VM to start
-  wait_for_vm_state "$VM_NAME" "running"
-
-  log "Wait for the VM to stop.."
-  # Wait for the VM to stop
-  wait_for_vm_state "$VM_NAME" "poweroff"
-
-  log "Detaching Guest Additions ISO..."
-  VBoxManage storageattach "$VM_NAME" \
-    --storagectl "SATA" \
-    --port 1 \
-    --device 0 \
-    --medium none
-
-  log "Setting network to bridged mode..."
-  VBoxManage modifyvm "$VM_NAME" \
-    --nic1 bridged
 
   log "Exporting to OVA..."
   VBoxManage export "$VM_NAME" --output "$OVA_FILE"

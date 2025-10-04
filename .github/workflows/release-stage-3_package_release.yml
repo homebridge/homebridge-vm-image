@@ -1,5 +1,5 @@
 name: Release Stage 3 - Package Release 
-run-name: Release Stage 3 - Package Release - Run ${{ inputs.run_id }}
+run-name: Release Stage 3 - Package Release - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
 
 on:
   workflow_dispatch:
@@ -99,37 +99,9 @@ jobs:
       with:
         body_path: ./output/release-body.md
 
-    - name: Convert, Compress, and Upload Each Disk Format
+    - name: Convert, Compress, and Upload Each Virtual Disk Format
       run: |
-        set -e
-        RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
-        for img in ./output/*.img; do
-          base_name=$(basename "$img" .img)
-          # Convert to qcow2 format
-          ext=qcow2
-          out_file="./output/${base_name}.${ext}"
-          qemu-img convert -c -O $ext "$img" "$out_file"
-          qemu-img resize "$out_file" ${VDISK_SIZE}
-          echo "Uploading $out_file to release"
-          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$out_file" --clobber
-          rm -f "$out_file"
-          # Remaining files don't have the -c option for qemu-img
-          for ext in vdi vhdx vmdk; do
-            out_file="./output/${base_name}.${ext}"
-            gz_file="${out_file}.gz"
-            echo "Converting $img to $ext format"
-            qemu-img convert -O $ext "$img" "$out_file"
-            qemu-img resize "$out_file" ${VDISK_SIZE} || true
-            echo "Compressing $out_file"
-            gzip -k "$out_file"
-            echo "Uploading $gz_file to release"
-            gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "$gz_file" --clobber
-            echo "Deleting $out_file and $gz_file to save space"
-            rm -f "$out_file" "$gz_file"
-          done
-        done
-        echo "Deleting original IMG files"
-        rm -f ./output/*.img
+        ./scripts/convert_img_to_virtual_disk.sh ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

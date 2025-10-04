@@ -400,7 +400,7 @@ cat > /etc/hosts <<HOSTS_EOF
 HOSTS_EOF
 
 # Set root password
-echo "root:root" | chpasswd
+# echo "root:root" | chpasswd
 
 # Clean package cache
 apt-get clean

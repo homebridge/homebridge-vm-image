@@ -1,4 +1,4 @@
-## Release Artifacts Available
+## Virtual Images Available:
 
 | File | Usage |
 |:-------:|:-------:|

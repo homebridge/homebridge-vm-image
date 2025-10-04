@@ -1,5 +1,5 @@
-name: Release Stage 3.5 - Package and Validate Homebridge VM VirtualBox Appliance
-run-name: Release Stage 3.5 - Package and Validate VirtualBox - Run ${{ inputs.run_id }}
+name: Release Stage 3.5 - Package for VirtualBox Appliance
+run-name: Release Stage 3.5 - Package for VirtualBox - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
 
 on:
   workflow_dispatch:
@@ -58,6 +58,7 @@ jobs:
         run: |
           ./scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
           echo "OVA_FILE=./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.ova" >> $GITHUB_OUTPUT
+          echo "VDI_FILE=./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vdi.gz" >> $GITHUB_OUTPUT
 
       - name: Upload image and manifest artifacts
         uses: actions/upload-artifact@v4
@@ -69,11 +70,11 @@ jobs:
             ./output/*.manifest
             ./output/*.img
 
-      - name: Upload OVA to GitHub Release
+      - name: Upload OVA and VDI to GitHub Release
         run: |
           set -e
           RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
-          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "${{ steps.package_appliance.outputs.OVA_FILE }}" --clobber
+          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "${{ steps.package_appliance.outputs.OVA_FILE }}" "${{ steps.package_appliance.outputs.VDI_FILE }}" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -83,27 +84,3 @@ jobs:
           echo "::notice::Run ID: ${{ inputs.run_id }}"
           echo "::notice::Architecture: ${{ matrix.arch }}"
           echo "::notice::Release Stream: ${{ inputs.release_stream }}" 
-
-  invoke-package-and-validate:
-    needs: [package-for-virtual-box]
-    runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 1
-      fail-fast: false
-      matrix:
-        arch: [amd64]
-    steps:
-    # Step 1: Checkout the repository
-    - name: Checkout repository
-      uses: actions/checkout@v5
-
-    # Step 2: Trigger Packaging and Validation Workflow
-    - name: Trigger Packaging and Validation Workflow
-      run: |
-        gh workflow run "reusable-validate-release-artifacts.yml" \
-          --ref "latest" \
-          --field release_stream="${{ inputs.release_stream }}" \
-          --field release_tag="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" \
-          --field arch="${{ matrix.arch }}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
