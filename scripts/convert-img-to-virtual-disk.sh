@@ -7,10 +7,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 GITHUB_TAG="${1:-latest}"  # Github Release TAG, not required for local runs
 
-if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  log "Using GitHub TAG: $GITHUB_TAG"
-fi
-
 # Colors for output
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -36,6 +32,9 @@ group_end() {
     fi
 }
 
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  log "Using GitHub TAG: $GITHUB_TAG"
+fi
 
 for img in ${REPO_ROOT}/output/*.img; do
   log "Processing $img"
