@@ -101,7 +101,7 @@ jobs:
 
     - name: Convert, Compress, and Upload Each Virtual Disk Format
       run: |
-        ./scripts/convert_img_to_virtual_disk.sh ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+        ./scripts/convert-img-to-virtual-disk.sh ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

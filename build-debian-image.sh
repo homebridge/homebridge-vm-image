@@ -405,6 +405,8 @@ HOSTS_EOF
 # Clean package cache
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+# Fix for tzupdate
+systemctl enable systemd-networkd-wait-online.service
 CHROOT_EOF
 
     # Execute chroot script
