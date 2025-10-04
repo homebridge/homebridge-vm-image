@@ -30,9 +30,9 @@ The virtual disk is created similar to how the Homebridge Raspbian image is crea
 
 * OS: Debian 12 ( aka `Bookworm` ) Lite
 * CPU Architecture: X86/Intel/AMD64 and ARM ( Includes M cpu based Macs )
-* Virtual Disk Size: Allocated as a 5Gb Virtual Hard Drive for VDI, VHDX and VMDK and 50Gb for gcow2.  
+* Virtual Disk Size: Allocated as a 5Gb Virtual Hard Drive for VHDX and VMDK and 50Gb for gcow2 and VDI.
 * Packages Installed: NodeJS, Homebridge, Homebridge UI and ffmpeg.  Exact versions installed are listed in the Manifest file.
-* Guest Additions: **UTM** Installed
+* Guest Additions: **UTM** and HyperV Kernel Modules Installed
 
 > **Note**: This VM image uses the official [Homebridge](https://github.com/homebridge/homebridge) packages from the official APT repository. If you were previously using images based on `oznu/homebridge` or from the old [`homebridge-vm-image-boot2docker`](https://github.com/homebridge/homebridge-vm-image-boot2docker) repository (v0.0.4), these new VM images provide the updated official Homebridge distribution.
 
