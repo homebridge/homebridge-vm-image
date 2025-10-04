@@ -108,8 +108,12 @@ This repository provides a set of scripts to automate building, packaging, valid
 
 ## Build and Packaging Scripts
 
+convert-img-to-virtual-disk.sh		Dockerfile				local-validate-virtual-box-package.sh	package-for-virtual-box.sh
+create-release-body.sh			local-build-in-docker.sh		package-for-utm.sh			validate-utm-package.sh
+
+
 - **build-debian-image.sh**  
-  Main build script for creating the Debian-based Homebridge VM image. Handles disk image creation, OS installation, package setup, and final compression.  Called by Github Action workflows and scripts/local-build-in-docker.sh
+  Main build script for creating the Debian-based Homebridge VM image. Handles disk image creation, OS installation, package setup, and final compression.  Called by Github Action workflows and scripts/local-build-in-docker.sh.
 
 - **package-for-virtual-box.sh**  
   Packages the raw disk image into a VirtualBox-compatible format (VDI), configures the VM, attaches Guest Additions ISO, and exports as an OVA appliance.
