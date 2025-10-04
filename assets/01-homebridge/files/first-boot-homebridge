@@ -133,12 +133,12 @@ echo "$USERNAME:$PASSWORD" | chpasswd
 # Check if user creation was successful
 if [ $? -eq 0 ]; then
     display_message "User '$USERNAME' created successfully!\n\nYou can now log in with this username and the password you provided."
+    systemctl disable first-boot-homebridge
+    systemctl daemon-reload
+    sleep 5
 else
     display_message "Failed to create user '$USERNAME'. Please check the system logs for more details."
     exit 1
 fi
 
 /usr/local/sbin/expandVirtualFilesystem
-
-systemctl disable first-boot-homebridge
-systemctl daemon-reload
