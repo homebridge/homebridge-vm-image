@@ -66,11 +66,23 @@ jobs:
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
-          New-VM -Name $vmName -MemoryStartupBytes 1024MB -Generation 2 -VHDPath $vhdxPath
+          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath
           Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
           Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
           Write-Host "VM $vmName created and configured."
 
+      - name: Set VM Description (Notes)
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $manifestPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.manifest"
+          if (Test-Path $manifestPath) {
+            $description = Get-Content $manifestPath | Out-String
+            Set-VM -Name $vmName -Notes $description
+            Write-Host "Set VM description from manifest."
+          } else {
+            Write-Host "Manifest file not found, skipping VM description."
+          }
+            
       - name: Export Hyper-V VM
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
