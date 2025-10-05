@@ -112,7 +112,7 @@ jobs:
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $exportPath = "output\$vmName-export"
-          Export-VM -Name $vmName -Path $exportPs
+          Export-VM -Name $vmName -Path $exportPath
           Compress-Archive -Path $exportPath\* -DestinationPath "output\$vmName-hyperv.zip"
 
       - name: Upload Hyper-V Appliance as Artifact
