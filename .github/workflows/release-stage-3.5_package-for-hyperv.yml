@@ -38,14 +38,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: homebridge-image-${{ matrix.arch }}
-          path: output
-          run-id: ${{ inputs.run_id }}
-          merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download VHDX and Manifest from Release
+        run: |
+          $releaseTag = "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          $arch = "${{ matrix.arch }}"
+          $outputDir = "output"
+          mkdir $outputDir
+          $baseUrl = "https://github.com/homebridge/homebridge-vm-image/releases/download/${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          $vhdxFile = "homebridge-vm-image-${{ inputs.release_stream }}-$arch.vhdx.gz"
+          $manifestFile = "homebridge-vm-image-${{ inputs.release_stream }}-$arch.manifest"
+          Invoke-WebRequest -Uri "$baseUrl/$vhdxFile" -OutFile "$outputDir\$vhdxFile"
+          Invoke-WebRequest -Uri "$baseUrl/$manifestFile" -OutFile "$outputDir\$manifestFile"
+          # Unzip the VHDX file
+          Write-Host "Extracting $vhdxFile..."
+          Expand-Archive -Path "$outputDir\$vhdxFile" -DestinationPath $outputDir -Force
+          # If Expand-Archive fails (not a zip), use gunzip
+          if (!(Test-Path "$outputDir\homebridge-vm-image-${{ inputs.release_stream }}-$arch.vhdx")) {
+            Write-Host "Trying gunzip for $vhdxFile..."
+            gzip -d "$outputDir\$vhdxFile"
+          }
 
       - name: List Downloaded Artifacts
         run: dir output
@@ -54,13 +65,6 @@ jobs:
         run: |
           Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
           Import-Module Hyper-V
-
-      - name: Convert IMG to VHDX
-        run: |
-          $imgPath = (Get-ChildItem -Path output -Filter *.img).FullName
-          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
-          Write-Host "Converting $imgPath to $vhdxPath"
-          Convert-VHD -Path $imgPath -DestinationPath $vhdxPath -VHDType Dynamic
 
       - name: Create Hyper-V VM
         run: |
@@ -82,12 +86,12 @@ jobs:
           } else {
             Write-Host "Manifest file not found, skipping VM description."
           }
-            
+
       - name: Export Hyper-V VM
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $exportPath = "output\$vmName-export"
-          Export-VM -Name $vmName -Path $exportPath
+          Export-VM -Name $vmName -Path $exportPs
           Compress-Archive -Path $exportPath\* -DestinationPath "output\$vmName-hyperv.zip"
 
       - name: Upload Hyper-V Appliance as Artifact
