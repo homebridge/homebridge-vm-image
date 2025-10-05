@@ -79,13 +79,21 @@ jobs:
           Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
           Import-Module Hyper-V
 
+      - name: Ensure Hyper-V Switch Exists
+        run: |
+          $switchName = "HomebridgeSwitch"
+          if (-not (Get-VMSwitch -Name $switchName -ErrorAction SilentlyContinue)) {
+            New-VMSwitch -Name $switchName -SwitchType Internal
+          }
+          Write-Host "Using switch: $switchName"
+
       - name: Create Hyper-V VM
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
           New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath
           Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
-          Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
+          Add-VMNetworkAdapter -VMName $vmName -SwitchName "HomebridgeSwitch"
           Write-Host "VM $vmName created and configured."
 
       - name: Set VM Description (Notes)
