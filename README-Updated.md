@@ -63,6 +63,26 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
 7. Manage Homebridge.
 
+### Usage - Microsoft HyperV
+
+1. Click here to download the latest Virtual Disk Images for your CPU Architecture:
+   - [Stable](https://github.com/homebridge/homebridge-vm-image/releases/tag/2025-10-03)
+   - [Beta](https://github.com/homebridge/homebridge-vm-image/releases/tag/beta-2025-10-02)
+   - [Alpha](https://github.com/homebridge/homebridge-vm-image/releases/tag/alpha-2025-10-02)
+2. Create a new virtual machine in HyperV
+   * Hyper-V settings:
+   * Generation 2
+   * 4096MB memory (dynamic checked)
+   * External VM Switch
+   * Use existing virtual HD and pointed to the .vhdx file
+   * After created, go to settings for that VM
+     * uncheck Enable Secure Boot
+     * check Enable Trusted Platform Module
+3. Start your VM.
+4. During first boot in the console window, it will ask you to create a local account for access to the Virtual Machine.  Pls create an account, and remember your credentials.
+5. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
+6. Manage Homebridge.
+
 ## Usage - Virtual Box Appliance
 
 1. Click here to download the latest Virtual Box Applicance Image (**ova**) for your CPU Architecture:
@@ -166,3 +186,7 @@ sudo journalctl -u install-vb-guest-additions -b
 ```
 sudo journalctl -u tzupdate -b
 ```
+
+systemd-networkd-wait-online.service
+
+sudo journalctl -u systemd-networkd-wait-online.service -b

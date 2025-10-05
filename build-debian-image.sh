@@ -323,6 +323,7 @@ SYSTEM_UTILITIES=(
   dialog
   file
   whiptail
+  kbd
 )
 
 VIRTUALIZATION_SUPPORT=(
@@ -405,8 +406,6 @@ HOSTS_EOF
 # Clean package cache
 apt-get clean
 rm -rf /var/lib/apt/lists/*
-# Fix for tzupdate
-systemctl enable systemd-networkd-wait-online.service
 CHROOT_EOF
 
     # Execute chroot script
@@ -566,7 +565,7 @@ main() {
     if ! sudo grep -q "source /opt/homebridge/source-vm.sh" "${ROOTFS}/opt/homebridge/source.sh"; then
         echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
         echo "if [ -f '/opt/homebridge/source-vm.sh' ]; then" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-        echo "  source /opt/homebridge/source-vm.sh" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+        echo "  . /opt/homebridge/source-vm.sh" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
         echo "fi" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
     fi
     # Create or overwrite source-vm.sh with the required exports
