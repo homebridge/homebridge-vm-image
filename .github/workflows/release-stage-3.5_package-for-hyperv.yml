@@ -49,13 +49,26 @@ jobs:
           $manifestFile = "homebridge-vm-image-${{ inputs.release_stream }}-$arch.manifest"
           Invoke-WebRequest -Uri "$baseUrl/$vhdxFile" -OutFile "$outputDir\$vhdxFile"
           Invoke-WebRequest -Uri "$baseUrl/$manifestFile" -OutFile "$outputDir\$manifestFile"
-          # Unzip the VHDX file
+          # Unzip the VHDX file (gzip, not zip)
           Write-Host "Extracting $vhdxFile..."
-          Expand-Archive -Path "$outputDir\$vhdxFile" -DestinationPath $outputDir -Force
-          # If Expand-Archive fails (not a zip), use gunzip
-          if (!(Test-Path "$outputDir\homebridge-vm-image-${{ inputs.release_stream }}-$arch.vhdx")) {
-            Write-Host "Trying gunzip for $vhdxFile..."
+          dir output
+          if (Get-Command gzip -ErrorAction SilentlyContinue) {
             gzip -d "$outputDir\$vhdxFile"
+          } else {
+            # Use .NET for gzip decompression if gzip is not available
+            $inFile = "$outputDir\$vhdxFile"
+            $outFile = $inFile -replace '\.gz$', ''
+            $inStream = [System.IO.File]::OpenRead($inFile)
+            $outStream = [System.IO.File]::Create($outFile)
+            $gzipStream = New-Object System.IO.Compression.GzipStream($inStream, [System.IO.Compression.CompressionMode]::Decompress)
+            $buffer = New-Object byte[] 4096
+            while (($read = $gzipStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+              $outStream.Write($buffer, 0, $read)
+            }
+            $gzipStream.Close()
+            $outStream.Close()
+            $inStream.Close()
+            Remove-Item $inFile
           }
 
       - name: List Downloaded Artifacts
