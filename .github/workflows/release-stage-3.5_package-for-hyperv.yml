@@ -89,13 +89,25 @@ jobs:
           }
           Write-Host "Using switch: $switchName"
 
+      - name: Convert VHDX to Fixed Format for Resize
+        run: |
+          $arch = "${{ matrix.arch }}"
+          $releaseStream = "${{ inputs.release_stream }}"
+          $srcVhdx = "output\homebridge-vm-image-$releaseStream-$arch.vhdx"
+          $fixedVhdx = "output\homebridge-vm-image-$releaseStream-$arch.fixed.vhdx"
+          Write-Host "Converting $srcVhdx to fixed format $fixedVhdx for resizing..."
+          Convert-VHD -Path $srcVhdx -DestinationPath $fixedVhdx -VHDType Dynamic
+          Write-Host "Converted to fixed format: $fixedVhdx"
+          Remove-Item $srcVhdx
+          Rename-Item $fixedVhdx $srcVhdx
+
       - name: Expand VHDX to 50GB
         run: |
           $arch = "${{ matrix.arch }}"
           $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-$arch.vhdx"
           Resize-VHD -Path $vhdxPath -SizeBytes 50GB
           Write-Host "Expanded $vhdxPath to 50GB"
-
+          
       - name: Create Hyper-V VM
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
