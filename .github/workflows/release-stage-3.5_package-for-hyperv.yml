@@ -115,6 +115,16 @@ jobs:
             Write-Host "Manifest file not found, skipping VM description."
           }
 
+      - name: Export Hyper-V VM
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $exportPath = "output\$vmName-export"
+          Export-VM -Name $vmName -Path $exportPath
+          Write-Host "Exported VM $vmName to $exportPath"
+
+      - name: List Exported Artifacts
+        run: dir output
+
       - name: Zip Hyper-V Export with 7-Zip
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
@@ -126,18 +136,21 @@ jobs:
           & 7z a -tzip $zipPath $exportPath\*
           Write-Host "Zipped $exportPath to $zipPath"
 
-      - name: List Downloaded Artifacts
-        run: dir output
-
-      - name: Zip VHDX file
+      - name: Zip VHDX file with 7-Zip
         run: |
           $arch = "${{ matrix.arch }}"
           $releaseStream = "${{ inputs.release_stream }}"
           $vhdxPath = "output\homebridge-vm-image-$releaseStream-$arch.vhdx"
           $zipPath = "output\homebridge-vm-image-$releaseStream-$arch.vhdx.zip"
-          Compress-Archive -Path $vhdxPath -DestinationPath $zipPath
+          if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) {
+            choco install 7zip -y
+          }
+          & 7z a -tzip $zipPath $vhdxPath
           Write-Host "Zipped $vhdxPath to $zipPath"
 
+      - name: List Exported Artifacts
+        run: dir output
+        
       - name: Upload Hyper-V Appliance as Artifact
         uses: actions/upload-artifact@v4
         with:
