@@ -87,6 +87,13 @@ jobs:
           }
           Write-Host "Using switch: $switchName"
 
+      - name: Expand VHDX to 50GB
+        run: |
+          $arch = "${{ matrix.arch }}"
+          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-$arch.vhdx"
+          Resize-VHD -Path $vhdxPath -SizeBytes 50GB
+          Write-Host "Expanded $vhdxPath to 50GB"
+
       - name: Create Hyper-V VM
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
@@ -108,25 +115,43 @@ jobs:
             Write-Host "Manifest file not found, skipping VM description."
           }
 
-      - name: Export Hyper-V VM
+      - name: Zip Hyper-V Export with 7-Zip
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $exportPath = "output\$vmName-export"
-          Export-VM -Name $vmName -Path $exportPath
-          Compress-Archive -Path $exportPath\* -DestinationPath "output\$vmName-hyperv.zip"
+          $zipPath = "output\$vmName-hyperv.zip"
+          if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) {
+            choco install 7zip -y
+          }
+          & 7z a -tzip $zipPath $exportPath\*
+          Write-Host "Zipped $exportPath to $zipPath"
+
+      - name: List Downloaded Artifacts
+        run: dir output
+
+      - name: Zip VHDX file
+        run: |
+          $arch = "${{ matrix.arch }}"
+          $releaseStream = "${{ inputs.release_stream }}"
+          $vhdxPath = "output\homebridge-vm-image-$releaseStream-$arch.vhdx"
+          $zipPath = "output\homebridge-vm-image-$releaseStream-$arch.vhdx.zip"
+          Compress-Archive -Path $vhdxPath -DestinationPath $zipPath
+          Write-Host "Zipped $vhdxPath to $zipPath"
 
       - name: Upload Hyper-V Appliance as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: hyperv-appliance-${{ matrix.arch }}
           path: |
-            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx
+            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx.zip
             output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip
             output\*.manifest
 
-      - name: Upload VHDX and ZIP to GitHub Release
+      - name: Upload VHDX, ZIP, and HyperV ZIP to GitHub Release
         run: |
-          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx" "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip" --clobber
+          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" `
+            "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx.zip" `
+            "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
