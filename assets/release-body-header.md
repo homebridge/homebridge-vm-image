@@ -1,10 +1,15 @@
-## Virtual Images Available:
+## Appliance Images Available:
 
 | File | Usage |
 |:-------:|:-------:|
 | OVA | Open Virtual Appliance optimized for VirtualBox |
 | UTM | UTM Appliance |
 | HYPERV | Microsoft HyperV Virtual Machine |
+
+## Virtual Disk Images
+
+| File | Usage |
+|:-------:|:-------:|
 | QCOW2 | QEMU/KVM Virtual Hard Diskt, also leveraged by Virtual Box |
 | VDI | Virtual Disk Image |
 | VHDX | Microsoft HyperV Virtual Hard Disk |
