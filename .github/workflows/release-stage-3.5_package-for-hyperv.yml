@@ -50,15 +50,19 @@ jobs:
       - name: List Downloaded Artifacts
         run: dir output
 
+      - name: Install qemu-img
+        run: |
+          if (-not (Get-Command qemu-img.exe -ErrorAction SilentlyContinue)) {
+            choco install qemu -y
+          }
+          Write-Host "qemu-img installed."
+
       - name: Convert IMG to VHDX with qemu-img
         run: |
           $imgPath = (Get-ChildItem -Path output -Filter *.img).FullName
           $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
-          if (-not (Get-Command qemu-img.exe -ErrorAction SilentlyContinue)) {
-            choco install qemu -y
-          }
           Write-Host "Converting $imgPath to $vhdxPath using qemu-img..."
-          & qemu-img.exe convert -f raw -O vhdx $imgPath $vhdxPath
+          qemu-img.exe convert -f raw -O vhdx $imgPath $vhdxPath
           Write-Host "Converted $imgPath to $vhdxPath"
 
       - name: List Downloaded Artifacts
