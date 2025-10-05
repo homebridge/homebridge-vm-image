@@ -4,6 +4,7 @@
 |:-------:|:-------:|
 | OVA | Open Virtual Appliance optimized for VirtualBox |
 | UTM | UTM Appliance |
+| HYPERV | Microsoft HyperV Virtual Machine |
 | QCOW2 | QEMU/KVM Virtual Hard Diskt, also leveraged by Virtual Box |
 | VDI | Virtual Disk Image |
 | VHDX | Microsoft HyperV Virtual Hard Disk |

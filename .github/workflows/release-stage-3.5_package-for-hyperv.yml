@@ -128,20 +128,9 @@ jobs:
           if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) {
             choco install 7zip -y
           }
-          & 7z a -tzip $zipPath $exportPath\*
-          Write-Host "Zipped $exportPath to $zipPath"
-
-      - name: Zip VHDX file with 7-Zip
-        run: |
-          $arch = "${{ matrix.arch }}"
-          $releaseStream = "${{ inputs.release_stream }}"
-          $vhdxPath = "output\homebridge-vm-image-$releaseStream-$arch.vhdx"
-          $zipPath = "output\homebridge-vm-image-$releaseStream-$arch.vhdx.zip"
-          if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) {
-            choco install 7zip -y
-          }
-          & 7z a -tzip $zipPath $vhdxPath
-          Write-Host "Zipped $vhdxPath to $zipPath"
+          # Only include files, not the source directory itself
+          & 7z a -tzip $zipPath "$exportPath\*" -xr!$exportPath
+          Write-Host "Zipped contents of $exportPath to $zipPath (excluding source directory)"
 
       - name: List Exported Artifacts
         run: dir output
@@ -151,14 +140,12 @@ jobs:
         with:
           name: hyperv-appliance-${{ matrix.arch }}
           path: |
-            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx.zip
             output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip
             output\*.manifest
 
       - name: Upload VHDX, ZIP, and HyperV ZIP to GitHub Release
         run: |
           gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" `
-            "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx.zip" `
             "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
