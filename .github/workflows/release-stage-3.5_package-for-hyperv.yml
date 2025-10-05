@@ -1,0 +1,101 @@
+name: Release Stage 3.5 - Package for Hyper-V Appliance
+run-name: Release Stage 3.5 - Package for Hyper-V - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'GitHub Run ID of the build workflow that produced the artifacts'
+        required: true
+        type: string
+      release_stream:
+        description: 'Release stream (stable, beta, alpha)'
+        required: true
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+        default: beta
+      HOMEBRIDGE_VM_IMAGE_VERSION:
+        description: 'Homebridge VM image version aka release tag'
+        required: true
+        type: string
+
+concurrency:
+  group: package-and-validate-hyperv
+  cancel-in-progress: false
+
+jobs:
+  package-for-hyperv:
+    runs-on: windows-2022
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: homebridge-image-${{ matrix.arch }}
+          path: output
+          run-id: ${{ inputs.run_id }}
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List Downloaded Artifacts
+        run: dir output
+
+      - name: Install Hyper-V PowerShell Module
+        run: |
+          Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
+          Import-Module Hyper-V
+
+      - name: Convert IMG to VHDX
+        run: |
+          $imgPath = (Get-ChildItem -Path output -Filter *.img).FullName
+          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
+          Write-Host "Converting $imgPath to $vhdxPath"
+          Convert-VHD -Path $imgPath -DestinationPath $vhdxPath -VHDType Dynamic
+
+      - name: Create Hyper-V VM
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
+          New-VM -Name $vmName -MemoryStartupBytes 1024MB -Generation 2 -VHDPath $vhdxPath
+          Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
+          Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
+          Write-Host "VM $vmName created and configured."
+
+      - name: Export Hyper-V VM
+        run: |
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $exportPath = "output\$vmName-export"
+          Export-VM -Name $vmName -Path $exportPath
+          Compress-Archive -Path $exportPath\* -DestinationPath "output\$vmName-hyperv.zip"
+
+      - name: Upload Hyper-V Appliance as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperv-appliance-${{ matrix.arch }}
+          path: |
+            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx
+            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip
+            output\*.manifest
+
+      - name: Upload VHDX and ZIP to GitHub Release
+        run: |
+          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx" "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Packaging complete
+        run: |
+          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          echo "::notice::Run ID: ${{ inputs.run_id }}"
+          echo "::notice::Architecture: ${{ matrix.arch }}"
+          echo "::notice::Release Stream: ${{ inputs.release_stream }}"

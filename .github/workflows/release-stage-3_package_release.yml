@@ -132,3 +132,11 @@ jobs:
           --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Cleanup older beta and alpha release and tags
+      if: ${{ inputs.release_stream != 'stable' }}
+      uses: ./.github/actions/cleanup-old-releases-and-tags
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        release-type: ${{ inputs.release_stream }}
+        releases-to-keep: 5
