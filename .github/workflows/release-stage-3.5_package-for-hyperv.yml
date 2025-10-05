@@ -61,8 +61,16 @@ jobs:
         run: |
           $imgPath = (Get-ChildItem -Path output -Filter *.img).FullName
           $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
-          Write-Host "Converting $imgPath to $vhdxPath using qemu-img..."
-          qemu-img.exe convert -f raw -O vhdx $imgPath $vhdxPath
+          # Find qemu-img.exe in common install locations
+          $qemuImgExe = "${env:ProgramFiles}\qemu\qemu-img.exe"
+          if (!(Test-Path $qemuImgExe)) {
+            $qemuImgExe = "${env:ProgramData}\chocolatey\bin\qemu-img.exe"
+          }
+          if (!(Test-Path $qemuImgExe)) {
+            throw "qemu-img.exe not found after installation"
+          }
+          Write-Host "Converting $imgPath to $vhdxPath using $qemuImgExe..."
+          & $qemuImgExe convert -f raw -O vhdx $imgPath $vhdxPath
           Write-Host "Converted $imgPath to $vhdxPath"
 
       - name: List Downloaded Artifacts
