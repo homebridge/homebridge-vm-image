@@ -1,5 +1,5 @@
-name: Release Stage 3.5 - Package for Hyper-V Appliance
-run-name: Release Stage 3.5 - Package for Hyper-V - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
+name: Release Stage 4 - Package for Hyper-V Appliance
+run-name: Release Stage 4 - Package for Hyper-V - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
 
 on:
   workflow_dispatch:
