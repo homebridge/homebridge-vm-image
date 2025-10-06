@@ -213,15 +213,18 @@ You can run a local build on MacOS with this command
 
 ---
 
-# Workflows
+# Release Workflow Stages
 
-release-stage-1_update_dependencies
-  ↓
-release-stage-2_build_and_push_images
-  ↓
-release-stage-3_package_release
-  ↓
-release-stage-4_package-for-[hypervisor]
+- [**`release-stage-1_update_dependencies`**](#release-stage-1_update_dependencies)
+  &darr;
+- [**`release-stage-2_build_and_push_images`**](#release-stage-2_build_and_push_images)
+  &darr;
+- [**`release-stage-3_package_release`**](#release-stage-3_package_release)
+  &darr;
+- [**`release-stage-4_package-for-VM`**](#release-stage-4_package-for-VM)
+
+## Release Workflow Stages
+
 
 ## release-stage-1_update_dependencies
 
@@ -274,7 +277,7 @@ The action "**Cleanup Old Releases and Tags**" is triggered to cleanup old beta 
 
 The workflow can be re-run, but before re-running the created release needs to be deleted.
 
-## release-stage-4_package-for-...
+## release-stage-4_package-for-VM
 
 ### Inputs
 
