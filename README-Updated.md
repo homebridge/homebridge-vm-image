@@ -49,7 +49,7 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 - Beta: Most recent beta releases of Homebridge 2.0, and Homebridge UI. And the upcoming version of NodeJS.
 - Alpha: Most recent alpha releases of Homebridge, and Homebridge UI. And the upcoming version of NodeJS.
 
-| Stream  | NodeJS | Homebridge | UI | FFMPEG | Stability |
+| Stream  | NodeJS[*](https://github.com/nodejs/Release?tab=readme-ov-file#nodejs-release-working-group) | Homebridge | UI | FFMPEG | Stability |
 |---------|--------|------------|----|--------|-----------|
 | Stable/Latest | LTS | Latest | Latest | Latest | Most stable |
 | Beta    | Current | Beta V2 | Beta | Latest | New features, less tested |
