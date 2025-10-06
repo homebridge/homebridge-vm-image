@@ -49,12 +49,14 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 - Beta: Most recent beta releases of Homebridge 2.0, and Homebridge UI. And the upcoming version of NodeJS.
 - Alpha: Most recent alpha releases of Homebridge, and Homebridge UI. And the upcoming version of NodeJS.
 
-The virtual disk and applicance images are parkaged and available as a github release.  
+All virtual disk and applicance images are parkaged and available as a github release.  
 
    - [Stable/Latest](https://github.com/homebridge/homebridge-vm-image/releases/latest)
   
   For the beta and alpha releases, please select the most recent beta or alpha tag
    - [Tags](https://github.com/homebridge/homebridge-vm-image/releases/tag/)
+
+---
 
 ## Usage - Virtual Disk Image
 
@@ -122,6 +124,8 @@ The virtual disk and applicance images are parkaged and available as a github re
 6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
 7. Manage Homebridge.
 
+---
+
 # First Boot
 
 During the first boot you will need to create a local user account within the virtual machine to manage the image.  This can used to login to the console and the SSH into the image for any required maintenace. Please keep the credential safe.
@@ -186,6 +190,22 @@ create-release-body.sh			local-build-in-docker.sh		package-for-utm.sh			validate
 
 ---
 
+## Local Builds for Testing
+
+- **UTM**
+You can run a local build on MacOS with this command
+
+```bash
+./local-build-in-docker.sh && ./package-for-utm.sh
+```
+- **Virtual Box**
+You can run a local build on MacOS with this command
+
+```bash
+./local-build-in-docker.sh && ./package-for-virtual-box.sh
+```
+
+---
 # Troubleshoot VM Boot issues
 
 ```
