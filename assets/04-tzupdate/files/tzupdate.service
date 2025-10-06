@@ -5,8 +5,7 @@ After=network.target network-online.target homebridge.service
 
 [Service]
 Type=oneshot
-ExecStartPre=/bin/sleep 5
-ExecStart=tzupdate --debug --timeout 5
+ExecStart=/bin/bash -c 'for i in {1..6}; do tzupdate --debug --timeout 5 && exit 0; done; exit 1'
 
 [Install]
 WantedBy=multi-user.target

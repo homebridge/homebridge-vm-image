@@ -116,7 +116,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        packaging_workflow: [package-for-utm.yml, package-for-virtualbox.yml]
+        packaging_workflow: [release-stage-4_package-for-utm.yml, release-stage-4_package-for-virtualbox.yml, release-stage-4_package-for-hyperv.yml]
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
