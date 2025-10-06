@@ -87,7 +87,7 @@ All virtual disk and applicance images are parkaged and available as a github re
 2. Create a new virtual machine in HyperV
    * Hyper-V settings:
    * Generation 2
-   * 4096MB memory (dynamic checked)
+   * 4096MB memory (Dynamic Memory **NOT* checked)
    * Network - "Default Switch"
    * Use existing virtual HD and pointed to the .vhdx file
    * After created, go to settings for that VM
