@@ -84,15 +84,11 @@ All virtual disk and applicance images are parkaged and available as a github re
 ## Usage - Microsoft HyperV
 
 1. Download the latest Microsoft HyperV Appliance Image ( **HyperV** ) for your CPU Architecture.
-2. Create a new virtual machine in HyperV
+2. Start Hyper-V Manager and select `Import Virtual Machine` - These are the included settings
    * Hyper-V settings:
    * Generation 2
-   * 4096MB memory (Dynamic Memory **NOT* checked)
+   * 4096MB memory (Dynamic Memory **NOT** checked)
    * Network - "Default Switch"
-   * Use existing virtual HD and pointed to the .vhdx file
-   * After created, go to settings for that VM
-     * uncheck Enable Secure Boot
-     * check Enable Trusted Platform Module
 3. Start your VM.
 4. During first boot in the console window, it will ask you to create a local account for access to the Virtual Machine.  Pls create an account, and remember your credentials.
 5. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
