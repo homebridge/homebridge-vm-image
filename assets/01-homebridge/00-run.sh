@@ -21,11 +21,21 @@ install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
 
 #
+# Issue
+#
+
+install -v -d "${ROOTFS_DIR}/usr/local/etc/"
+install -m 755 files/issue.template "${ROOTFS_DIR}/usr/local/etc/"
+
+install -v -d "${ROOTFS_DIR}/etc/systemd/system/getty@.service.d/"
+install -m 755 files/issue-generator.conf "${ROOTFS_DIR}/etc/systemd/system/getty@.service.d/"
+install -m 755 files/issue-generator.service "${ROOTFS_DIR}/etc/systemd/system/"
+install -m 755 files/generate_issue.sh "${ROOTFS_DIR}/usr/local/sbin/"
+
+#
 # MOTD
 #
 
-ls -l files/issue "${ROOTFS_DIR}/etc/issue"
-install -m 755 files/issue "${ROOTFS_DIR}/etc/issue"
 install -m 755 files/motd-linux "${ROOTFS_DIR}/etc/update-motd.d/15-linux"
 install -m 755 files/motd-homebridge "${ROOTFS_DIR}/etc/update-motd.d/20-homebridge"
 install -m 633 files/bashrc.partial "${ROOTFS_DIR}/tmp/bashrc.partial"
@@ -69,5 +79,6 @@ sed -i 's/files mdns4_minimal \[NOTFOUND=return\] dns/files dns mdns4_minimal \[
 systemctl daemon-reload
 systemctl enable homebridge
 systemctl enable first-boot-homebridge
+systemctl enable issue-generator.service
 EOF
 

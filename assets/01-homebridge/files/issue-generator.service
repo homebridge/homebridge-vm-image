@@ -1,0 +1,14 @@
+[Unit]
+Description=Generate dynamic /etc/issue before getty
+Before=getty@.service
+Before=serial-getty@.service
+Before=getty-pre.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/generate_issue.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=getty-pre.target
