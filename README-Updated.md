@@ -215,7 +215,13 @@ You can run a local build on MacOS with this command
 
 # Workflows
 
-release-stage-1_update_dependencies --> release-stage-2_build_and_push_images --> release-stage-3_package_release --> release-stage-4_package-for-hyperv
+release-stage-1_update_dependencies
+  ↓
+release-stage-2_build_and_push_images
+  ↓
+release-stage-3_package_release
+  ↓
+release-stage-4_package-for-[hypervisor]
 
 ## release-stage-1_update_dependencies
 
