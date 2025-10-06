@@ -5,7 +5,8 @@ After=network.target network-online.target homebridge.service
 
 [Service]
 Type=oneshot
-ExecStartPre=/bin/sleep 60
-ExecStart=/usr/local/bin/tzupdate
+ExecStartPre=/bin/sleep 5
+ExecStart=tzupdate --debug --timeout 5
 
 [Install]
+WantedBy=multi-user.target

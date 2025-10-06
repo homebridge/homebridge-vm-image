@@ -8,12 +8,18 @@ The virtual disk is created similar to how the Homebridge Raspbian image is crea
   <img src="assets/Console.png">
 </p>
 
-## Virtual Images Available:
+## Appliance Images Available:
 
 | File | Usage |
 |:-------:|:-------:|
 | OVA | Open Virtual Appliance optimized for VirtualBox |
 | UTM | UTM Appliance |
+| HYPERV | Microsoft HyperV Virtual Machine |
+
+## Virtual Disk Images
+
+| File | Usage |
+|:-------:|:-------:|
 | QCOW2 | QEMU/KVM Virtual Hard Diskt, also leveraged by Virtual Box |
 | VDI | Virtual Disk Image |
 | VHDX | Microsoft HyperV Virtual Hard Disk |
@@ -40,15 +46,21 @@ The virtual disk is created similar to how the Homebridge Raspbian image is crea
 
 Virtual Disk Images are supplied supporting the various Homebridge Release Streams.
 - Stable/Latest: Most recent releases of NodeJS, Homebridge, Homebridge UI, and FFMPEG
-- Beta: Most recent beta releases of Homebridge, and Homebridge UI. And the upcoming version of NodeJS.
-- Alpha: Most recent beta releases of Homebridge, and Homebridge UI. And the upcoming version of NodeJS.
+- Beta: Most recent beta releases of Homebridge 2.0, and Homebridge UI. And the upcoming version of NodeJS.
+- Alpha: Most recent alpha releases of Homebridge, and Homebridge UI. And the upcoming version of NodeJS.
+
+All virtual disk and applicance images are parkaged and available as a github release.  
+
+   - [Stable/Latest](https://github.com/homebridge/homebridge-vm-image/releases/latest)
+  
+  For the beta and alpha releases, please select the most recent beta or alpha tag
+   - [Tags](https://github.com/homebridge/homebridge-vm-image/releases/tag/)
+
+---
 
 ## Usage - Virtual Disk Image
 
-1. Click here to download the latest Virtual Disk Images for your CPU Architecture:
-   - [Stable](https://github.com/homebridge/homebridge-vm-image/releases/tag/2025-10-03)
-   - [Beta](https://github.com/homebridge/homebridge-vm-image/releases/tag/beta-2025-10-02)
-   - [Alpha](https://github.com/homebridge/homebridge-vm-image/releases/tag/alpha-2025-10-02)
+1. Download the latest Virtual Disk Images for your CPU Architecture.
 2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.  You must choice the CPU Architecture based on your Host machines's architecture.
     * *OS*: Linux -> Debian -> Debian (64bit) or Debian (ARM 64bit)
     * *Hyper-V*: Select "Generation 1 VM"
@@ -63,17 +75,14 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
 7. Manage Homebridge.
 
-### Usage - Microsoft HyperV
+## Usage - Microsoft HyperV
 
-1. Click here to download the latest Virtual Disk Images for your CPU Architecture:
-   - [Stable](https://github.com/homebridge/homebridge-vm-image/releases/tag/2025-10-03)
-   - [Beta](https://github.com/homebridge/homebridge-vm-image/releases/tag/beta-2025-10-02)
-   - [Alpha](https://github.com/homebridge/homebridge-vm-image/releases/tag/alpha-2025-10-02)
+1. Download the latest Microsoft HyperV Appliance Image ( **HyperV** ) for your CPU Architecture.
 2. Create a new virtual machine in HyperV
    * Hyper-V settings:
    * Generation 2
    * 4096MB memory (dynamic checked)
-   * External VM Switch
+   * Network - "Default Switch"
    * Use existing virtual HD and pointed to the .vhdx file
    * After created, go to settings for that VM
      * uncheck Enable Secure Boot
@@ -85,7 +94,7 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 
 ## Usage - Virtual Box Appliance
 
-1. Click here to download the latest Virtual Box Applicance Image (**ova**) for your CPU Architecture:
+1. Download the latest Virtual Box Applicance Image (**ova**) for your CPU Architecture:
    - [Stable](https://github.com/homebridge/homebridge-vm-image/releases/tag/2025-10-03)
    - [Beta](https://github.com/homebridge/homebridge-vm-image/releases/tag/beta-2025-10-02)
    - [Alpha](https://github.com/homebridge/homebridge-vm-image/releases/tag/alpha-2025-10-02)
@@ -101,7 +110,7 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 
 ## Usage - UTM Applicance
 
-1. Click here to download the latest UTM Applicance Image (**utm**) for your CPU Architecture:
+1. Download the latest UTM Applicance Image (**utm**) for your CPU Architecture:
    - [Stable](https://github.com/homebridge/homebridge-vm-image/releases/tag/2025-10-03)
    - [Beta](https://github.com/homebridge/homebridge-vm-image/releases/tag/beta-2025-10-02)
    - [Alpha](https://github.com/homebridge/homebridge-vm-image/releases/tag/alpha-2025-10-02)
@@ -115,9 +124,21 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
 7. Manage Homebridge.
 
+---
+
+# First Boot
+
+During the first boot you will need to create a local user account within the virtual machine to manage the image.  This can used to login to the console and the SSH into the image for any required maintenace. Please keep the credential safe.
+
 <p align="center">
   <img src="assets/First Boot.png">
 </p>
+
+Also during first boot on UTM or Virtual Box, the virtual hard disk will be expanded to a 50Gb dynamic virtual hard disk.
+
+# Configuration Reference
+
+[Configuration Reference](https://github.com/homebridge/homebridge/wiki/Install-Homebridge-on-Debian-or-Ubuntu-Linux#configuration-reference)
 
 
 # Included Scripts
@@ -135,11 +156,17 @@ create-release-body.sh			local-build-in-docker.sh		package-for-utm.sh			validate
 - **build-debian-image.sh**  
   Main build script for creating the Debian-based Homebridge VM image. Handles disk image creation, OS installation, package setup, and final compression.  Called by Github Action workflows and scripts/local-build-in-docker.sh.
 
+- **local-build-in-docker.sh**  
+  Allows running `build-debian-image.sh` script on non-linux MacOS Hosts.
+
 - **package-for-virtual-box.sh**  
-  Packages the raw disk image into a VirtualBox-compatible format (VDI), configures the VM, attaches Guest Additions ISO, and exports as an OVA appliance.
+  Packages the raw disk image created from `build-debian-image.sh` into a VirtualBox-compatible format (VDI), configures the VM, and exports as an OVA appliance.
 
 - **package-for-utm.sh**  
-  Packages the disk image for UTM (macOS) by creating a UTM bundle, configuring VM settings, and exporting the bundle as a `.utm.tgz` file.
+  Packages the raw disk image created from `build-debian-image.sh` into a UTM bundle, configuring VM settings, and exporting the bundle as a `.utm.tgz` file.
+
+- **create-release-body.sh**
+  Creates the body document for the Github Release.
 
 ---
 
@@ -153,16 +180,32 @@ create-release-body.sh			local-build-in-docker.sh		package-for-utm.sh			validate
 
 ---
 
-## Image Scripts
+## Image Scripts from assets
 
 - **expandVirtualFilesystem**  
   Expands the root filesystem inside the VM to utilize all available disk space. Typically run on first boot or after disk resize.
 
 - **first-boot-homebridge**  
-  Handles initial setup tasks on first boot, including user creation and basic configuration validation.
+  Handles initial setup tasks on first boot, including user creation and basic configuration.
 
 ---
 
+## Local Builds for Testing
+
+- **UTM**
+You can run a local build on MacOS with this command
+
+```bash
+./local-build-in-docker.sh && ./package-for-utm.sh
+```
+- **Virtual Box**
+You can run a local build on MacOS with this command
+
+```bash
+./local-build-in-docker.sh && ./package-for-virtual-box.sh
+```
+
+---
 # Troubleshoot VM Boot issues
 
 ```
