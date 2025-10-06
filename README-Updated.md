@@ -49,6 +49,12 @@ Virtual Disk Images are supplied supporting the various Homebridge Release Strea
 - Beta: Most recent beta releases of Homebridge 2.0, and Homebridge UI. And the upcoming version of NodeJS.
 - Alpha: Most recent alpha releases of Homebridge, and Homebridge UI. And the upcoming version of NodeJS.
 
+| Stream  | NodeJS | Homebridge | UI | FFMPEG | Stability |
+|---------|--------|------------|----|--------|-----------|
+| Stable/Latest | LTS | Latest | Latest | Latest | Most stable |
+| Beta    | Current | Beta V2 | Beta | Latest | New features, less tested |
+| Alpha   | Current  | Alpha | Alpha | Latest | Experimental, least tested |
+
 All virtual disk and applicance images are parkaged and available as a github release.  
 
    - [Stable/Latest](https://github.com/homebridge/homebridge-vm-image/releases/latest)
@@ -206,6 +212,82 @@ You can run a local build on MacOS with this command
 ```
 
 ---
+
+# Workflows
+
+release-stage-1_update_dependencies --> release-stage-2_build_and_push_images --> release-stage-3_package_release --> release-stage-4_package-for-hyperv
+
+## release-stage-1_update_dependencies
+
+### Steps
+
+1. Triggered daily by cron, to check the upstream dependency updates with `homebridge-dependency-bot`.
+2. Iterates thru each release stream, checks for upstream dependency updates, if a change is needed, creates a PR, merges it, then runs the workflow release-stage-2_build_and_push_images for each architecture.
+
+
+## release-stage-2_build_and_push_images
+
+### Inputs
+
+* Release Stream - Which release stream to package for, either stable, beta or alpha
+
+### Steps
+
+1. Runs the script `build-debian-image.sh` to create a Debian virtual hard disk images with Homebridge pre-installed.  
+2. The created images, one for each architecture are attached as artifacts to the job.
+
+### Triggers
+
+release-stage-3_package_release
+
+### Re-Runable
+
+This can be re-run at any time.
+
+## release-stage-3_package_release
+
+### Inputs
+
+* Github Run ID from stage 2
+* Release Stream
+* Github Release tag to use for publishing
+
+### Steps
+
+1. Creates a github pre-release with the supplied release tag.
+2. Runs the script `scripts/convert-img-to-virtual-disk.sh` to convert the IMG file created in Step 2 to the format required for the Virtual Machines.  And also runs the script `scripts/create-release-body.sh` to create the github release body content.
+3. The converted images files are uploaded the the github release.
+
+### Triggers
+
+The Release Stage 4 applicance VM image workflows are triggered.
+
+The action "**Cleanup Old Releases and Tags**" is triggered to cleanup old beta and alpha tags and releases.
+
+### Re-Runable
+
+The workflow can be re-run, but before re-running the created release needs to be deleted.
+
+## release-stage-4_package-for-...
+
+### Inputs
+
+* Github Run ID from stage 2
+* Release Stream
+* Github Release tag to use for publishing
+
+### Steps
+
+1. Creates a VM appliance for either HyperV, Virtual Box or UTM.
+2. For Virtual Box, the script `scripts/package-for-virtual-box.sh` is used.
+3. For UTM, the script `scripts/package-for-utm.sh` is used.
+4. For HyperV, the workflow runs the powershell commands to create and export the appliance
+5. The created VM appliance is uploaded to the Github Release/
+
+### Re-Runable
+
+The workflow can be re-run, and will overwrite the VM Appliance attached to the release.
+
 # Troubleshoot VM Boot issues
 
 ```
@@ -228,6 +310,14 @@ sudo journalctl -u install-vb-guest-additions -b
 
 ```
 sudo journalctl -u tzupdate -b
+```
+
+# Issue Display ( Before login screen )
+
+```
+sudo systemctl status issue-generator.service
+sudo systemctl list-dependencies getty@tty1.service
+sudo journalctl -u issue-generator.service -f
 ```
 
 systemd-networkd-wait-online.service
