@@ -637,7 +637,7 @@ do_configure_system() {
 
 do_update() {
   tempDir=$(mktemp -d)
-  scriptUrl=https://raw.githubusercontent.com/homebridge/homebridge-vm-image/latest/assets/01-homebridge/files/hb-config-new
+  scriptUrl=https://raw.githubusercontent.com/homebridge/homebridge-vm-image/latest/assets/01-homebridge/files/hb-config
 
   # download the update to a temporary directory
   scriptUrl=$scriptUrl?$(date --iso-8601)
@@ -704,62 +704,30 @@ if [ "$INTERACTIVE" = True ]; then
   [ -e $CONFIG ] || touch $CONFIG
   calc_wt_size
   while true; do
-    if is_pi ; then
-      FUN=$(whiptail --title "Homebridge VM Image Configuration Tool (hb-config)" --backtitle "Homebridge VM Image" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
-        "1 Update Node.js" "Update Node.js to the latest LTS version" \
-        "2 Update Homebridge" "Update Homebridge and Node.js to the latest version" \
-        "3 Restore Config" "Restores the Homebridge config to the factory default" \
-        "4 Extra Packages" "Optional packages, eg. Pi-Hole, UniFi Controller" \
-        "5 Nginx Options" "Configure Homebridge Nginx settings" \
-        "6 Configure OS" "Open the System Configuration Tool" \
-        "7 Networking" "Open the NetworkManager UI" \
-        "8 Update" "Update this tool to the latest version" \
-        "9 About" "Information about this configuration tool" \
-        3>&1 1>&2 2>&3)
-    else
       FUN=$(whiptail --title "Homebridge VM Image Configuration Tool (hb-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
         "1 Update Node.js" "Update Node.js to the latest LTS version" \
-        "2 Update Homebridge" "Update Homebridge and Node.js to the latest version" \
+        "2 Update Homebridge" "Update Homebridge and Node.js to the latest version using apt-pkg" \
         "3 Restore Config" "Restores the Homebridge config to the factory default" \
-        "4 Extra Packages" "Optional packages, eg. Pi-Hole, UniFi Controller" \
-        "5 Nginx Options" "Configure Homebridge Nginx settings" \
-        "6 Configure OS" "Open the System Configuration Tool" \
-        "7 Networking" "Open the NetworkManager UI" \
-        "8 Update" "Update this tool to the latest version" \
-        "9 About" "Information about this configuration tool" \
+        "4 Nginx Options" "Configure Homebridge Nginx settings" \
+        "5 Configure OS" "Open the System Configuration Tool" \
+        "6 Update" "Update this tool to the latest version" \
+        "7 About" "Information about this configuration tool" \
         3>&1 1>&2 2>&3)
-    fi
     RET=$?
     if [ $RET -eq 1 ]; then
       do_finish
     elif [ $RET -eq 0 ]; then
-      if is_pi ; then
+
         case "$FUN" in
           1\ *) do_nodejs_update ;;
           2\ *) do_homebridge_update ;;
           3\ *) do_restore_config ;;
-          4\ *) do_extra_packages ;;
-          5\ *) do_configure_nginx ;;
-          6\ *) do_configure_system ;;
-          7\ *) do_nmtui ;;
-          8\ *) do_update ;;
-          9\ *) do_about ;;
+          4\ *) do_configure_nginx ;;
+          5\ *) do_configure_system ;;
+          7\ *) do_update ;;
+          7\ *) do_about ;;
           *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
         esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
-      else
-        case "$FUN" in
-          1\ *) do_nodejs_update ;;
-          2\ *) do_homebridge_update ;;
-          3\ *) do_restore_config ;;
-          4\ *) do_extra_packages ;;
-          5\ *) do_configure_nginx ;;
-          6\ *) do_configure_system ;;
-          7\ *) do_nmtui ;;
-          8\ *) do_update ;;
-          9\ *) do_about ;;
-          *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
-        esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
-      fi
     else
       exit 1
     fi
