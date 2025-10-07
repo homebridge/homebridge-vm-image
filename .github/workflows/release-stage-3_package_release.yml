@@ -138,5 +138,5 @@ jobs:
       uses: ./.github/actions/cleanup-old-releases-and-tags
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        release-type: ${{ inputs.release_stream }}
+        release-stream: ${{ inputs.release_stream }}
         releases-to-keep: 5

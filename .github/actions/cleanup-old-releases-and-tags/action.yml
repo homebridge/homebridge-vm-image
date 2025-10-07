@@ -4,7 +4,7 @@ inputs:
   github-token:
     description: "GitHub token with repo permissions"
     required: true
-  release-type:
+  release-stream:
     description: "Release type (stable, beta or alpha)"
     required: true
   releases-to-keep:
@@ -14,11 +14,11 @@ runs:
   using: "composite"
   steps:
     - name: Delete Old Releases and Tags
-      if: ${{ inputs.release-type != '' }}
+      if: ${{ inputs.release-stream != '' }}
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-        RELEASE_TYPE: ${{ inputs.release-type }}
+        RELEASE_TYPE: ${{ inputs.release-stream }}
         RELEASES_TO_KEEP: ${{ inputs.releases-to-keep }}
       run: |
         echo "::group::Finding releases for $RELEASE_TYPE"
