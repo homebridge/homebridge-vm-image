@@ -95,4 +95,4 @@ jobs:
           scheduled: ${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Scheduled' }}
           github-token: ${{ secrets.GH_TOKEN }}
           timeout-minutes: '30'
-          run-name: ${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Scheduled' }} - Build and Push ${{ matrix.stream }}
+          run-name: "${{ matrix.stream }}:${{ github.run_id }}"

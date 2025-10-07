@@ -1,5 +1,5 @@
 name: Release Stage 2 - Build and Push Homebridge VM Images
-run-name: Release Stage 2 - ${{ github.event.inputs.Scheduled}} - Build and Push - ${{ inputs.release_stream }} - ${{ github.run_id }}
+run-name: Release Stage 2 - ${{ github.event.inputs.Scheduled}} - Build and Push - ${{ inputs.release_stream }} - ${{ github.run_id }} - ${{ inputs.run_name }}
 
 on:
   workflow_dispatch:
@@ -21,6 +21,11 @@ on:
             - Scheduled
             - Manual
           default: Manual
+      run_name:
+        description: 'Unique name of the run'
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: stage-2-build-and-push

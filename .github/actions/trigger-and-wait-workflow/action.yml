@@ -23,7 +23,7 @@ inputs:
     required: false
     default: '30'
   run-name:
-    description: 'Name of the triggered workflow run'
+    description: 'Unique name of the triggered workflow run'
     required: false
     default: ''
 
@@ -48,6 +48,7 @@ runs:
         gh workflow run "${{ inputs.workflow-file }}" \
           --ref "${{ inputs.ref }}" \
           --field release_stream="${{ inputs.release-stream }}" \
+          --field run_name="${{ inputs.run-name }}" \
           --field Scheduled="${{ inputs.scheduled }}" || { 
           echo "::error::Failed to trigger ${{ inputs.release-stream }} workflow"; 
           exit 1; 
