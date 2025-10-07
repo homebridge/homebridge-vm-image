@@ -84,7 +84,7 @@ runs:
           WORKFLOW_URL=$(gh run list --workflow "${{ inputs.workflow-file }}" \
             --event workflow_dispatch \
             --branch "${{ inputs.ref }}" \
-            --limit 1 \
+            --limit 10 \
             --json url,name \
             --jq '[.[] | select(.name | contains("${{ inputs.run-name }}"))] | .[].url' | \
             head -n 1)
