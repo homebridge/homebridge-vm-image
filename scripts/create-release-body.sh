@@ -58,7 +58,7 @@ elif [[ "${PKG_RELEASE_STREAM:-stable}" == "alpha" ]]; then
   LATEST_TAG=$(git tag -l | grep -E "alpha" | sort -V | tail -1 2>/dev/null || echo "")
 else
   # For stable releases, only look at stable tags (no beta or alpha in name)
-  LATEST_TAG=$(git tag -l | grep -v -E "(beta|alpha)" | sort -V | tail -1 2>/dev/null || echo "")
+  LATEST_TAG=$(git tag -l | grep -v -E "(beta|alpha|v)" | sort -V | tail -1 2>/dev/null || echo "")
 fi
 
 log "Latest tag for stream '${PKG_RELEASE_STREAM:-stable}': ${LATEST_TAG:-none}"
