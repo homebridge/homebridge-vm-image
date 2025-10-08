@@ -120,6 +120,6 @@ jobs:
         timeout-minutes: '60'
         run-name: "${{ inputs.release_stream }}:${{ github.run_id }}"
         workflow-fields: |
-          release_stream=${{ inputs.release_stream }} \
-          run_id="${{ github.run_id }}" \
+          release_stream=${{ inputs.release_stream }}
+          run_id="${{ github.run_id }}"
           HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
