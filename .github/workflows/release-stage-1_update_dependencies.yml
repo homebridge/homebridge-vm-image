@@ -97,4 +97,3 @@ jobs:
           workflow-fields: |
             release_stream=${{ matrix.stream }}
             Scheduled=${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Scheduled' }}
-          skip_build: ${{ github.event.inputs.skip_build }}
