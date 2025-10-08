@@ -50,6 +50,8 @@ runs:
           done <<< "${{ inputs.workflow-fields }}"
         fi
 
+        echo "::notice::Using fields: $FIELD_ARGS"
+
         gh workflow run "${{ inputs.workflow-file }}" \
           --ref "${{ inputs.ref }}" \
           --field run_name="${{ inputs.run-name }}" \
