@@ -172,7 +172,9 @@ jobs:
             sleep 5
           fi
         done
-
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
   wait-for-appliance-packaging:
       needs: [invoke-appliance-packaging]
       runs-on: ubuntu-latest
