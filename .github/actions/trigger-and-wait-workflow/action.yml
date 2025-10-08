@@ -46,7 +46,7 @@ runs:
         FIELD_ARGS=""
         if [[ -n "${{ inputs.workflow-fields }}" ]]; then
           while IFS='=' read -r key value; do
-            FIELD_ARGS+=" --field $key=\"$value\""
+            FIELD_ARGS+=" --field $key=$value"
           done <<< "${{ inputs.workflow-fields }}"
         fi
 
