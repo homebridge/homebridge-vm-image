@@ -183,7 +183,7 @@ jobs:
             # Step 1: Checkout the repository
         - name: Checkout repository
           uses: actions/checkout@v5
-          
+
         - name: Wait for all Release Stage 4 packaging workflows with matching run_id to complete
           run: |
             workflows=$(gh run list --json name,databaseId,status,workflowName \
@@ -195,7 +195,7 @@ jobs:
             fi
 
             while read -r run_id name status; do
-              echo "Waiting for workflow: $name (run_id: $run_id, status: $status)"
+              echo "::group::Waiting for workflow: $name (run_id: $run_id, status: $status)"
               while [ "$status" != "completed" ]; do
                 sleep 30
                 status=$(gh run view "$run_id" --json status | jq -r '.status')
@@ -207,6 +207,7 @@ jobs:
                 echo "::error::Workflow $name failed with conclusion: $conclusion"
                 exit 1
               fi
+              echo "::endgroup::"
             done <<< "$workflows"
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
