@@ -102,7 +102,8 @@ jobs:
           echo "::notice::Architecture: ${{ matrix.arch }}"
           echo "::notice::Release Stream: ${{ inputs.release_stream }}"
 
-  invoke-package-and-validate:
+  invoke-package-and-release:
+    name: Invoke Stage 3 - Package and Release
     needs: [set-versions, build-img-file]
     runs-on: ubuntu-latest
     steps:
@@ -119,6 +120,6 @@ jobs:
         timeout-minutes: '60'
         run-name: "${{ inputs.release_stream }}:${{ github.run_id }}"
         workflow-fields: |
-          release_stream=${{ inputs.release_stream  }}
+          release_stream=${{ inputs.release_stream }} \
           run_id="${{ github.run_id }}" \
           HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"

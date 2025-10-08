@@ -66,7 +66,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
-        echo "::notice::Waiting for ${{ inputs.run-name }} workflow to appear in run list..."
+        echo "::group::Waiting for ${{ inputs.run-name }} workflow to appear in run list..."
 
         # Initialize variables
         WORKFLOW_URL=""
@@ -99,6 +99,7 @@ runs:
           fi
         done
 
+        echo "::endgroup::"
         echo "::notice::Found ${{ inputs.run-name }} workflow run: $WORKFLOW_URL"
         echo "workflow_url=$WORKFLOW_URL" >> $GITHUB_OUTPUT
 
@@ -125,7 +126,7 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
         RUN_ID="${{ steps.extract-run-id.outputs.run_id }}"
-        echo "::notice::Waiting for ${{ inputs.run-name }} workflow (run $RUN_ID) to complete..."
+        echo "::group::Waiting for ${{ inputs.run-name }} workflow (run $RUN_ID) to complete..."
         
         # Set maximum wait time (convert minutes to seconds)
         MAX_WAIT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
@@ -166,3 +167,4 @@ runs:
               ;;
           esac
         done
+        echo "::endgroup::"
