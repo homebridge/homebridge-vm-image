@@ -180,6 +180,10 @@ jobs:
       needs: [invoke-appliance-packaging]
       runs-on: ubuntu-latest
       steps:
+            # Step 1: Checkout the repository
+        - name: Checkout repository
+          uses: actions/checkout@v5
+          
         - name: Wait for all Release Stage 4 packaging workflows with matching run_id to complete
           run: |
             workflows=$(gh run list --json name,databaseId,status,workflowName \
