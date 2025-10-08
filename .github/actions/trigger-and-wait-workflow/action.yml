@@ -46,7 +46,10 @@ runs:
         FIELD_ARGS=""
         if [[ -n "${{ inputs.workflow-fields }}" ]]; then
           while IFS='=' read -r key value; do
-            FIELD_ARGS+=" --field $key=$value"
+            # Only add if both key and value are non-empty
+            if [[ -n "$key" && -n "$value" ]]; then
+              FIELD_ARGS+=" --field $key=$value"
+            fi
           done <<< "${{ inputs.workflow-fields }}"
         fi
 
