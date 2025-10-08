@@ -117,7 +117,7 @@ jobs:
         workflow-file: 'release-stage-3_package_release.yml'
         ref: 'latest'
         github-token: ${{ secrets.GH_TOKEN }}
-        timeout-minutes: '60'
+        timeout-minutes: '90'
         workflow-fields: |
           release_stream=${{ inputs.release_stream }}
           run_id="${{ github.run_id }}"
