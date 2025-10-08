@@ -140,7 +140,7 @@ jobs:
 
     - name: Wait for Appliance Packaging Workflow to be visible to GH CLI
       run: |
-        echo "::notice::Waiting for ${{ inputs.run_id }} workflow to appear in run list..."
+        echo "::group::Waiting for ${{ inputs.run_id }} workflow to appear in run list..."
 
         # Initialize variables
         WORKFLOW_URL=""
@@ -161,7 +161,6 @@ jobs:
           # Check for the workflow run
           WORKFLOW_URL=$(gh run list --workflow "${{ matrix.packaging_workflow }}" \
             --event workflow_dispatch \
-            --branch "main" \
             --limit 10 \
             --json url,name \
             --jq '[.[] | select(.name | contains("${{ inputs.run_id }}"))] | .[].url' | \
@@ -172,6 +171,8 @@ jobs:
             sleep 5
           fi
         done
+        echo "::notice::Found triggered ${{ inputs.run_id }} workflow: $WORKFLOW_URL"
+        echo "::endgroup::"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
