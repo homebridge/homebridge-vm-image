@@ -23,7 +23,7 @@ on:
         type: string
 
 concurrency:
-  group: package-and-validate-virtualbox
+  group: package-virtualbox
   cancel-in-progress: false
 
 jobs:

@@ -1,5 +1,5 @@
 name: Release Stage 3 - Package Release 
-run-name: Release Stage 3 - Package Release - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }}
+run-name: Release Stage 3 - Package Release - Run ${{ inputs.run_id }} - ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} - ${{ inputs.release_stream }} - ${{ inputs.run_name }}
 
 on:
   workflow_dispatch:
@@ -21,12 +21,17 @@ on:
         description: 'Homebridge VM image version aka release tag'
         required: true
         type: string
+      run_name:
+        description: 'Unique name of the run'
+        required: false
+        type: string
+        default: ''
 
 env:
   VDISK_SIZE: 50G  # Size of the virtual disk for each VM
 
 concurrency:
-  group: package-and-validate-virtualbox
+  group: package-and-release
   cancel-in-progress: false
 
 jobs:
@@ -123,7 +128,7 @@ jobs:
       uses: actions/checkout@v5
 
     # Step 2: Trigger Packaging and Validation Workflow
-    - name: Trigger Packaging and Validation Workflow
+    - name: Trigger Appliance Packaging Workflow
       run: |
         gh workflow run "${{ matrix.packaging_workflow }}" \
           --ref "latest" \
@@ -133,6 +138,76 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Wait for Appliance Packaging Workflow to be visible to GH CLI
+      run: |
+        echo "::notice::Waiting for ${{ inputs.run_id }} workflow to appear in run list..."
+
+        # Initialize variables
+        WORKFLOW_URL=""
+        MAX_RETRIES=12  # Retry for up to 1 minute (12 retries * 5 seconds)
+        RETRY_COUNT=0
+
+        # Retry loop
+        while [[ -z "$WORKFLOW_URL" || "$WORKFLOW_URL" == "null" ]]; do
+          if [[ $RETRY_COUNT -ge $MAX_RETRIES ]]; then
+            echo "::error::Could not find triggered ${{ inputs.run_id }} workflow run after 1 minute"
+            gh run list --workflow "${{ matrix.packaging_workflow }}" --event workflow_dispatch --branch "main" --limit 5 --json url,name
+            exit 1
+          fi
+
+          # Increment retry count
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+
+          # Check for the workflow run
+          WORKFLOW_URL=$(gh run list --workflow "${{ matrix.packaging_workflow }}" \
+            --event workflow_dispatch \
+            --branch "main" \
+            --limit 10 \
+            --json url,name \
+            --jq '[.[] | select(.name | contains("${{ inputs.run_id }}"))] | .[].url' | \
+            head -n 1)
+
+          if [[ -z "$WORKFLOW_URL" || "$WORKFLOW_URL" == "null" ]]; then
+            echo "::notice::Retry $RETRY_COUNT/$MAX_RETRIES: ${{ inputs.run_id }} workflow not found. Retrying in 5 seconds..."
+            sleep 5
+          fi
+        done
+
+  wait-for-appliance-packaging:
+      needs: [invoke-appliance-packaging]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Wait for all Release Stage 4 packaging workflows with matching run_id to complete
+          run: |
+            workflows=$(gh run list --json name,databaseId,status,workflowName \
+              | jq -r --arg run_id "${{ inputs.run_id }}" '.[] | select(.name | startswith("Release Stage 4 - Package for")) | select(.name | test($run_id)) | "\(.databaseId) \(.name) \(.status)"')
+
+            if [ -z "$workflows" ]; then
+              echo "::error::No matching Release Stage 4 packaging workflows found for run_id: ${{ inputs.run_id }}"
+              exit 1
+            fi
+
+            while read -r run_id name status; do
+              echo "Waiting for workflow: $name (run_id: $run_id, status: $status)"
+              while [ "$status" != "completed" ]; do
+                sleep 30
+                status=$(gh run view "$run_id" --json status | jq -r '.status')
+                echo "Workflow $name (run_id: $run_id) status: $status"
+              done
+              conclusion=$(gh run view "$run_id" --json conclusion | jq -r '.conclusion')
+              echo "Workflow $name (run_id: $run_id) completed with conclusion: $conclusion"
+              if [ "$conclusion" != "success" ]; then
+                echo "::error::Workflow $name failed with conclusion: $conclusion"
+                exit 1
+              fi
+            done <<< "$workflows"
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup-old-releases-and-tags:
+    needs: [invoke-appliance-packaging]
+    runs-on: ubuntu-latest
+    steps:
     - name: Cleanup older beta and alpha release and tags
       if: ${{ inputs.release_stream != 'stable' }}
       uses: ./.github/actions/cleanup-old-releases-and-tags

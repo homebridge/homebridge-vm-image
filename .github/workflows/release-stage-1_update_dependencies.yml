@@ -91,8 +91,10 @@ jobs:
         with:
           workflow-file: 'release-stage-2_build_and_push_images.yml'
           ref: 'latest'
-          release-stream: ${{ matrix.stream }}
-          scheduled: ${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Scheduled' }}
           github-token: ${{ secrets.GH_TOKEN }}
-          timeout-minutes: '30'
+          timeout-minutes: '60'
           run-name: "${{ matrix.stream }}:${{ github.run_id }}"
+          workflow-fields: |
+            release_stream=${{ matrix.stream }}
+            Scheduled=${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Scheduled' }}
+          skip_build: ${{ github.event.inputs.skip_build }}

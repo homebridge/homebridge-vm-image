@@ -110,13 +110,15 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v5
 
-    # Step 2: Trigger Packaging and Validation Workflow
-    - name: Trigger Release Packaging Workflow
-      run: |
-        gh workflow run "release-stage-3_package_release.yml" \
-          --ref "latest" \
-          --field release_stream="${{ inputs.release_stream }}" \
-          --field run_id="${{ github.run_id }}" \
-          --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Trigger and Wait for ${{ inputs.release_stream }} Stage 3 Workflow
+      uses: ./.github/actions/trigger-and-wait-workflow
+      with:
+        workflow-file: 'release-stage-3_package_release.yml'
+        ref: 'latest'
+        github-token: ${{ secrets.GH_TOKEN }}
+        timeout-minutes: '60'
+        run-name: "${{ inputs.release_stream }}:${{ github.run_id }}"
+        workflow-fields: |
+          release_stream=${{ inputs.release_stream  }}
+          run_id="${{ github.run_id }}" \
+          HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"

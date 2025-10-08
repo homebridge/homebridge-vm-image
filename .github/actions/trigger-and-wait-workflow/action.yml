@@ -8,13 +8,6 @@ inputs:
     description: 'The git ref to run the workflow on'
     required: true
     default: 'latest'
-  release-stream:
-    description: 'The release type parameter to pass to the workflow'
-    required: true
-  scheduled:
-    description: 'The scheduled parameter to pass to the workflow'
-    required: false
-    default: 'Manual'
   github-token:
     description: 'GitHub token for authentication'
     required: true
@@ -24,6 +17,10 @@ inputs:
     default: '30'
   run-name:
     description: 'Unique name of the triggered workflow run'
+    required: false
+    default: ''
+  workflow-fields:
+    description: 'Fields to pass to the workflow as key=value pairs (JSON or newline separated)'
     required: false
     default: ''
 
@@ -38,23 +35,30 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Trigger ${{ inputs.release-stream }} Workflow
+    - name: Trigger ${{ inputs.run-name }} Workflow
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
-        echo "::notice::Triggering ${{ inputs.release-stream }} workflow - ${{ inputs.workflow-file }}"
+        echo "::notice::Triggering ${{ inputs.run-name }} workflow - ${{ inputs.workflow-file }}"
         
+        # Parse workflow-fields input and build --field arguments
+        FIELD_ARGS=""
+        if [[ -n "${{ inputs.workflow-fields }}" ]]; then
+          while IFS='=' read -r key value; do
+            FIELD_ARGS+=" --field $key=\"$value\""
+          done <<< "${{ inputs.workflow-fields }}"
+        fi
+
         gh workflow run "${{ inputs.workflow-file }}" \
           --ref "${{ inputs.ref }}" \
-          --field release_stream="${{ inputs.release-stream }}" \
           --field run_name="${{ inputs.run-name }}" \
-          --field Scheduled="${{ inputs.scheduled }}" || { 
-          echo "::error::Failed to trigger ${{ inputs.release-stream }} workflow"; 
+          $FIELD_ARGS || { 
+          echo "::error::Failed to trigger ${{ inputs.workflow-file }} workflow"; 
           exit 1; 
         }
         
-        echo "::notice::${{ inputs.release-stream }} workflow triggered successfully"
+        echo "::notice::${{ inputs.run-name }} workflow triggered successfully"
 
     - name: Find ${{ inputs.run-name }} Workflow Run
       id: find-workflow
@@ -98,7 +102,7 @@ runs:
         echo "::notice::Found ${{ inputs.run-name }} workflow run: $WORKFLOW_URL"
         echo "workflow_url=$WORKFLOW_URL" >> $GITHUB_OUTPUT
 
-    - name: Extract ${{ inputs.release-stream }} Workflow Run ID
+    - name: Extract ${{ inputs.run-name }} Workflow Run ID
       id: extract-run-id
       shell: bash
       run: |
@@ -114,14 +118,14 @@ runs:
           exit 1
         fi
 
-    - name: Wait for ${{ inputs.release-stream }} Workflow Completion
+    - name: Wait for ${{ inputs.run-name }} Workflow Completion
       id: wait-completion
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
         RUN_ID="${{ steps.extract-run-id.outputs.run_id }}"
-        echo "::notice::Waiting for ${{ inputs.release-stream }} workflow (run $RUN_ID) to complete..."
+        echo "::notice::Waiting for ${{ inputs.run-name }} workflow (run $RUN_ID) to complete..."
         
         # Set maximum wait time (convert minutes to seconds)
         MAX_WAIT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
@@ -134,7 +138,7 @@ runs:
           ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
           
           if [[ $ELAPSED_TIME -gt $MAX_WAIT_SECONDS ]]; then
-            echo "::error::${{ inputs.release-stream }} workflow timed out after ${{ inputs.timeout-minutes }} minutes"
+            echo "::error::${{ inputs.run-name }} workflow timed out after ${{ inputs.timeout-minutes }} minutes"
             exit 0
           fi
           
@@ -145,19 +149,19 @@ runs:
               CONCLUSION=$(gh run view "$RUN_ID" --json conclusion -q '.conclusion')
               echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
               if [[ "$CONCLUSION" == "success" ]]; then
-                echo "::notice::${{ inputs.release-stream }} workflow completed successfully"
+                echo "::notice::${{ inputs.run-name }} workflow completed successfully"
                 break
               else
-                echo "::error::${{ inputs.release-stream }} workflow failed with conclusion: $CONCLUSION"
+                echo "::error::${{ inputs.run-name }} workflow failed with conclusion: $CONCLUSION"
                 break
               fi
               ;;
             "in_progress"|"queued"|"requested"|"waiting")
-              echo "::notice::${{ inputs.release-stream }} workflow status: $STATUS - continuing to wait... (elapsed: ${ELAPSED_TIME}s)"
+              echo "::notice::${{ inputs.run-name }} workflow status: $STATUS - continuing to wait... (elapsed: ${ELAPSED_TIME}s)"
               sleep 30
               ;;
             *)
-              echo "::error::${{ inputs.release-stream }} workflow has unexpected status: $STATUS"
+              echo "::error::${{ inputs.run-name }} workflow has unexpected status: $STATUS"
               break
               ;;
           esac

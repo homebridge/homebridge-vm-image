@@ -23,7 +23,7 @@ on:
         type: string
 
 concurrency:
-  group: package-and-validate-utm
+  group: package-utm
   cancel-in-progress: false
 
 jobs:
