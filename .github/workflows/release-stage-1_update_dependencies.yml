@@ -92,7 +92,7 @@ jobs:
           workflow-file: 'release-stage-2_build_and_push_images.yml'
           ref: 'latest'
           github-token: ${{ secrets.GH_TOKEN }}
-          timeout-minutes: '60'
+          timeout-minutes: '120'
           workflow-fields: |
             release_stream=${{ matrix.stream }}
             Scheduled=${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Scheduled' }}

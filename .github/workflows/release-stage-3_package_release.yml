@@ -216,6 +216,9 @@ jobs:
     needs: [invoke-appliance-packaging]
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
     - name: Cleanup older beta and alpha release and tags
       if: ${{ inputs.release_stream != 'stable' }}
       uses: ./.github/actions/cleanup-old-releases-and-tags
