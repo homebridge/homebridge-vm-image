@@ -62,7 +62,7 @@ All virtual disk and applicance images are parkaged and available as a github re
    - [Stable/Latest](https://github.com/homebridge/homebridge-vm-image/releases/latest)
   
   For the beta and alpha releases, please select the most recent beta or alpha tag
-   - [Tags](https://github.com/homebridge/homebridge-vm-image/releases/tag/)
+   - [Tags](https://github.com/homebridge/homebridge-vm-image/tags)
 
 ---
 
