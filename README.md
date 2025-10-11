@@ -40,7 +40,7 @@ The virtual disk is created similar to how the Homebridge Raspbian image is crea
 * Packages Installed: NodeJS, Homebridge, Homebridge UI and ffmpeg.  Exact versions installed are listed in the Manifest file.
 * Guest Additions: **UTM** and HyperV Kernel Modules Installed
 
-> **Note**: This VM image uses the official [Homebridge](https://github.com/homebridge/homebridge) packages from the official APT repository. If you were previously using images based on `oznu/homebridge` or from the old [`homebridge-vm-image-boot2docker`](https://github.com/homebridge/homebridge-vm-image-boot2docker) repository (v0.0.4), these new VM images provide the updated official Homebridge distribution.
+> **Note**: The legacy/previous build README is [Here](./README-deprecated.md)
 
 ## Release Streams
 
@@ -136,7 +136,7 @@ During the first boot you will need to create a local user account within the vi
   <img src="assets/First Boot.png">
 </p>
 
-  ***If the first boot screen did not appear, or if you cancelled, restarting the VM will redisplay the first boot screen.***
+>  ***If the first boot screen did not appear, or if you cancelled, restarting the VM will redisplay the first boot screen.***
 
 Also during first boot on UTM or Virtual Box, the virtual hard disk will be expanded to a 50Gb dynamic virtual hard disk.
 
@@ -318,15 +318,3 @@ sudo journalctl -u install-vb-guest-additions -b
 ```
 sudo journalctl -u tzupdate -b
 ```
-
-# Issue Display ( Before login screen )
-
-```
-sudo systemctl status issue-generator.service
-sudo systemctl list-dependencies getty@tty1.service
-sudo journalctl -u issue-generator.service -f
-```
-
-systemd-networkd-wait-online.service
-
-sudo journalctl -u systemd-networkd-wait-online.service -b
