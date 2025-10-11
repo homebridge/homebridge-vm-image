@@ -319,7 +319,7 @@ SYSTEM_UTILITIES=(
   ssh
   zstd
   avahi-daemon
-  vim
+  vim.tiny
   dialog
   file
   whiptail
