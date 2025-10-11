@@ -2,6 +2,8 @@
 
 A preconfigured Debian Virtual Disk Image for X86 and Arm cpu architecture that runs Homebridge.
 
+Recommended for use on non-linux based systems where Docker can not be used.  ie Windows or MacOS.
+
 The virtual disk is created similar to how the Homebridge Raspbian image is created, and leverages Debian as the Operating System, with NodeJs, Homebridge and the Homebridge UI already installed.
 
 <p align="center">
