@@ -226,3 +226,21 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         release-stream: ${{ inputs.release_stream }}
         releases-to-keep: 5
+
+# stable release should be marked as non-prerelease, and latest
+  finalize-stable-release:
+    needs: [invoke-appliance-packaging]
+    if: ${{ inputs.release_stream == 'stable' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    # Mark stable release as non-prerelease and latest
+    - name: Mark Stable Release as Non-Prerelease and Latest
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release edit ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} \
+          --prerelease=false \
+          --latest
