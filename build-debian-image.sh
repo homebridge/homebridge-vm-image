@@ -455,7 +455,6 @@ install_staged_assets() {
             sudo bash -euo pipefail -euc "
                 export ROOTFS_DIR='$SCRIPT_DIR/$ROOTFS'
                 export DEBIAN_FRONTEND=noninteractive
-                export FIRST_USER_NAME='${FIRST_USER_NAME:-homebridge}'
                 export BUILD_VERSION='${BUILD_VERSION:-development}'
                 export HOMEBRIDGE_APT_PKG_VERSION='${HOMEBRIDGE_APT_PKG_VERSION:-}'
                 export FFMPEG_FOR_HOMEBRIDGE_VERSION='${FFMPEG_FOR_HOMEBRIDGE_VERSION:-}'
@@ -515,7 +514,6 @@ main() {
     
     group_log "Installing Homebridge VM customizations"
     # Install customizations, these are copied from homebridge-raspbian-image
-    export FIRST_USER_NAME="homebridge"
     export BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d)-${RELEASE_STREAM}-${ARCH}}"
 
     export HOMEBRIDGE_APT_PKG_NPM_VERSION=$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
@@ -568,11 +566,6 @@ main() {
         echo "  . /opt/homebridge/source-vm.sh" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
         echo "fi" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
     fi
-    # Create or overwrite source-vm.sh with the required exports
-    echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
-    echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
-    echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "${ROOTFS}/opt/homebridge/source-vm.sh" > /dev/null
-    sudo chmod +x "${ROOTFS}/opt/homebridge/source-vm.sh"
 
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"

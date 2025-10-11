@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Define color codes for logging
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -34,8 +36,8 @@ validate_user() {
         MSG="$MSG\nMust only contain lower-case letters, digits and hyphens, and must start with a letter."
         RET=1
     fi
-    if [ "$USERNAME" = "root" ] || [ "$USERNAME" = "homebridge" ]; then
-        MSG="$MSG\nCannot be root or homebridge."
+    if getent passwd "$USERNAME" >/dev/null 2>&1; then
+        MSG="$MSG\nCannot use existing username '$USERNAME'."
         RET=1
     fi
     if [ "$RET" -ne 0 ]; then
@@ -141,4 +143,5 @@ else
     exit 1
 fi
 
+/usr/local/sbin/updateIssueVMName
 /usr/local/sbin/expandVirtualFilesystem

@@ -1,0 +1,17 @@
+#! /bin/bash
+
+# Use sed to add a second line to the issue file with the VM name in yellow ie "VM Software: UTM"
+# Only do this if VM_SOFTWARE is set, and not empty and if not already present in /etc/issue
+
+source /opt/homebridge/source-vm.sh
+
+if [ -z "$VM_SOFTWARE" ]; then
+    echo "VM_SOFTWARE is not set or empty, exiting without updating /etc/issue"
+    exit 0
+fi
+if grep -q "VM Software:" /etc/issue; then
+    echo "VM Software already present in /etc/issue, exiting without updating"
+    exit 0
+fi
+
+sed -i "2iVM Software: \\\e{yellow}${VM_SOFTWARE}\\\e{reset}" /etc/issue

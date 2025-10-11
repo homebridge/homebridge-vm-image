@@ -19,12 +19,16 @@ install -m 755 files/20-hb-nginx-check "${ROOTFS_DIR}/etc/hb-service/homebridge/
 install -m 644 files/first-boot-homebridge.service "${ROOTFS_DIR}/etc/systemd/system/"
 install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
+install -m 755 files/updateIssueVMName "${ROOTFS_DIR}/usr/local/sbin/"
 
+# VM detection script
+
+install -v -d "${ROOTFS_DIR}/opt/homebridge/"
+install -m 755 files/source-vm.sh "${ROOTFS_DIR}/opt/homebridge/"
 #
 # MOTD
 #
 
-ls -l files/issue "${ROOTFS_DIR}/etc/issue"
 install -m 755 files/issue "${ROOTFS_DIR}/etc/issue"
 install -m 755 files/motd-linux "${ROOTFS_DIR}/etc/update-motd.d/15-linux"
 install -m 755 files/motd-homebridge "${ROOTFS_DIR}/etc/update-motd.d/20-homebridge"
@@ -46,18 +50,13 @@ echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge
 apt-get update
 apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
 
-# correct ownership
-chown -R ${FIRST_USER_NAME}:${FIRST_USER_NAME} /var/lib/homebridge
-
 # empty motd
 > /etc/motd
 
 # make a symlink to the main config directory
-[ -e /home/${FIRST_USER_NAME}/.homebridge ] || ln -fs /var/lib/homebridge /home/${FIRST_USER_NAME}/.homebridge
 [ -e /root/.homebridge ] || ln -fs /var/lib/homebridge /root/.homebridge
 
 # include homebridge bashrc in first user's bashrc
-# cat /tmp/bashrc.partial >> /home/${FIRST_USER_NAME}/.bashrc
 rm -rf /tmp/bashrc.partial
 
 # set ui port for use in motd message
@@ -65,6 +64,13 @@ echo "8581" > /etc/hb-ui-port
 
 # prioritise dns over mdns
 sed -i 's/files mdns4_minimal \[NOTFOUND=return\] dns/files dns mdns4_minimal \[NOTFOUND=return\]/' /etc/nsswitch.conf
+
+# Store versions in source-vm.sh
+
+echo "# Appended by 00-run.sh" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
+echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
+echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
+echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
 
 systemctl daemon-reload
 systemctl enable homebridge
