@@ -1,322 +1,224 @@
-# Homebridge VM Boot Image
+# Homebridge VM Image
 
-A preconfigured Debian Virtual Disk Image for X86 and Arm cpu architecture that runs Homebridge.
+A preconfigured Debian Virtual Disk Image for x86 and ARM CPU architectures that runs Homebridge.
 
-Recommended for use on non-linux based systems where Docker can not be used.  ie Windows or MacOS.
+Recommended for use on non-Linux based systems where Docker cannot be used, such as Windows or macOS.
 
-The virtual disk is created similar to how the Homebridge Raspbian image is created, and leverages Debian as the Operating System, with NodeJs, Homebridge and the Homebridge UI already installed.
+The virtual disk is created similar to how the Homebridge Raspbian image is created, and leverages Debian as the operating system, with Node.js, Homebridge, and the Homebridge UI already installed.
 
 <p align="center">
   <img src="assets/Console.png">
 </p>
 
-## Appliance Images Available:
+## Documentation
 
-| File | Usage |
-|:-------:|:-------:|
-| OVA | Open Virtual Appliance optimized for VirtualBox |
-| UTM | UTM Appliance |
-| HYPERV | Microsoft HyperV Virtual Machine |
+**For installation instructions, system requirements, and usage guides, please visit the [Homebridge VM Image Wiki](https://github.com/homebridge/homebridge/wiki/Install-Homebridge-on-Virtual-Machine).**
 
-## Virtual Disk Images
+The wiki includes:
+- Detailed installation instructions for all platforms (Hyper-V, VirtualBox, UTM, QEMU/KVM)
+- CPU architecture and system requirements
+- First boot setup guide
+- Virtual disk specifications
+- Release stream information (Stable, Beta, Alpha)
+- Configuration reference
+- Troubleshooting guides
 
-| File | Usage |
-|:-------:|:-------:|
-| QCOW2 | QEMU/KVM Virtual Hard Diskt, also leveraged by Virtual Box |
-| VDI | Virtual Disk Image |
-| VHDX | Microsoft HyperV Virtual Hard Disk |
-| VMDK | VMware Virtual Hard Disk |
+## Available Formats
 
-## Supported CPU Architectures:
+### Appliance Images (Ready to Import)
+- **OVA** - VirtualBox Open Virtual Appliance
+- **UTM** - UTM Appliance for macOS
+- **HYPERV** - Microsoft Hyper-V Virtual Machine (Windows 10/11 Enterprise, Pro, or Education)
 
-| CPU Architecture | Description |
-|:-------:|:-------:|
-| amd64 | 64 Bit Intel X86 and AMD Cpu's |
-| arm64 | 64 Bit Arm CPU's including M based Mac's |
+### Virtual Disk Images (Manual Setup)
+- **QCOW2** - QEMU/KVM Virtual Hard Disk
+- **VDI** - Virtual Disk Image (VirtualBox)
+- **VHDX** - Microsoft Hyper-V Virtual Hard Disk
+- **VMDK** - VMware Virtual Hard Disk
 
-# Virtual Disk Image Specifications
-
-* OS: Debian 12 ( aka `Bookworm` ) Lite
-* CPU Architecture: X86/Intel/AMD64 and ARM ( Includes M cpu based Macs )
-* Virtual Disk Size: Allocated as a 5Gb Virtual Hard Drive for VHDX and VMDK and 50Gb for gcow2 and VDI.
-* Packages Installed: NodeJS, Homebridge, Homebridge UI and ffmpeg.  Exact versions installed are listed in the Manifest file.
-* Guest Additions: **UTM** and HyperV Kernel Modules Installed
-
-> **Note**: The legacy/previous build README is [Here](./README-deprecated.md)
+### Supported CPU Architectures
+- **amd64** - 64-bit Intel/AMD processors
+- **arm64** - 64-bit ARM processors (including Apple Silicon Macs)
 
 ## Release Streams
 
-Virtual Disk Images are supplied supporting the various Homebridge Release Streams.
-- Stable/Latest: Most recent releases of NodeJS, Homebridge, Homebridge UI, and FFMPEG
-- Beta: Most recent beta releases of Homebridge 2.0, and Homebridge UI. And the upcoming version of NodeJS.
-- Alpha: Most recent alpha releases of Homebridge, and Homebridge UI. And the upcoming version of NodeJS.
-
-| Stream  | NodeJS[*](https://github.com/nodejs/Release?tab=readme-ov-file#nodejs-release-working-group) | Homebridge | UI | FFMPEG | Stability |
-|---------|--------|------------|----|--------|-----------|
-| Stable/Latest | LTS | Latest | Latest | Latest | Most stable |
-| Beta    | Current | Beta V2 | Beta | Latest | New features, less tested |
-| Alpha   | Current  | Alpha | Alpha | Latest | Experimental, least tested |
-
-All virtual disk and applicance images are parkaged and available as a github release.  
-
-   - [Stable/Latest](https://github.com/homebridge/homebridge-vm-image/releases/latest)
-  
-  For the beta and alpha releases, please select the most recent beta or alpha tag
-   - [Tags](https://github.com/homebridge/homebridge-vm-image/tags)
+| Stream | Node.js | Homebridge | UI | FFmpeg | Best For |
+|--------|---------|------------|-----|--------|----------|
+| **Stable** | LTS | Latest | Latest | Latest | Production use |
+| **Beta** | Current | Beta V2 | Beta | Latest | Testing new features |
+| **Alpha** | Current | Alpha | Alpha | Latest | Experimental/development |
 
 ---
 
-## Usage - Virtual Disk Image
+## Developer Documentation
 
-1. Download the latest Virtual Disk Images for your CPU Architecture.
-2. Create a new virtual machine in HyperV, VirtualBox, Parallels Desktop, ESXi etc.  You must choice the CPU Architecture based on your Host machines's architecture.
-    * *OS*: Linux -> Debian -> Debian (64bit) or Debian (ARM 64bit)
-    * *Hyper-V*: Select "Generation 1 VM"
-3. Configure your virtual machine with the following settings:
-    * **RAM**: 4GB Minimum
-    * **CPU**: 1+
-    * **Network Adapter**: [Bridged Adapter](https://github.com/homebridge/homebridge/wiki/VirtualBox-and-Parallels-Desktop-VM-Network-Settings) (VirtualBox / Parallels Desktop) or [External Switch](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/create-a-virtual-switch-for-hyper-v-virtual-machines) (Hyper-V).
-    * **Existing Virtual Disk Image**: homebridge-vm-image-*.gz (extract first, then this must stay attached forever, so store the .img in a safe place).  Pls use the correct file for your virtual Machine.
-        * *VirtualBox*: Do not check the "Is Live CD" box.
-4. Start your VM.
-5. During first boot in the console window, it will ask you to create a local account for access to the Virtual Machine.  Pls create an account, and remember your credentials.
-6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
-7. Manage Homebridge.
+The following sections are intended for developers and contributors working on the Homebridge VM Image build system.
 
-## Usage - Microsoft HyperV
+### Repository Structure
 
-1. Download the latest Microsoft HyperV Appliance Image ( **HyperV** ) for your CPU Architecture.
-2. Start Hyper-V Manager and select `Import Virtual Machine` - These are the included settings Hyper-V settings:
-    * Generation 2
-    * 4096MB memory (Dynamic Memory **NOT** checked)
-    * Network - "Default Switch"
-    * Security - "Secure Boot Disabled"
-3. Start your VM.
-4. During first boot in the console window, it will ask you to create a local account for access to the Virtual Machine.  Pls create an account, and remember your credentials.
-5. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
-6. Manage Homebridge.
+```
+homebridge-vm-image/
+├── scripts/              # Build and packaging automation scripts
+├── assets/               # VM configuration files and first-boot scripts.  These were mostly copied from homebridge-raspbian-image with a few minor tweaks.
+├── .github/workflows/    # CI/CD GitHub Actions workflows
+└── README.md            # This file
+```
 
-## Usage - Virtual Box Appliance
+### Build and Packaging Scripts
 
-1. Download the latest Virtual Box Applicance Image (**ova**) for your CPU Architecture:
-   - [Stable](https://github.com/homebridge/homebridge-vm-image/releases/tag/2025-10-03)
-   - [Beta](https://github.com/homebridge/homebridge-vm-image/releases/tag/beta-2025-10-02)
-   - [Alpha](https://github.com/homebridge/homebridge-vm-image/releases/tag/alpha-2025-10-02)
+#### Main Build Scripts
 
-2. Store the Applicance in a safe place.  Pls use the correct file for your virtual Machine.
+- **`build-debian-image.sh`**  
+  Main build script for creating the Debian-based Homebridge VM image. Handles disk image creation, OS installation, package setup, and final compression. Called by GitHub Action workflows and `scripts/local-build-in-docker.sh`.
 
-3. Select `Import Applicance` from the menu. And select the file you downloaded earlier.
+- **`scripts/local-build-in-docker.sh`**  
+  Allows running the `build-debian-image.sh` script on non-Linux macOS hosts using Docker.
 
-4. Start your VM.
-5. During first boot in the console window, it will ask you to create a local account for access to the Virtual Machine.  Pls create an account, and remember your credentials.
-6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
-7. Manage Homebridge.
+#### Platform-Specific Packaging
 
-## Usage - UTM Applicance
+- **`scripts/package-for-virtual-box.sh`**  
+  Packages the raw disk image into a VirtualBox-compatible format (VDI), configures the VM, and exports as an OVA appliance.
 
-1. Download the latest UTM Applicance Image (**utm**) for your CPU Architecture:
-   - [Stable](https://github.com/homebridge/homebridge-vm-image/releases/tag/2025-10-03)
-   - [Beta](https://github.com/homebridge/homebridge-vm-image/releases/tag/beta-2025-10-02)
-   - [Alpha](https://github.com/homebridge/homebridge-vm-image/releases/tag/alpha-2025-10-02)
+- **`scripts/package-for-utm.sh`**  
+  Packages the raw disk image into a UTM bundle, configures VM settings, and exports as a `.utm.tgz` file.
 
-2. Unzip and store the Applicance in a safe place.  Pls use the correct file for your virtual Machine.
+- **`scripts/create-release-body.sh`**  
+  Generates the release notes document for GitHub releases.
 
-3. Select `Create a New Virtual Machine` from the menu. And choice `Existing`, then select file you downloaded earlier.
+#### Validation Scripts
 
-4. Start your VM.
-5. During first boot in the console window, it will ask you to create a local account for access to the Virtual Machine.  Pls create an account, and remember your credentials.
-6. Connect to the address shown in the console window, eg. `http://192.168.1.100:8581`.
-7. Manage Homebridge.
+- **`scripts/validate-utm-package.sh`**  
+  Validates the UTM VM bundle by importing, configuring, starting the VM, and verifying Homebridge accessibility.
 
----
+- **`scripts/local-validate-virtual-box-package.sh`**  
+  Validates the VirtualBox VM by starting it and checking that Homebridge UI is available.
 
-# First Boot
+### VM Image Scripts
 
-During the first boot you will need to create a local user account within the virtual machine to manage the image.  This can used to login to the console and the SSH into the image for any required maintenace. Please keep the credential safe.
+These scripts are included in the VM image and run during first boot or maintenance:
 
-<p align="center">
-  <img src="assets/First Boot.png">
-</p>
-
->  ***If the first boot screen did not appear, or if you cancelled, restarting the VM will redisplay the first boot screen.***
-
-Also during first boot on UTM or Virtual Box, the virtual hard disk will be expanded to a 50Gb dynamic virtual hard disk.
-
-# Configuration Reference
-
-[Configuration Reference](https://github.com/homebridge/homebridge/wiki/Install-Homebridge-on-Debian-or-Ubuntu-Linux#configuration-reference)
-
-
-# Included Scripts
-
-This repository provides a set of scripts to automate building, packaging, validating, and expanding the Homebridge VM images for various platforms and architectures. Below is a summary of the key scripts and their purpose:
-
----
-
-## Build and Packaging Scripts
-
-
-- **build-debian-image.sh**  
-  Main build script for creating the Debian-based Homebridge VM image. Handles disk image creation, OS installation, package setup, and final compression.  Called by Github Action workflows and scripts/local-build-in-docker.sh.
-
-- **local-build-in-docker.sh**  
-  Allows running `build-debian-image.sh` script on non-linux MacOS Hosts.
-
-- **package-for-virtual-box.sh**  
-  Packages the raw disk image created from `build-debian-image.sh` into a VirtualBox-compatible format (VDI), configures the VM, and exports as an OVA appliance.
-
-- **package-for-utm.sh**  
-  Packages the raw disk image created from `build-debian-image.sh` into a UTM bundle, configuring VM settings, and exporting the bundle as a `.utm.tgz` file.
-
-- **create-release-body.sh**
-  Creates the body document for the Github Release.
-
----
-
-## Validation Scripts
-
-- **validate-utm-package.sh**  
-  Validates the UTM VM bundle by importing, configuring, starting the VM, and checking that Homebridge is accessible via its web interface.
-
-- **local-validate-virtual-box-package.sh**  
-  Validates the VirtualBox VM by starting the VM, checking its state, and verifying Homebridge UI is available.
-
----
-
-## Image Scripts from assets
-
-
-- **/usr/local/sbin/first-boot-homebridge**  
+- **`/usr/local/sbin/first-boot-homebridge`**  
   Handles initial setup tasks on first boot, including local user account creation and basic configuration.
 
-- **/usr/local/sbin/expandVirtualFilesystem**  
-  Expands the root filesystem inside the VM to utilize all allocated disk space. Run as part of first-boot-homebridge.  Can be rerun if virtual disk allocation is changed.  Tested with UTM and Virtual Box.
+- **`/usr/local/sbin/expandVirtualFilesystem`**  
+  Expands the root filesystem to utilize all allocated disk space. Runs during first boot and can be re-run if virtual disk allocation changes. Tested with UTM and VirtualBox.
 
-- **/usr/local/sbin/updateIssueVMName**  
-  Updates /etc/issue to include VM Software name.  Run as part of first-boot-homebridge.
----
+- **`/usr/local/sbin/updateIssueVMName`**  
+  Updates `/etc/issue` to include VM software name. Runs during first boot.
 
-## Local Builds for Testing
+### Local Development Builds
 
-- **UTM**
-You can run a local build on MacOS with this command
-
+#### UTM (macOS)
 ```bash
 ./local-build-in-docker.sh && ./package-for-utm.sh
 ```
-- **Virtual Box**
-You can run a local build on MacOS with this command
 
+#### VirtualBox (macOS)
 ```bash
 ./local-build-in-docker.sh && ./package-for-virtual-box.sh
 ```
 
----
+### Release Workflow
 
-# Release Workflow Stages
+The automated release process consists of four stages:
 
-- [**`release-stage-1_update_dependencies`**](#release-stage-1_update_dependencies)
-  &darr;
-- [**`release-stage-2_build_and_push_images`**](#release-stage-2_build_and_push_images)
-  &darr;
-- [**`release-stage-3_package_release`**](#release-stage-3_package_release)
-  &darr;
-- [**`release-stage-4_package-for-VM`**](#release-stage-4_package-for-VM)
+#### Stage 1: Update Dependencies (`release-stage-1_update_dependencies`)
 
-## Release Workflow Stages
+**Trigger:** Daily cron job
 
+**Steps:**
+1. Runs `homebridge-dependency-bot` to check for upstream dependency updates
+2. Iterates through each release stream (stable, beta, alpha)
+3. Creates and merges PRs for dependency updates
+4. Triggers Stage 2 for each architecture that needs updating
 
-## release-stage-1_update_dependencies
+#### Stage 2: Build and Push Images (`release-stage-2_build_and_push_images`)
 
-### Steps
+**Inputs:**
+- Release Stream (stable, beta, or alpha)
 
-1. Triggered daily by cron, to check the upstream dependency updates with `homebridge-dependency-bot`.
-2. Iterates thru each release stream, checks for upstream dependency updates, if a change is needed, creates a PR, merges it, then runs the workflow release-stage-2_build_and_push_images for each architecture.
+**Steps:**
+1. Runs `build-debian-image.sh` to create Debian virtual hard disk images with Homebridge pre-installed
+2. Creates images for each architecture (amd64, arm64)
+3. Attaches created images as artifacts to the job
 
+**Triggers:** Stage 3
 
-## release-stage-2_build_and_push_images
+**Note:** This workflow can be manually re-run at any time.
 
-### Inputs
+#### Stage 3: Package Release (`release-stage-3_package_release`)
 
-* Release Stream - Which release stream to package for, either stable, beta or alpha
+**Inputs:**
+- GitHub Run ID from Stage 2
+- Release Stream
+- GitHub Release tag
 
-### Steps
+**Steps:**
+1. Creates a GitHub pre-release with the specified tag
+2. Runs `scripts/convert-img-to-virtual-disk.sh` to convert images to various VM formats
+3. Runs `scripts/create-release-body.sh` to generate release notes
+4. Uploads converted images to GitHub release
 
-1. Runs the script `build-debian-image.sh` to create a Debian virtual hard disk images with Homebridge pre-installed.  
-2. The created images, one for each architecture are attached as artifacts to the job.
+**Triggers:**
+- Stage 4 appliance workflows
+- Cleanup workflow for old beta/alpha releases
 
-### Triggers
+**Note:** To re-run, delete the existing release first.
 
-release-stage-3_package_release
+#### Stage 4: Package for VM (`release-stage-4_package-for-VM`)
 
-### Re-Runable
+**Inputs:**
+- GitHub Run ID from Stage 2
+- Release Stream
+- GitHub Release tag
 
-This can be re-run at any time.
+**Steps:**
+1. Creates VM appliances for Hyper-V, VirtualBox, and UTM
+   - VirtualBox: Uses `scripts/package-for-virtual-box.sh`
+   - UTM: Uses `scripts/package-for-utm.sh`
+   - Hyper-V: Uses PowerShell commands
+2. Uploads appliances to GitHub release
 
-## release-stage-3_package_release
+**Note:** This workflow can be re-run and will overwrite existing appliances.
 
-### Inputs
+### Troubleshooting VM Boot Issues
 
-* Github Run ID from stage 2
-* Release Stream
-* Github Release tag to use for publishing
-
-### Steps
-
-1. Creates a github pre-release with the supplied release tag.
-2. Runs the script `scripts/convert-img-to-virtual-disk.sh` to convert the IMG file created in Step 2 to the format required for the Virtual Machines.  And also runs the script `scripts/create-release-body.sh` to create the github release body content.
-3. The converted images files are uploaded the the github release.
-
-### Triggers
-
-The Release Stage 4 applicance VM image workflows are triggered.
-
-The action "**Cleanup Old Releases and Tags**" is triggered to cleanup old beta and alpha tags and releases.
-
-### Re-Runable
-
-The workflow can be re-run, but before re-running the created release needs to be deleted.
-
-## release-stage-4_package-for-VM
-
-### Inputs
-
-* Github Run ID from stage 2
-* Release Stream
-* Github Release tag to use for publishing
-
-### Steps
-
-1. Creates a VM appliance for either HyperV, Virtual Box or UTM.
-2. For Virtual Box, the script `scripts/package-for-virtual-box.sh` is used.
-3. For UTM, the script `scripts/package-for-utm.sh` is used.
-4. For HyperV, the workflow runs the powershell commands to create and export the appliance
-5. The created VM appliance is uploaded to the Github Release/
-
-### Re-Runable
-
-The workflow can be re-run, and will overwrite the VM Appliance attached to the release.
-
-# Troubleshoot VM Boot issues
-
-```
+#### View All Boot Messages
+```bash
 sudo journalctl -b
 ```
 
-## first-boot-homebridge
-
-```
+#### Check First Boot Service
+```bash
 sudo journalctl -u first-boot-homebridge -b
 ```
 
-## install-vb-guest-additions
-
-```
+#### Check VirtualBox Guest Additions Installation
+```bash
 sudo journalctl -u install-vb-guest-additions -b
 ```
 
-# tzupdate
-
-```
+#### Check Timezone Update Service
+```bash
 sudo journalctl -u tzupdate -b
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+- All changes are tested thoroughly before submitting PRs
+- Build scripts maintain compatibility with both amd64 and arm64 architectures
+- Documentation is updated to reflect any changes
+- Follow existing code style and conventions
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/homebridge/homebridge-vm-image/issues)
+- **Wiki:** [Installation and Usage Documentation](https://github.com/homebridge/homebridge-vm-image/wiki)
+- **Discord:** [Homebridge Community](https://discord.gg/homebridge)
+
+## License
+
+This project is licensed under the Apache-2.0 License - see the LICENSE file for details.
