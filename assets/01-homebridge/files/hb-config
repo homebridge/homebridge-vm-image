@@ -9,46 +9,6 @@ GREEN='\033[0;32m'
 BOLD='\e[1m'
 NC='\033[0m'
 
-is_pi () {
-  # Always return false for VM - not a physical Pi
-  return 1
-}
-
-is_pione() {
-   if grep -q "^Revision\s*:\s*00[0-9a-fA-F][0-9a-fA-F]$" /proc/cpuinfo; then
-      return 0
-   elif grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]0[0-36][0-9a-fA-F]$" /proc/cpuinfo ; then
-      return 0
-   else
-      return 1
-   fi
-}
-
-is_pitwo() {
-   grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]04[0-9a-fA-F]$" /proc/cpuinfo
-   return $?
-}
-
-is_pizero() {
-   grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]0[9cC][0-9a-fA-F]$" /proc/cpuinfo
-   return $?
-}
-
-is_pifour() {
-   grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]11[0-9a-fA-F]$" /proc/cpuinfo
-   return $?
-}
-
-get_pi_type() {
-   if is_pione; then
-      echo 1
-   elif is_pitwo; then
-      echo 2
-   else
-      echo 0
-   fi
-}
-
 is_live() {
     grep -q "boot=live" $CMDLINE
     return $?
@@ -198,298 +158,71 @@ do_nodejs_update() {
   exit 0
 }
 
-do_install_pihole() {
-  pstree -s $$ | grep "hb-service" > /dev/null
-  if [ "$?" -eq 0 ]; then
-    whiptail --title "Error" --msgbox "You must not install Pi Hole via the Homebridge UI Terminal.\n\nFor a successful installation of Pi-Hole you must be logged in using SSH (see wiki for instructions)." 20 60 1
-    printf "\n"
-    return
-  fi
 
-  whiptail --title "Warning" --yesno "Installing Pi-Hole will prevent you from accessing the Homebridge UI on port 80.\n\nYou will still be able to access the Homebridge UI on port $(cat /etc/hb-ui-port) and via:\n\n* http://homebridge.local:$(cat /etc/hb-ui-port)\n* https://homebridge.local\n\nWARNING: Failing to configure Pi-Hole correctly or attempting to uninstall Pi-Hole may result in Homebridge not working correctly. You should take a backup of your Homebridge instance via the UI before proceeding.\n\nAre you sure you want to continue?" 20 60 1
+
+
+# use the utiltiy /usr/local/sbin/expandVirtualFilesystem
+
+do_expand_filesystem() {
+  whiptail --title "Warning" --yesno "This will expand the filesystem to use all available space on the virtual disk.\n\nThis operation may take several minutes to complete depending on the size of your virtual disk.\n\nAre you sure you want to continue?" 20 60 1
   RET=$?
   if [ $RET -eq 0 ]; then
-    if [ -f /etc/nginx/sites-available/homebridge.local ]; then
-      sed -i "/listen 80;/c\  # listen 80;                  # http IPv4 - disabled by Pi-Hole installer" /etc/nginx/sites-available/homebridge.local
-      sed -i "/listen \[::\]:80;/c\  # listen \[::\]:80;             # http IPv6 - disabled by Pi-Hole installer" /etc/nginx/sites-available/homebridge.local
-      if systemctl is-active --quiet nginx.service; then
-        echo "Restarting Nginx..."
-        systemctl restart nginx
-      fi
+    /usr/local/sbin/expandVirtualFilesystem
+    RET=$?
+    if [ $RET -eq 0 ]; then 
+      whiptail --title "Success" --msgbox "The filesystem has been expanded successfully.\n\nYou need to reboot for the changes to take effect.\n\nIf needed the output is here - /var/log/diskexpand.log" 20 60 1
+      ASK_TO_REBOOT=1
+    else
+      whiptail --title "Error" --msgbox "An error occured while attempting to expand the filesystem. Pls see output here - /var/log/diskexpand.log" 20 60 1
     fi
-    printf "Starting Pi-hole installer...\n"
-    curl -sSL https://install.pi-hole.net | bash
-
-    printf "\n${BOLD}Pi-hole has been installed${NC}\n"
-    printf "Access Pi-hole in your browser by going to:\n"
-    get_web_addresses http 80 /admin
-
-    printf "\nYou can still access the Homebridge UI by going to:\n"
-    get_web_addresses http $(cat /etc/hb-ui-port)
-    get_web_addresses https 443
-    printf "\n"
-    exit 0
   fi
 }
 
-do_install_adguard_home() {
-  if [ -e /etc/systemd/system/AdGuardHome.service ]; then
-      whiptail --title "Remove AdGuard Home" --yesno "AdGuard Home is already installed.\n\nWould you like to UNINSTALL AdGuard Home?" 20 60 1
-      RET=$?
-      if [ $RET -eq 0 ]; then
-        systemctl stop AdGuardHome
-      	systemctl disable AdGuardHome
-	      rm -rf /etc/systemd/system/AdGuardHome.service
-        rm -rf /opt/AdGuardHome
-	      systemctl daemon-reload
-        whiptail --title "Success" --msgbox "AdGuard Home has been uninstalled." 20 60 1
-      	printf "\n"
-      fi
+get_hostname() {
+  tr -d " \t\n\r" < /etc/hostname
+}   
+  
+do_hostname() {
+  if [ "$INTERACTIVE" = True ]; then
+    whiptail --msgbox "\
+Please note: RFCs mandate that a hostname's labels \
+may contain only the ASCII letters 'a' through 'z' (case-insensitive),
+the digits '0' through '9', and the hyphen.
+Hostname labels cannot begin or end with a hyphen.
+No other symbols, punctuation characters, or blank spaces are permitted.\
+" 20 70 1
+  fi
+  CURRENT_HOSTNAME=$(get_hostname)
+  if [ "$INTERACTIVE" = True ]; then
+    NEW_HOSTNAME=$(whiptail --inputbox "Please enter a hostname" 20 60 "$CURRENT_HOSTNAME" 3>&1 1>&2 2>&3) 
   else
-    whiptail --title "Warning" --yesno "This will install the AdGuard Home software which uses the following ports:\n\n* 3000\n\nAre you sure you want to continue?" 20 60 1
-    RET=$?
-    if [ $RET -eq 0 ]; then
-      rm -rf /tmp/adguardhome
-      mkdir -p /tmp/adguardhome
-      cd /tmp/adguardhome
-      wget https://static.adguard.com/adguardhome/release/AdGuardHome_linux_armv6.tar.gz
-      tar xvf AdGuardHome_linux_armv6.tar.gz -C /opt
-      rm -rf /tmp/adguardhome
-      cd /opt/AdGuardHome
-      ./AdGuardHome -s install
-      if [ $? -eq 0 ]; then
-        # Complete
-        ADGUARD_WEB=$(get_web_addresses http 3000 | sed 's/\x1b\[[0-9;]*m//g')
-        whiptail --title "Success" --msgbox "AdGuard Home has been installed.\n\nFinish setting up AdGuard Home via:\n\n$ADGUARD_WEB" 20 60 1
-        printf "\n"
-        exit 0
-      else
-        whiptail --title "Error" --msgbox "AdGuard Home failed to install correctly. Review log above." 20 60 1
-        printf "\n"
-        exit 0
-      fi
+    NEW_HOSTNAME="$1"
+    true
+  fi
+  if [ $? -eq 0 ]; then
+    if [ "$INIT" = "systemd" ] && systemctl -q is-active dbus && ! ischroot; then
+      hostnamectl set-hostname "$NEW_HOSTNAME" 2> /dev/null
+    else
+      echo "$NEW_HOSTNAME" > /etc/hostname
     fi
+    sed -i "s/127\.0\.1\.1.*$CURRENT_HOSTNAME/127.0.1.1\t$NEW_HOSTNAME/g" /etc/hosts
+    whiptail --title "Success" --msgbox "The filesystem has been expanded successfully.\n\nYou need to reboot for the changes to take effect." 20 60 1
+    ASK_TO_REBOOT=1
   fi
 }
 
-do_install_deconz() {
-  whiptail --title "Warning" --yesno "This will install the deCONZ and Phoscon software which will use the following ports:\n\n* 4530 - Phoscon Web App\n* 4531 - WebSockets\n\nAre you sure you want to continue?" 20 60 1
-  RET=$?
-  if [ $RET -eq 0 ]; then
-    isRaspbee="0"
-    isRaspbee2="0"
-
-    do_raspbee_setup() {
-      echo "Setting up for RaspBee..."
-      isRaspbee="1"
-
-      # Install deps for VM
-      apt update --allow-releaseinfo-change
-      sudo apt install -y i2c-tools build-essential
-
-      # WiringPi (Pi4 Only)
-      if [ is_pifour ]; then
-        curl -o /tmp/wiringpi-latest.deb https://project-downloads.drogon.net/wiringpi-latest.deb
-        dpkg -i /tmp/wiringpi-latest.deb
-        rm -rf /tmp/wiringpi-latest.deb
-      else
-        apt install wiringpi
-      fi
-
-      # Enable UART
-      set_config_var enable_uart 1 $CONFIG
-    }
-
-    do_raspbee2_setup() {
-      isRaspbee2="1"
-      do_raspbee_setup
-
-      # RTC-Installation
-      [ -d /tmp/raspbee2-rtc-master ] && rm -rf /tmp/raspbee2-rtc-master
-      curl -o /tmp/raspbee2-rtc.zip -L# https://github.com/dresden-elektronik/raspbee2-rtc/archive/master.zip
-      unzip /tmp/raspbee2-rtc.zip -d /tmp
-      cd /tmp/raspbee2-rtc-master
-      make
-      make install
-      cd ~
-      rm -rf /tmp/raspbee2-rtc-master
-    }
-
-    do_conbee_setup() {
-      echo "Setting up for ConBee / ConBee II..."
-      isRaspbee="0"
-    }
-
-    FUN=$(whiptail --title "Choose Device" --menu "\nPlease select the type of device you have:" 20 60 3 --cancel-button Cancel --ok-button Select \
-      "C1 ConBee or ConBee II" "" \
-      "C2 RaspBee I" "" \
-      "C3 RaspBee II" "" \
-      3>&1 1>&2 2>&3)
-    RET=$?
-    if [ $RET -eq 1 ]; then
-      return 0
-    elif [ $RET -eq 0 ]; then
-      case "$FUN" in
-        C1\ *) do_conbee_setup ;;
-        C2\ *) do_raspbee_setup ;;
-        C3\ *) do_raspbee2_setup ;;
-        *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
-      esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
-    fi
-
-    # Import Phoscon public key
-    wget -O - http://phoscon.de/apt/deconz.pub.key | sudo apt-key add -
-
-    # Configure the APT repository for deCONZ
-    # remove -beta when https://forum.phoscon.de/t/please-create-a-repo-for-debian-11-bullseye/432 is resolved
-    sudo sh -c "echo 'deb http://phoscon.de/apt/deconz \
-            $(lsb_release -cs)-beta main' > \
-            /etc/apt/sources.list.d/deconz.list"
-
-    # Update APT package list
-    apt update --allow-releaseinfo-change
-
-    # Install deCONZ
-    apt install -y deconz
-
-    # Add override service
-    mkdir -p /etc/systemd/system/deconz.service.d
-    cat > /etc/systemd/system/deconz.service.d/override.conf <<EOL
-[Service]
-User=$(get_first_user)
-ExecStart=
-ExecStart=/usr/bin/deCONZ -platform minimal --http-port=4530 --ws-port=4531
-EOL
-
-    # Enable and start
-    systemctl daemon-reload
-
-    systemctl stop deconz-gui
-    systemctl disable deconz-gui
-
-    systemctl enable deconz
-    systemctl restart deconz
-
-    # Complete
-    PHOSCON_WEB=$(get_web_addresses http 4530 | sed 's/\x1b\[[0-9;]*m//g')
-    whiptail --title "Success" --msgbox "deCONZ and Phoscon have been installed.\n\nYou can access the Phoscon web app via:\n\n$PHOSCON_WEB" 20 60 1
-
-    # Ask to reboot on RaspBee
-    if [ "$isRaspbee" = "1" ]; then
-      if [ "$isRaspbee2" = "1" ]; then
-        whiptail --title "Final Steps" --msgbox "You need to reboot your device to complete installation.\n\nOnce you have reboot you need to configure the RTC module by running:\n\nsudo hwclock --systohc\nsudo hwclock --verbose\n\nSee the RaspBee II install guide for further instructions: https://phoscon.de/en/raspbee2/install#raspbian" 20 60 1
-      else
-        whiptail --title "Final Steps" --msgbox "You need to reboot your device to complete installation." 20 60 1
-      fi
-      whiptail --title "Reboot Required" --yesno "Would you like to reboot now?" 20 60 2
-      if [ $? -eq 0 ]; then # yes
-        sync
-        reboot
-      fi
-    fi
-  fi
-}
-
-do_install_desktop_and_vnc() {
-  get_vnc() {
-    if systemctl status vncserver-x11-serviced.service  | grep -q -w active; then
-      echo 0
-    else
-      echo 1
-    fi
-  }
-
-  do_vnc() {
-    DEFAULT=--defaultno
-    if [ $(get_vnc) -eq 0 ]; then
-      DEFAULT=
-    fi
-    whiptail --yesno "Would you like the VNC Server and virtual desktop service enabled?" $DEFAULT 20 60 2 --no-button "Disable" --yes-button "Enable"
-    RET=$?
-    if [ $RET -eq 0 ]; then
-
-      # install desktop for VM
-      if is_installed task-desktop; then
-        echo "Desktop Environment Already Installed"
-      else
-        whiptail --title "Warning" --yesno "A desktop environment will now be installed.\n\nThis may take between 5 and 45 minutes to complete depending on your device." 20 60 2 --no-button "Cancel" --yes-button "Continue"
-        if [ $? -eq 0 ]; then
-          apt update --allow-releaseinfo-change
-          apt install -y task-desktop
-        else
-          return 0;
-        fi
-      fi
-
-      # install and setup VNC
-      if is_installed realvnc-vnc-server || (apt update --allow-releaseinfo-change && apt install -y realvnc-vnc-server); then
-#        cat > /etc/systemd/system/vncserver-pi.service <<EOL
-#[Unit]
-#Description=VNC Virtual Desktop Service
-#After=syslog.target network.target
-
-#[Service]
-#Type=forking
-#User=$(get_first_user)
-#Group=$(get_first_user)
-#WorkingDirectory=/home/$(get_first_user)
-
-#PIDFile=/home/$(get_first_user)/.vnc/%H:12.pid
-#ExecStartPre=-/usr/bin/vncserver -kill :12 > /dev/null 2>&1
-#ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x800 :12
-#ExecStop=/usr/bin/vncserver -kill :12
-
-#[Install]
-#WantedBy=multi-user.target
-#EOL
-        systemctl enable vncserver-x11-serviced.service &&
-        systemctl start vncserver-x11-serviced.service &&
-#        systemctl enable vncserver-pi.service &&
-#        systemctl start vncserver-pi.service &&
-        STATUS=enabled
-      else
-        return 1
-      fi
-    elif [ $RET -eq 1 ]; then
-      if is_installed realvnc-vnc-server; then
-          systemctl disable vncserver-x11-serviced.service
-          systemctl stop vncserver-x11-serviced.service
-#          systemctl disable vncserver-pi.service
-#          systemctl stop vncserver-pi.service
-      fi
-      STATUS=disabled
-    else
-      return $RET
-    fi
-
-    if [ "$STATUS" = "disabled" ]; then
-      whiptail --title "Success" --msgbox "The VNC Server and virtual desktop have been disabled." 20 60 1
-    else
-      # Complete
-      VNC_ACCESS_URI=$(get_ip_and_port 5912 | sed 's/\x1b\[[0-9;]*m//g')
-      whiptail --title "Success" --msgbox "The VNC Server and virtual desktop have been configured.\n\nYou can connect to the virtual desktop using the RealVNC Viewer on port 5912:\n\n$VNC_ACCESS_URI\n\nDownload RealVNC Viewer:\n\n  * https://www.realvnc.com/download/viewer/" 20 60 1
-    fi
-  }
-
-  do_vnc
-}
-
-do_extra_packages() {
+do_advanced_options() {
   FUN=$(whiptail --title "Homebridge VM Configuration Tool (hb-config)" --menu "Advanced Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Back --ok-button Select \
-    "A0 AdGuard Home" "Install / Uninstall AdGuard Home" \
-    "A1 Pi-hole" "Install / Reconfigure Pi-hole" \
-    "A2 deCONZ / Phoscon" "Install / Update to manage your ConBee or RaspBee device" \
-    "A3 RealVNC Server" "Enable / Disable desktop access over VNC" \
+    "A1 Change Hostname" "Change hostname for this computer on a network" \
+    "A2 Expand Filesystem" "Expand Virtual Filesystem to current allocation" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
     return 0
   elif [ $RET -eq 0 ]; then
     case "$FUN" in
-      A0\ *) do_install_adguard_home ;;
-      A1\ *) do_install_pihole ;;
-      A2\ *) do_install_deconz ;;
-      A3\ *) do_install_desktop_and_vnc ;;
+      A1\ *) do_hostname ;;
+      A2\ *) do_expand_filesystem ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   fi
@@ -710,8 +443,9 @@ if [ "$INTERACTIVE" = True ]; then
         "3 Restore Config" "Restores the Homebridge config to the factory default" \
         "4 Nginx Options" "Configure Homebridge Nginx settings" \
         "5 Configure OS" "Open the System Configuration Tool" \
-        "6 Update" "Update this tool to the latest version" \
-        "7 About" "Information about this configuration tool" \
+        "6 Advanced Options" "Advanced Options ie expand file system, change host name" \
+        "8 Update" "Update this tool to the latest version" \
+        "9 About" "Information about this configuration tool" \
         3>&1 1>&2 2>&3)
     RET=$?
     if [ $RET -eq 1 ]; then
@@ -724,8 +458,9 @@ if [ "$INTERACTIVE" = True ]; then
           3\ *) do_restore_config ;;
           4\ *) do_configure_nginx ;;
           5\ *) do_configure_system ;;
-          6\ *) do_update ;;
-          7\ *) do_about ;;
+          6\ *) do_advanced_options ;;
+          8\ *) do_update ;;
+          9\ *) do_about ;;
           *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
         esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
     else
