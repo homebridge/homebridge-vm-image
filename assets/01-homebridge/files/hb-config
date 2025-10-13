@@ -442,8 +442,7 @@ if [ "$INTERACTIVE" = True ]; then
         "2 Update Homebridge" "Update Homebridge and Node.js to the latest version using apt-pkg" \
         "3 Restore Config" "Restores the Homebridge config to the factory default" \
         "4 Nginx Options" "Configure Homebridge Nginx settings" \
-        "5 Configure OS" "Open the System Configuration Tool" \
-        "6 Advanced Options" "Advanced Options ie expand file system, change host name" \
+        "5 Advanced Options" "Advanced Options ie expand file system, change host name" \
         "8 Update" "Update this tool to the latest version" \
         "9 About" "Information about this configuration tool" \
         3>&1 1>&2 2>&3)
@@ -457,8 +456,7 @@ if [ "$INTERACTIVE" = True ]; then
           2\ *) do_homebridge_update ;;
           3\ *) do_restore_config ;;
           4\ *) do_configure_nginx ;;
-          5\ *) do_configure_system ;;
-          6\ *) do_advanced_options ;;
+          5\ *) do_advanced_options ;;
           8\ *) do_update ;;
           9\ *) do_about ;;
           *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
