@@ -44,7 +44,8 @@ OUTPUT_DIR="${REPO_ROOT}/output"
 
 MANIFEST="${OUTPUT_DIR}/release-body.md"
 cp "${REPO_ROOT}/assets/release-body-header.md" "$MANIFEST"
-
+echo >> "$MANIFEST"
+echo >> "$MANIFEST"
 PKG_RELEASE_STREAM="${1:-beta}"
 
 info "Creating release body at ${MANIFEST}"
@@ -112,57 +113,55 @@ if [ -n "$LATEST_TAG" ]; then
 
       # Check if the version has changed and add it to the changelog
       if [[ "$PREV_VERSION" != "$CURR_VERSION" && "$CURR_VERSION" != "unknown" ]]; then
+        log "Dependency ${DEP} changed from ${PREV_VERSION} to ${CURR_VERSION}, ${HAS_PACKAGE_CHANGES}"
         if [ "$HAS_PACKAGE_CHANGES" = false ]; then
-          echo "### Package Manifest Changes" >> "$MANIFEST"
+
+          log "Adding Package Manifest Changes section to release body"
+          echo -e "## ${PKG_RELEASE_STREAM} Docker Build Instruction Changes" >> "$MANIFEST"
           echo >> "$MANIFEST"
           HAS_PACKAGE_CHANGES=true
         fi
         echo "* **${DEP}**: Updated from $PREV_VERSION to $CURR_VERSION" >> "$MANIFEST"
       fi
     done
-
-    # Add a blank line to the manifest if there were package changes
-    if [ "$HAS_PACKAGE_CHANGES" = true ]; then
-      echo >> "$MANIFEST"
-    fi
-    else
-      warn "Could not find previous package.json at tag ${LATEST_TAG} for comparison."
-    fi
+  else
+    warn "Could not find previous package.json at tag ${LATEST_TAG} for comparison."
+  fi
 fi
 
 # Add current manifest section
-echo -e "\n## Current Package Manifests\n" >> "$MANIFEST"
+echo >> "$MANIFEST"
+echo -e "\n## Current Package Manifests:\n" >> "$MANIFEST"
 
-# Display AMD64 manifest if it exists
-if [[ -f "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-amd64.manifest" ]]; then
-  echo "### AMD64 Manifest" >> "$MANIFEST"
-  echo '```' >> "$MANIFEST"
-  cat "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-amd64.manifest" >> "$MANIFEST"
-  echo '```' >> "$MANIFEST"
-  echo >> "$MANIFEST"
-else
-  warn "AMD64 manifest not found at ${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-amd64.manifest"
-fi
+for OUTPUT_MANIFEST in ${OUTPUT_DIR}/*manifest; do
 
-# Display ARM64 manifest if it exists
-if [[ -f "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-arm64.manifest" ]]; then
-  echo "### ARM64 Manifest" >> "$MANIFEST"
-  echo '```' >> "$MANIFEST"
-  cat "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-arm64.manifest" >> "$MANIFEST"
-  echo '```' >> "$MANIFEST"
+# Extract the base name of the manifest file
+  MANIFEST_NAME=$(basename "$OUTPUT_MANIFEST")
+
+# Create this line based on the manifest name - ### AMD64 Manifest
+  if [[ "$MANIFEST_NAME" == *"amd64.manifest" ]]; then
+    MANIFEST_HEADER="AMD64 Manifest"
+  elif [[ "$MANIFEST_NAME" == *"arm64.manifest" ]]; then
+    MANIFEST_HEADER="ARM64 Manifest"
+  else
+    MANIFEST_HEADER="$MANIFEST_NAME"
+  fi
+
+  log "Including manifest: $MANIFEST_NAME"
+  echo "### ${MANIFEST_HEADER}" >> "$MANIFEST"
   echo >> "$MANIFEST"
-else
-  warn "ARM64 manifest not found at ${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-arm64.manifest"
-fi
+  cat "$OUTPUT_MANIFEST" >> "$MANIFEST"
+  echo >> "$MANIFEST"
+done
 
 if gh release download "$LATEST_TAG" --pattern "*.manifest" --dir ${PREVIOUS_DIR} 2>/dev/null; then
-  echo -e "\n## Changes Since Previous Release ($LATEST_TAG)\n" >> "$MANIFEST"
+  echo -e "\n## Changes Since Previous Release ($LATEST_TAG):\n" >> "$MANIFEST"
   
   # Iterate through all manifest files in ${OUTPUT_DIR}
   for OUTPUT_MANIFEST in ${OUTPUT_DIR}/*manifest; do
     # Extract the base name of the manifest file
     MANIFEST_NAME=$(basename "$OUTPUT_MANIFEST")
-    log "Processing manifest: $MANIFEST_NAME"
+    log "Processing manifest for changes: $MANIFEST_NAME"
     # Check if a corresponding file exists in ${PREVIOUS_DIR}
     PREVIOUS_MANIFEST="${PREVIOUS_DIR}/${MANIFEST_NAME}"
     if [[ -f "$PREVIOUS_MANIFEST" ]]; then
