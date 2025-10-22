@@ -6,7 +6,7 @@
 | UTM | UTM Appliance |
 | HYPERV | Microsoft HyperV Virtual Machine |
 
-## Virtual Disk Images
+## Virtual Disk Images:
 
 | File | Usage |
 |:-------:|:-------:|
