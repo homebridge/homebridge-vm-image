@@ -130,6 +130,31 @@ if [ -n "$LATEST_TAG" ]; then
     fi
 fi
 
+# Add current manifest section
+echo -e "\n## Current Package Manifests\n" >> "$MANIFEST"
+
+# Display AMD64 manifest if it exists
+if [[ -f "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-amd64.manifest" ]]; then
+  echo "### AMD64 Manifest" >> "$MANIFEST"
+  echo '```' >> "$MANIFEST"
+  cat "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-amd64.manifest" >> "$MANIFEST"
+  echo '```' >> "$MANIFEST"
+  echo >> "$MANIFEST"
+else
+  warn "AMD64 manifest not found at ${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-amd64.manifest"
+fi
+
+# Display ARM64 manifest if it exists
+if [[ -f "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-arm64.manifest" ]]; then
+  echo "### ARM64 Manifest" >> "$MANIFEST"
+  echo '```' >> "$MANIFEST"
+  cat "${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-arm64.manifest" >> "$MANIFEST"
+  echo '```' >> "$MANIFEST"
+  echo >> "$MANIFEST"
+else
+  warn "ARM64 manifest not found at ${OUTPUT_DIR}/homebridge-vm-image-${PKG_RELEASE_STREAM}-arm64.manifest"
+fi
+
 if gh release download "$LATEST_TAG" --pattern "*.manifest" --dir ${PREVIOUS_DIR} 2>/dev/null; then
   echo -e "\n## Changes Since Previous Release ($LATEST_TAG)\n" >> "$MANIFEST"
   
