@@ -43,12 +43,41 @@ mkdir -p "$PREVIOUS_DIR"
 OUTPUT_DIR="${REPO_ROOT}/output"
 
 MANIFEST="${OUTPUT_DIR}/release-body.md"
-cp "${REPO_ROOT}/assets/release-body-header.md" "$MANIFEST"
-echo >> "$MANIFEST"
-echo >> "$MANIFEST"
-PKG_RELEASE_STREAM="${1:-beta}"
 
 info "Creating release body at ${MANIFEST}"
+
+log "Adding header to release body"
+cp "${REPO_ROOT}/assets/release-body-header.md" "$MANIFEST"
+echo >> "$MANIFEST"
+
+PKG_RELEASE_STREAM="${1:-beta}"
+
+
+log "Adding package manifest section for stream: ${PKG_RELEASE_STREAM}"
+
+# Add current manifest section
+echo -e "\n## Current Package Manifests:\n" >> "$MANIFEST"
+
+for OUTPUT_MANIFEST in ${OUTPUT_DIR}/*manifest; do
+
+# Extract the base name of the manifest file
+  MANIFEST_NAME=$(basename "$OUTPUT_MANIFEST")
+
+# Create this line based on the manifest name - ### AMD64 Manifest
+  if [[ "$MANIFEST_NAME" == *"amd64.manifest" ]]; then
+    MANIFEST_HEADER="AMD64 Manifest"
+  elif [[ "$MANIFEST_NAME" == *"arm64.manifest" ]]; then
+    MANIFEST_HEADER="ARM64 Manifest"
+  else
+    MANIFEST_HEADER="$MANIFEST_NAME"
+  fi
+
+  log "Including manifest: $MANIFEST_NAME"
+  echo "### ${MANIFEST_HEADER}" >> "$MANIFEST"
+  echo >> "$MANIFEST"
+  cat "$OUTPUT_MANIFEST" >> "$MANIFEST"
+  echo >> "$MANIFEST"
+done
 
 # Get the latest tag to compare against, filtered by release type
 if [[ "${PKG_RELEASE_STREAM:-stable}" == "beta" ]]; then
@@ -117,7 +146,7 @@ if [ -n "$LATEST_TAG" ]; then
         if [ "$HAS_PACKAGE_CHANGES" = false ]; then
 
           log "Adding Package Manifest Changes section to release body"
-          echo -e "## ${PKG_RELEASE_STREAM} Docker Build Instruction Changes" >> "$MANIFEST"
+          echo -e "## Docker Build Instruction Changes" >> "$MANIFEST"
           echo >> "$MANIFEST"
           HAS_PACKAGE_CHANGES=true
         fi
@@ -129,30 +158,7 @@ if [ -n "$LATEST_TAG" ]; then
   fi
 fi
 
-# Add current manifest section
-echo >> "$MANIFEST"
-echo -e "\n## Current Package Manifests:\n" >> "$MANIFEST"
 
-for OUTPUT_MANIFEST in ${OUTPUT_DIR}/*manifest; do
-
-# Extract the base name of the manifest file
-  MANIFEST_NAME=$(basename "$OUTPUT_MANIFEST")
-
-# Create this line based on the manifest name - ### AMD64 Manifest
-  if [[ "$MANIFEST_NAME" == *"amd64.manifest" ]]; then
-    MANIFEST_HEADER="AMD64 Manifest"
-  elif [[ "$MANIFEST_NAME" == *"arm64.manifest" ]]; then
-    MANIFEST_HEADER="ARM64 Manifest"
-  else
-    MANIFEST_HEADER="$MANIFEST_NAME"
-  fi
-
-  log "Including manifest: $MANIFEST_NAME"
-  echo "### ${MANIFEST_HEADER}" >> "$MANIFEST"
-  echo >> "$MANIFEST"
-  cat "$OUTPUT_MANIFEST" >> "$MANIFEST"
-  echo >> "$MANIFEST"
-done
 
 if gh release download "$LATEST_TAG" --pattern "*.manifest" --dir ${PREVIOUS_DIR} 2>/dev/null; then
   echo -e "\n## Changes Since Previous Release ($LATEST_TAG):\n" >> "$MANIFEST"
