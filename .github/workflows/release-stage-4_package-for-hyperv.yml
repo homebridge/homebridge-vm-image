@@ -125,9 +125,7 @@ jobs:
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $exportPath = "output\$vmName-export"
-          # Resolve the parent directory explicitly so the zip is created in the output folder.
-          $parentOutput = (Resolve-Path "..").Path
-          $zipPath = Join-Path $parentOutput "output\$vmName-hyperv.zip"
+          $zipPath = "..\$vmName-hyperv.zip"
           if (-not (Test-Path $exportPath)) {
             throw "Export path '$exportPath' not found"
           }
