@@ -29,6 +29,7 @@ concurrency:
 jobs:
   package-for-hyperv:
     runs-on: windows-2022
+    timeout-minutes: 60
     strategy:
       max-parallel: 1
       fail-fast: false
@@ -124,7 +125,9 @@ jobs:
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $exportPath = "output\$vmName-export"
-          $zipPath = "output\$vmName-hyperv.zip"
+          # Resolve the parent directory explicitly so the zip is created in the output folder.
+          $parentOutput = (Resolve-Path "..").Path
+          $zipPath = Join-Path $parentOutput "$vmName-hyperv.zip"
           if (-not (Test-Path $exportPath)) {
             throw "Export path '$exportPath' not found"
           }
@@ -134,6 +137,7 @@ jobs:
           # Change into the export folder and add all files so the archive does NOT include the parent path.
           Push-Location $exportPath
           try {
+            pwd
             # Use '*' to include everything inside the folder; create zip in the output parent folder.
             & 7z a -tzip $zipPath * -r -mx=9
             Write-Host "Zipped contents of $exportPath to $zipPath (archive root contains export folder contents only)"
