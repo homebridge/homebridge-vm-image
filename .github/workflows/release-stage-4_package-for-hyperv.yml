@@ -119,7 +119,7 @@ jobs:
           Write-Host "Exported VM $vmName to $exportPath"
 
       - name: List Exported Artifacts
-        run: dir output
+        run: dir -Recurse output
 
       - name: Zip Hyper-V Export with 7-Zip
         run: |
@@ -127,7 +127,7 @@ jobs:
           $exportPath = "output\$vmName-export"
           # Resolve the parent directory explicitly so the zip is created in the output folder.
           $parentOutput = (Resolve-Path "..").Path
-          $zipPath = Join-Path $parentOutput "$vmName-hyperv.zip"
+          $zipPath = Join-Path $parentOutput "output\$vmName-hyperv.zip"
           if (-not (Test-Path $exportPath)) {
             throw "Export path '$exportPath' not found"
           }
@@ -146,7 +146,7 @@ jobs:
           }
 
       - name: List Exported Artifacts
-        run: dir output
+        run: dir -Recurse output
 
       - name: Upload Hyper-V Appliance as Artifact
         uses: actions/upload-artifact@v4
