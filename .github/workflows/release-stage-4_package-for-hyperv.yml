@@ -93,7 +93,7 @@ jobs:
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
-          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath
+          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version 9.0
           Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
           Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
           Write-Host "VM $vmName created and configured."
@@ -125,12 +125,21 @@ jobs:
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $exportPath = "output\$vmName-export"
           $zipPath = "output\$vmName-hyperv.zip"
+          if (-not (Test-Path $exportPath)) {
+            throw "Export path '$exportPath' not found"
+          }
           if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) {
             choco install 7zip -y
           }
-          # Only include files, not the source directory itself
-          & 7z a -tzip $zipPath "$exportPath\*" -xr!$exportPath
-          Write-Host "Zipped contents of $exportPath to $zipPath (excluding source directory)"
+          # Change into the export folder and add all files so the archive does NOT include the parent path.
+          Push-Location $exportPath
+          try {
+            # Use '*' to include everything inside the folder; create zip in the output parent folder.
+            & 7z a -tzip $zipPath * -r -mx=9
+            Write-Host "Zipped contents of $exportPath to $zipPath (archive root contains export folder contents only)"
+          } finally {
+            Pop-Location
+          }
 
       - name: List Exported Artifacts
         run: dir output
