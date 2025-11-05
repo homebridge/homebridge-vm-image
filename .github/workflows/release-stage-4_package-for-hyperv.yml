@@ -28,8 +28,11 @@ on:
         options:
           - '8.0'
           - '9.0'
+          - '9.1'
+          - '9.2'
+          - '9.3'
           - '10.0'
-        default: '9.0'
+        default: '10.0'
 
 concurrency:
   group: package-hyperv
