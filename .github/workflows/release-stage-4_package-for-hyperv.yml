@@ -21,6 +21,15 @@ on:
         description: 'Homebridge VM image version aka release tag'
         required: true
         type: string
+      Hyperv_Version:
+        description: 'Hyper-V Version to target (8.0, 9.0 or 10.0)'
+        required: false
+        type: choice
+        options:
+          - '8.0'
+          - '9.0'
+          - '10.0'
+        default: '9.0'
 
 concurrency:
   group: package-hyperv
@@ -90,11 +99,11 @@ jobs:
           }
           Write-Host "Using switch: $switchName"
 
-      - name: Create Hyper-V VM
+      - name: Create Hyper-V VM Version ${{ inputs.Hyperv_Version }}
         run: |
           $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
           $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
-          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version 8.0
+          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version ${{ inputs.Hyperv_Version }}
           Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
           Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
           Write-Host "VM $vmName created and configured."
