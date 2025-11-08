@@ -4,7 +4,7 @@
 |:-------:|:-------:|
 | OVA | Open Virtual Appliance optimized for VirtualBox |
 | UTM | UTM Appliance |
-| HYPERV | Microsoft HyperV Virtual Machine Version 10.0 |
+| HYPERV | Microsoft HyperV Virtual Machine Version V8.0 & V10.0 |
 
 ## Virtual Disk Images:
 

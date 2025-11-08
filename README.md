@@ -28,7 +28,7 @@ The wiki includes:
 ### Appliance Images (Ready to Import)
 - **OVA** - VirtualBox Open Virtual Appliance
 - **UTM** - UTM Appliance for macOS
-- **HYPERV** - Microsoft Hyper-V Virtual Machine (Windows 10/11 Enterprise, Pro, or Education)
+- **HyperV** - Microsoft Hyper-V Virtual Machine (Windows 10/11 Enterprise, Pro, or Education)
 
 ### Virtual Disk Images (Manual Setup)
 - **QCOW2** - QEMU/KVM Virtual Hard Disk

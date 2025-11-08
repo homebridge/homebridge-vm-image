@@ -29,11 +29,13 @@ concurrency:
 jobs:
   package-for-hyperv:
     runs-on: windows-2022
+    timeout-minutes: 60
     strategy:
       max-parallel: 1
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
+        hyperv_version: ['8.0', '10.0']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -60,7 +62,7 @@ jobs:
       - name: Convert IMG to VHDX with qemu-img
         run: |
           $imgPath = (Get-ChildItem -Path output -Filter *.img).FullName
-          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
+          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.vhdx"
           # Find qemu-img.exe in common install locations
           $qemuImgExe = "${env:ProgramFiles}\qemu\qemu-img.exe"
           if (!(Test-Path $qemuImgExe)) {
@@ -89,18 +91,18 @@ jobs:
           }
           Write-Host "Using switch: $switchName"
 
-      - name: Create Hyper-V VM
+      - name: Create Hyper-V VM Version ${{ matrix.hyperv_version }}
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
-          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vhdx"
-          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
+          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.vhdx"
+          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version ${{ matrix.hyperv_version }}
           Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
           Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
           Write-Host "VM $vmName created and configured."
 
       - name: Set VM Description (Notes)
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
           $manifestPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.manifest"
           if (Test-Path $manifestPath) {
             $description = Get-Content $manifestPath | Out-String
@@ -112,41 +114,51 @@ jobs:
 
       - name: Export Hyper-V VM
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
           $exportPath = "output\$vmName-export"
           Export-VM -Name $vmName -Path $exportPath
           Write-Host "Exported VM $vmName to $exportPath"
 
       - name: List Exported Artifacts
-        run: dir output
+        run: dir -Recurse output
 
       - name: Zip Hyper-V Export with 7-Zip
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}"
+          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
           $exportPath = "output\$vmName-export"
-          $zipPath = "output\$vmName-hyperv.zip"
+          $zipPath = "..\$vmName.zip"
+          if (-not (Test-Path $exportPath)) {
+            throw "Export path '$exportPath' not found"
+          }
           if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) {
             choco install 7zip -y
           }
-          # Only include files, not the source directory itself
-          & 7z a -tzip $zipPath "$exportPath\*" -xr!$exportPath
-          Write-Host "Zipped contents of $exportPath to $zipPath (excluding source directory)"
+          # Change into the export folder and add all files so the archive does NOT include the parent path.
+          Push-Location $exportPath
+          try {
+            pwd
+            # Use '*' to include everything inside the folder; create zip in the output parent folder.
+            & 7z a -tzip $zipPath * -r -mx=9
+            Write-Host "Zipped contents of $exportPath to $zipPath (archive root contains export folder contents only)"
+          } finally {
+            Pop-Location
+          }
 
       - name: List Exported Artifacts
-        run: dir output
+        run: dir -Recurse output
 
       - name: Upload Hyper-V Appliance as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hyperv-appliance-${{ matrix.arch }}
+          name: hyperv-appliance-${{ matrix.arch }}-v${{ matrix.hyperv_version }}
           path: |
-            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip
+            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.zip
             output\*.manifest
 
       - name: Upload VHDX, ZIP, and HyperV ZIP to GitHub Release
         run: |
           gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" `
-            "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv.zip" --clobber
+            "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.zip" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -156,3 +168,4 @@ jobs:
           echo "::notice::Run ID: ${{ inputs.run_id }}"
           echo "::notice::Architecture: ${{ matrix.arch }}"
           echo "::notice::Release Stream: ${{ inputs.release_stream }}"
+          echo "::notice::Hyper-V Version: ${{ matrix.hyperv_version }}"
