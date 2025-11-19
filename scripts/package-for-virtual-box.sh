@@ -150,7 +150,7 @@ package_as_ova() {
   VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
     --cpus 2 \
-    --firmware bios \
+    --firmware efi \
     --boot1 disk \
     --nic1 bridged \
     --bridgeadapter1 "en0" \

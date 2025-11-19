@@ -83,4 +83,4 @@ jobs:
           echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
           echo "::notice::Run ID: ${{ inputs.run_id }}"
           echo "::notice::Architecture: ${{ matrix.arch }}"
-          echo "::notice::Release Stream: ${{ inputs.release_stream }}" 
+          echo "::notice::Release Stream: ${{ inputs.release_stream }}"

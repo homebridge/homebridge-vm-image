@@ -94,6 +94,7 @@ start_vm() {
   done
   if [[ "$VM_STATE" != "running" ]]; then
     error "VM failed to start."
+    tail -n 50 "$VM_LOG_FOLDER/VBox.log" || true
     exit 1
   fi
 }
@@ -113,6 +114,7 @@ wait_for_homebridge() {
   done
   if [[ "$STATUS" != "200" ]]; then
     error "Homebridge UI did not respond with HTTP 200"
+    tail -n 50 "$VM_LOG_FOLDER/VBox.log" || true
     exit 1
   fi
 }
@@ -129,6 +131,7 @@ check_json_field() {
   # Compare the actual value with the expected value
   if [[ "$actual_value" != "$expected_value" ]]; then
     error "Expected $field to be '$expected_value', but got '$actual_value'"
+    tail -n 50 "$VM_LOG_FOLDER/VBox.log" || true
     exit 1
   fi
 
@@ -145,6 +148,7 @@ check_homebridge_web_interface() {
 
   if [[ -z "$response" ]]; then
     error "No response received from $url"
+    tail -n 50 "$VM_LOG_FOLDER/VBox.log" || true
     exit 1
   fi
 

@@ -3,15 +3,6 @@ description: Installs VirtualBox on Ubuntu runners using the jammy repo for best
 runs:
   using: "composite"
   steps:
-    - name: Check runner OS version
-      run: |
-        source /etc/os-release
-        if [[ "$VERSION_ID" != "22.04" ]]; then
-          echo "::error::Due to Oracle Virtual Box Package issues, this workflow must run on ubuntu-22.04. Current version: $VERSION_ID"
-          exit 1
-        fi
-      shell: bash
-
     - name: apt-get update
       run: |
         echo "::group::Running apt-get update"
@@ -22,8 +13,17 @@ runs:
     - name: Add Oracle VirtualBox repo
       run: |
         echo "::group::Adding Oracle VirtualBox Repository"
+        
+        # Detect Ubuntu version codename
+        UBUNTU_CODENAME=$(lsb_release -cs)
+        echo "Detected Ubuntu codename: $UBUNTU_CODENAME"
+        
+        # Download and add Oracle GPG key
         wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo gpg --dearmor -o /usr/share/keyrings/oracle_vbox_2016.gpg
-        echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian jammy contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
+        
+        # Add VirtualBox repository with detected Ubuntu version
+        echo "deb [signed-by=/usr/share/keyrings/oracle_vbox_2016.gpg] https://download.virtualbox.org/virtualbox/debian $UBUNTU_CODENAME contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
+        
         sudo apt-get update
         echo "::endgroup::"
       shell: bash
