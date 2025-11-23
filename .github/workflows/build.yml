@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v6
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
@@ -40,7 +40,7 @@ jobs:
 
     - name: Upload to GitHub Releases (only on tag or manual)
       if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: output/homebridge-${{ matrix.arch }}.img.gz
       env:

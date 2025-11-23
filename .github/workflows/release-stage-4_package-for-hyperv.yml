@@ -38,10 +38,10 @@ jobs:
         hyperv_version: ['8.0', '10.0']
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: homebridge-image-${{ matrix.arch }}
           path: output
@@ -148,7 +148,7 @@ jobs:
         run: dir -Recurse output
 
       - name: Upload Hyper-V Appliance as Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: hyperv-appliance-${{ matrix.arch }}-v${{ matrix.hyperv_version }}
           path: |
