@@ -39,7 +39,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set Docker Homebridge version
       id: docker_version
@@ -73,7 +73,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       # Setup build environemnt
       - name: Install dependencies
@@ -89,7 +89,7 @@ jobs:
 
       # Step 3: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           retention-days: 7
           name: homebridge-image-${{ matrix.arch }}
@@ -109,7 +109,7 @@ jobs:
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Trigger and Wait for ${{ inputs.release_stream }} Stage 3 Workflow
       uses: ./.github/actions/trigger-and-wait-workflow

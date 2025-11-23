@@ -39,12 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
     - name: Download Artifacts
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v6
       with:
         pattern: homebridge-image-*
         path: ./output
@@ -125,7 +125,7 @@ jobs:
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     # Step 2: Trigger Packaging and Validation Workflow
     - name: Trigger Appliance Packaging Workflow
@@ -182,7 +182,7 @@ jobs:
       steps:
             # Step 1: Checkout the repository
         - name: Checkout repository
-          uses: actions/checkout@v5
+          uses: actions/checkout@v6
 
         - name: Wait for all Release Stage 4 packaging workflows with matching run_id to complete
           run: |
@@ -217,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Cleanup older beta and alpha release and tags
       if: ${{ inputs.release_stream != 'stable' }}
@@ -234,7 +234,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     # Mark stable release as non-prerelease and latest
     - name: Mark Stable Release as Non-Prerelease and Latest
