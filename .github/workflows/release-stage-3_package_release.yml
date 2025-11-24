@@ -34,6 +34,9 @@ concurrency:
   group: package-and-release
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
