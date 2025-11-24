@@ -34,22 +34,17 @@ concurrency:
   group: package-and-release
   cancel-in-progress: false
 
-permissions:
-  contents: write
-
 jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-        persist-credentials: true
 
     - name: Download Artifacts
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v5
       with:
         pattern: homebridge-image-*
         path: ./output
@@ -78,30 +73,12 @@ jobs:
           echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
         fi
 
-    - name: Configure Git Authentication
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        # Configure git to use the GitHub token for authentication
-        git config --global credential.helper store
-        echo "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
-        chmod 600 ~/.git-credentials
-
     - name: Create Release Body
       id: release_body
       run: |
         ./scripts/create-release-body.sh "${{ inputs.release_stream }}"
       env:
         GH_TOKEN: ${{ github.token }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Create Release Tag
-      run: |
-        git tag -f "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-        git push -f origin "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create GitHub Prerelease
       id: create_release
@@ -111,7 +88,7 @@ jobs:
         tag: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
         prerelease: true
         draft: false
-        name: ${{ steps.set_title.outputs.RELEASE_TITLE }}
+        name: ${{ steps.set_title.outputs.release_title }}
         files: |
           ./output/*.manifest
         body: Placeholder, will be updated in next step
@@ -148,7 +125,7 @@ jobs:
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v5
 
     # Step 2: Trigger Packaging and Validation Workflow
     - name: Trigger Appliance Packaging Workflow
@@ -205,7 +182,7 @@ jobs:
       steps:
             # Step 1: Checkout the repository
         - name: Checkout repository
-          uses: actions/checkout@v6
+          uses: actions/checkout@v5
 
         - name: Wait for all Release Stage 4 packaging workflows with matching run_id to complete
           run: |
@@ -240,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v5
 
     - name: Cleanup older beta and alpha release and tags
       if: ${{ inputs.release_stream != 'stable' }}
@@ -255,14 +232,14 @@ jobs:
     needs: [invoke-appliance-packaging]
     if: ${{ inputs.release_stream == 'stable' }}
     runs-on: ubuntu-latest
-    steps:    - name: Checkout repository      uses: actions/checkout@v6    # Mark stable release as non-prerelease and latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    # Mark stable release as non-prerelease and latest
     - name: Mark Stable Release as Non-Prerelease and Latest
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh release edit ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} \
-          --prerelease=false \
-          --latest
       run: |
         gh release edit ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} \
           --prerelease=false \
