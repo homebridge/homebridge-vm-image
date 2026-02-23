@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v6
    
       - name: Download Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: homebridge-image-${{ matrix.arch }}
           path: ./output
@@ -61,7 +61,7 @@ jobs:
           echo "VDI_FILE=./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vdi.gz" >> $GITHUB_OUTPUT
 
       - name: Upload image and manifest artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           retention-days: 7
           name: virtualbox-appliance-${{ matrix.arch }}
