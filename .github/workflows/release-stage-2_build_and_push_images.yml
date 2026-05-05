@@ -89,7 +89,7 @@ jobs:
 
       # Step 3: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           retention-days: 7
           name: homebridge-image-${{ matrix.arch }}

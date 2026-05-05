@@ -43,7 +43,7 @@ jobs:
 
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: homebridge-image-${{ matrix.arch }}
           path: ./output
@@ -81,7 +81,7 @@ jobs:
 
       # Step 8: Upload UTM package as artifact
       - name: Upload UTM package as artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: utm-package
           path: ./output/*.utm.tgz
