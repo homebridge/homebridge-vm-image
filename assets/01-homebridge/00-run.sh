@@ -56,6 +56,9 @@ apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
 if [ -n "${HOMEBRIDGE_RING_VERSION}" ]; then
   hb-service add homebridge-ring@${HOMEBRIDGE_RING_VERSION}
 fi
+if [ -n "${HOMEBRIDGE_TUYA_API_VERSION}" ]; then
+  hb-service add homebridge-tuya-api@${HOMEBRIDGE_TUYA_API_VERSION}
+fi
 
 # empty motd
 > /etc/motd
