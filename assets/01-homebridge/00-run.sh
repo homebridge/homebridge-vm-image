@@ -52,13 +52,11 @@ apt-get update
 apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
 
 # Pre-install bundled plugins into the Homebridge plugin path.
+# HOMEBRIDGE_PLUGINS is a space-separated list of name@version specs;
 # hb-service resolves the apt package's custom plugin path automatically.
-if [ -n "${HOMEBRIDGE_RING_VERSION}" ]; then
-  hb-service add homebridge-ring@${HOMEBRIDGE_RING_VERSION}
-fi
-if [ -n "${HOMEBRIDGE_TUYA_API_VERSION}" ]; then
-  hb-service add homebridge-tuya-api@${HOMEBRIDGE_TUYA_API_VERSION}
-fi
+for plugin in ${HOMEBRIDGE_PLUGINS}; do
+  hb-service add "\$plugin"
+done
 
 # empty motd
 > /etc/motd
