@@ -15,6 +15,14 @@
         {
           "name": "ffmpeg-for-homebridge",
           "tag": "latest"
+        },
+        {
+          "name": "homebridge-ring",
+          "tag": "latest"
+        },
+        {
+          "name": "homebridge-tuya-platform",
+          "tag": "latest"
         }
       ]
     }
