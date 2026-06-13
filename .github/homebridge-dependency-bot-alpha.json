@@ -21,7 +21,7 @@
           "tag": "latest"
         },
         {
-          "name": "homebridge-tuya-api",
+          "name": "homebridge-tuya-platform",
           "tag": "latest"
         }
       ]
