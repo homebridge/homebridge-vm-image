@@ -5,6 +5,8 @@
   "description": "Stub file to track versions of homebridge-apt-pkg and ffmpeg-for-homebridge for the 'stable' release stream of the homebridge-vm-image package",
   "dependencies": {
     "@homebridge/homebridge-apt-pkg": "2.0.6",
-    "ffmpeg-for-homebridge": "2.2.2"
+    "ffmpeg-for-homebridge": "2.2.2",
+    "homebridge-ring": "14.3.0",
+    "homebridge-tuya-platform": "1.5.0"
   }
 }

@@ -13,6 +13,7 @@ install -m 755 files/hb-config "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 
 # Pre-start files
 install -v -d "${ROOTFS_DIR}/etc/hb-service/homebridge/prestart.d"
+install -m 755 files/10-hb-mdns-advertiser "${ROOTFS_DIR}/etc/hb-service/homebridge/prestart.d/"
 install -m 755 files/20-hb-nginx-check "${ROOTFS_DIR}/etc/hb-service/homebridge/prestart.d/"
 
 # First boot service
@@ -50,6 +51,13 @@ echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge
 apt-get update
 apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
 
+# Pre-install bundled plugins into the Homebridge plugin path.
+# HOMEBRIDGE_PLUGINS is a space-separated list of name@version specs;
+# hb-service resolves the apt package's custom plugin path automatically.
+for plugin in ${HOMEBRIDGE_PLUGINS}; do
+  hb-service add "\$plugin"
+done
+
 # empty motd
 > /etc/motd
 
@@ -75,5 +83,7 @@ echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo te
 systemctl daemon-reload
 systemctl enable homebridge
 systemctl enable first-boot-homebridge
+# avahi-daemon provides mDNS for HomeKit advertising and the .local UI address
+systemctl enable avahi-daemon || true
 EOF
 

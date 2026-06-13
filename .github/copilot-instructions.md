@@ -82,10 +82,10 @@ sudo rm -rf work-{arch} output || true
 ### Modifying the Build Process
 - **Build script**: Edit `build.sh` for changes to the image creation process
 - **Homebridge service**: Modify `assets/homebridge.service` for service configuration changes
-- **Avahi discovery**: Edit `assets/50-avahi.service` for network discovery settings
+- **Avahi / HomeKit discovery**: `avahi-daemon` is installed by `build-debian-image.sh` and enabled in `assets/01-homebridge/00-run.sh`. Homebridge is pointed at the system Avahi advertiser by the prestart hook `assets/01-homebridge/files/10-hb-mdns-advertiser` to avoid an mDNS port 5353 conflict that breaks HomeKit pairing.
 
 ### Asset Files Details
-- `50-avahi.service`: Enables Homebridge discovery on port 51826 via mDNS/Bonjour
+- `01-homebridge/files/10-hb-mdns-advertiser`: Prestart hook that sets Homebridge's mDNS advertiser to `avahi` so HomeKit pairing works alongside avahi-daemon
 - `homebridge.service`: Runs Homebridge as user "homebridge" in `/var/lib/homebridge`
 - `cloud-init.yaml`: Alternative cloud-init configuration (not used by current build process)
 

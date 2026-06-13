@@ -1,0 +1,80 @@
+#!/bin/bash
+#
+# Ensure Homebridge advertises HomeKit over the system Avahi daemon.
+#
+# This VM image runs avahi-daemon, which owns mDNS port 5353 (and provides
+# the *.local hostname used for the UI). Homebridge's default bundled
+# advertiser ("bonjour-hap" / ciao) also binds 5353, and the two conflict —
+# the bridge is discoverable but HomeKit pairing fails or times out.
+# Delegating advertising to Avahi removes the conflict while keeping the
+# .local UI address working.
+#
+# Runs as a hb-service prestart hook, as root, before Homebridge starts.
+
+set -e
+
+CONFIG=/var/lib/homebridge/config.json
+HB_USER=homebridge
+HB_GROUP=homebridge
+
+# jq is required to edit/create the config safely; bail out quietly if missing
+# rather than blocking Homebridge from starting.
+command -v jq >/dev/null 2>&1 || exit 0
+
+if [ -f "$CONFIG" ]; then
+  # Config already exists: only set the advertiser when the user hasn't
+  # chosen one, so we never override a deliberate setting.
+  current=$(jq -r '.bridge.advertiser // empty' "$CONFIG" 2>/dev/null || true)
+  if [ -z "$current" ]; then
+    tmp=$(mktemp)
+    if jq '.bridge.advertiser = "avahi"' "$CONFIG" > "$tmp" 2>/dev/null; then
+      cat "$tmp" > "$CONFIG"
+      printf "Set Homebridge mDNS advertiser to avahi in %s\n" "$CONFIG"
+    fi
+    rm -f "$tmp"
+  fi
+  exit 0
+fi
+
+# First boot: no config yet. Seed a valid default config with Avahi already
+# selected, generating a per-VM bridge identity (so every VM is unique) that
+# matches the defaults Homebridge would otherwise create itself.
+rand_hex() { tr -dc 'A-F0-9' < /dev/urandom | head -c "$1"; }
+
+NAME="Homebridge $(rand_hex 4)"
+USERNAME="0E:$(rand_hex 2):$(rand_hex 2):$(rand_hex 2):$(rand_hex 2):$(rand_hex 2)"
+PORT=$(( (RANDOM % 30001) + 30000 ))   # 30000-60000
+PIN="031-45-154"                        # Homebridge default setup code
+
+tmp=$(mktemp)
+jq -n \
+  --arg name "$NAME" \
+  --arg username "$USERNAME" \
+  --argjson port "$PORT" \
+  --arg pin "$PIN" \
+  '{
+     bridge: {
+       name: $name,
+       username: $username,
+       port: $port,
+       pin: $pin,
+       advertiser: "avahi"
+     },
+     accessories: [],
+     platforms: [
+       { name: "Config", port: 8581, platform: "config" }
+     ]
+   }' > "$tmp"
+
+mkdir -p "$(dirname "$CONFIG")"
+cat "$tmp" > "$CONFIG"
+rm -f "$tmp"
+
+# Hand the file to the Homebridge service user so it can manage it.
+if getent passwd "$HB_USER" >/dev/null 2>&1; then
+  chown "$HB_USER:$HB_GROUP" "$CONFIG" 2>/dev/null || true
+fi
+chmod 644 "$CONFIG" 2>/dev/null || true
+
+printf "Created default Homebridge config with avahi advertiser at %s\n" "$CONFIG"
+exit 0
