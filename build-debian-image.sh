@@ -458,6 +458,7 @@ install_staged_assets() {
                 export BUILD_VERSION='${BUILD_VERSION:-development}'
                 export HOMEBRIDGE_APT_PKG_VERSION='${HOMEBRIDGE_APT_PKG_VERSION:-}'
                 export FFMPEG_FOR_HOMEBRIDGE_VERSION='${FFMPEG_FOR_HOMEBRIDGE_VERSION:-}'
+                export HOMEBRIDGE_RING_VERSION='${HOMEBRIDGE_RING_VERSION:-}'
                 export RELEASE_STREAM='${RELEASE_STREAM:-stable}'
                 
                 on_chroot() {
@@ -519,10 +520,12 @@ main() {
     export HOMEBRIDGE_APT_PKG_NPM_VERSION=$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
     export HOMEBRIDGE_APT_PKG_VERSION=$( echo ${HOMEBRIDGE_APT_PKG_NPM_VERSION} | sed 's/-/~/' )
     export FFMPEG_FOR_HOMEBRIDGE_VERSION=v$(jq -r '.dependencies["ffmpeg-for-homebridge"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
+    export HOMEBRIDGE_RING_VERSION=$(jq -r '.dependencies["homebridge-ring"] // empty' ${RELEASE_STREAM}/package.json | sed 's/\^//')
 
     log "Using homebridge-apt-pkg NPM version: ${BLUE}${HOMEBRIDGE_APT_PKG_NPM_VERSION}${NC}"
     log "Using homebridge-apt-pkg version: ${BLUE}${HOMEBRIDGE_APT_PKG_VERSION}${NC}"
     log "Using ffmpeg-for-homebridge version: ${BLUE}${FFMPEG_FOR_HOMEBRIDGE_VERSION}${NC}"
+    [[ -n "${HOMEBRIDGE_RING_VERSION}" ]] && log "Using homebridge-ring version: ${BLUE}${HOMEBRIDGE_RING_VERSION}${NC}"
     
     for stage in $(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
       group_log "Stage: $stage"
@@ -554,6 +557,7 @@ main() {
         [[ -n "$APT_MANIFEST" ]] && printf "%s\n" "$APT_MANIFEST"
         echo "| ffmpeg for homebridge | ${FFMPEG_FOR_HOMEBRIDGE_VERSION} |"
         echo "| Homebridge APT Package | ${HOMEBRIDGE_APT_PKG_NPM_VERSION} |"
+        [[ -n "${HOMEBRIDGE_RING_VERSION}" ]] && echo "| homebridge-ring | ${HOMEBRIDGE_RING_VERSION} |"
     } > ${MANIFEST_FILE}
 
     sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"

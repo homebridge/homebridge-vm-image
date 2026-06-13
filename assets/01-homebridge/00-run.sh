@@ -50,6 +50,12 @@ echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge
 apt-get update
 apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
 
+# Pre-install bundled plugins into the Homebridge plugin path.
+# hb-service resolves the apt package's custom plugin path automatically.
+if [ -n "${HOMEBRIDGE_RING_VERSION}" ]; then
+  hb-service add homebridge-ring@${HOMEBRIDGE_RING_VERSION}
+fi
+
 # empty motd
 > /etc/motd
 
