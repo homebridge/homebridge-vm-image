@@ -39,7 +39,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
 
       - name: Download Artifacts
