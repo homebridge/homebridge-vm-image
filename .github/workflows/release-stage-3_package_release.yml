@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -125,7 +125,7 @@ jobs:
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     # Step 2: Trigger Packaging and Validation Workflow
     - name: Trigger Appliance Packaging Workflow
@@ -182,7 +182,7 @@ jobs:
       steps:
             # Step 1: Checkout the repository
         - name: Checkout repository
-          uses: actions/checkout@v6
+          uses: actions/checkout@v7
 
         - name: Wait for all Release Stage 4 packaging workflows with matching run_id to complete
           run: |
@@ -217,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Cleanup older beta and alpha release and tags
       if: ${{ inputs.release_stream != 'stable' }}
@@ -234,7 +234,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     # Mark stable release as non-prerelease and latest
     - name: Mark Stable Release as Non-Prerelease and Latest
