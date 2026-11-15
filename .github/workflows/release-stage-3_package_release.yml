@@ -91,27 +91,25 @@ jobs:
 
     - name: Create GitHub Prerelease
       id: create_release
-      uses: docker://ghcr.io/mini-bomba/create-github-release:v1.2.0
-      with:
-        token: ${{ steps.app-token.outputs.token }}
-        tag: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
-        prerelease: true
-        draft: false
-        name: ${{ steps.set_title.outputs.release_title }}
-        files: |
-          ./output/*.manifest
-        body: Placeholder, will be updated in next step
-        if-no-files: true
-        clear_attachments: true
-        fail_on_no_files: false
-
-    - name: Update release body
-      uses: tubone24/update_release@v1.3.1
       env:
-        GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        TAG_NAME: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
-      with:
-        body_path: ./output/release-body.md
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        TAG: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+        TITLE: ${{ steps.set_title.outputs.release_title }}
+      run: |
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          echo "Release $TAG exists, clearing attachments and updating"
+          gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r asset; do
+            gh release delete-asset "$TAG" "$asset" --yes
+          done
+          gh release edit "$TAG" --title "$TITLE" --notes-file ./output/release-body.md --prerelease --draft=false
+        else
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TITLE" --notes-file ./output/release-body.md --prerelease
+        fi
+        shopt -s nullglob
+        manifests=(./output/*.manifest)
+        if (( ${#manifests[@]} )); then
+          gh release upload "$TAG" "${manifests[@]}" --clobber
+        fi
 
     - name: Convert, Compress, and Upload Each Virtual Disk Format
       run: |
