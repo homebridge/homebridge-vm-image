@@ -38,6 +38,15 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
+    - name: Create GitHub App Token
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
+        private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+        owner: homebridge
+        repositories: homebridge-vm-image
+        permission-contents: write
     - name: Checkout
       uses: actions/checkout@v7
       with:
@@ -82,33 +91,31 @@ jobs:
 
     - name: Create GitHub Prerelease
       id: create_release
-      uses: docker://ghcr.io/mini-bomba/create-github-release:v1.2.0
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        tag: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
-        prerelease: true
-        draft: false
-        name: ${{ steps.set_title.outputs.release_title }}
-        files: |
-          ./output/*.manifest
-        body: Placeholder, will be updated in next step
-        if-no-files: true
-        clear_attachments: true
-        fail_on_no_files: false
-
-    - name: Update release body
-      uses: tubone24/update_release@v1.3.1
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG_NAME: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
-      with:
-        body_path: ./output/release-body.md
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        TAG: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+        TITLE: ${{ steps.set_title.outputs.release_title }}
+      run: |
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          echo "Release $TAG exists, clearing attachments and updating"
+          gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r asset; do
+            gh release delete-asset "$TAG" "$asset" --yes
+          done
+          gh release edit "$TAG" --title "$TITLE" --notes-file ./output/release-body.md --prerelease --draft=false
+        else
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TITLE" --notes-file ./output/release-body.md --prerelease
+        fi
+        shopt -s nullglob
+        manifests=(./output/*.manifest)
+        if (( ${#manifests[@]} )); then
+          gh release upload "$TAG" "${manifests[@]}" --clobber
+        fi
 
     - name: Convert, Compress, and Upload Each Virtual Disk Format
       run: |
         ./scripts/convert-img-to-virtual-disk.sh ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
     - name: Release created
       run: |
@@ -233,13 +240,22 @@ jobs:
     if: ${{ inputs.release_stream == 'stable' }}
     runs-on: ubuntu-latest
     steps:
+    - name: Create GitHub App Token
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
+        private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+        owner: homebridge
+        repositories: homebridge-vm-image
+        permission-contents: write
     - name: Checkout repository
       uses: actions/checkout@v7
 
     # Mark stable release as non-prerelease and latest
     - name: Mark Stable Release as Non-Prerelease and Latest
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
       run: |
         gh release edit ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} \
           --prerelease=false \
