@@ -1,8 +1,10 @@
 [Unit]
 Description=First Boot Homebridge Setup
-After=multi-user.target
+# The wizard runs on the screen console, before the login prompt of that console.
+# It must NOT be ordered after multi-user.target: the login prompts are part of that target, so
+# "after the target, before the login prompt" is a loop, and systemd then drops a job to break it.
+After=systemd-user-sessions.service
 Before=getty@tty1.service
-# ConditionPathExists=/etc/first-boot-homebridge
 
 [Service]
 Type=oneshot
