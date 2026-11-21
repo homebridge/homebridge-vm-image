@@ -43,7 +43,11 @@ quiet() {
   rm -f "$output"
 }
 
-# Configure APT for faster downloads
+# apt settings FOR THE BUILD ONLY: no translations and no "recommended" packages, so the build is
+# fast and the image is small. scripts/seal-image.sh deletes both files at the end of the build,
+# so apt in the VM works like normal Debian (decided by BP, 2026-11-21).
+# Because of the second setting, every package the image needs must be named in a list below
+# or in assets/*/00-packages. A package that is only "recommended" by another one is not installed.
 echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99nolang
 echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/99norecommends
 
@@ -88,15 +92,17 @@ echo "grub-efi-${ARCH} grub2/force_efi_extra_removable boolean true" | debconf-s
 
 log "Installing kernel, bootloader, and utilities"
 # Define package lists
+# The kernel and the boot loader. (No kernel headers: nothing in the image builds kernel modules.)
 KERNEL_PACKAGES=(
   linux-image-${ARCH}
-  linux-headers-${ARCH}
   grub-efi-${ARCH}
   grub-efi-${ARCH}-bin
   grub-common
   grub2-common
 )
 
+# Tools, the network (dhcpcd, avahi, mDNS names), the SSH server, and what the console wizard
+# and hb-config need (whiptail, kbd).
 SYSTEM_UTILITIES=(
   wget
   psmisc
@@ -118,16 +124,18 @@ SYSTEM_UTILITIES=(
   ssh
   zstd
   avahi-daemon
-  vim.tiny
-  dialog
+  vim-tiny
   file
   whiptail
   kbd
 )
 
+# Helpers for the VM programs:
+#   hyperv-daemons     Hyper-V: lets the host see the VM's address and shut it down cleanly
+#   qemu-guest-agent   QEMU, UTM, Proxmox: the same. The boot test also talks to the VM through it
+#   cloud-guest-utils  growpart, which grows the partition into a larger virtual disk
 VIRTUALIZATION_SUPPORT=(
   hyperv-daemons
-  spice-vdagent
   qemu-guest-agent
   cloud-guest-utils
 )
@@ -223,9 +231,7 @@ cat > /etc/hosts <<HOSTS_EOF
 ::1       localhost ip6-localhost ip6-loopback
 HOSTS_EOF
 
-# Set root password
-# echo "root:root" | chpasswd
+# root gets no password: nobody can log in as root. The first-boot wizard makes the user account.
 
-# Clean package cache
+# Clean package cache (scripts/seal-image.sh removes the package lists at the end of the build)
 apt-get clean
-rm -rf /var/lib/apt/lists/*
