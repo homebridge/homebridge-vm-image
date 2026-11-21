@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # single quotes are meant: the text is looked for, or passed on, as it is
 # The boot test is the gate before a release: a failed check, a VM that never answers and a
 # check that never ends must all stop the release.
 # shellcheck source=lib.sh

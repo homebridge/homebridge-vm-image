@@ -263,14 +263,12 @@ configure_vm() {
     # Read manifest and set as Information:Notes, preserving newlines
     info "Reading manifest from ${MANIFEST}"
     local manifest_content
-    # Escape quotes and backslashes to make content PlistBuddy-compatible
-    manifest_content=$(cat "${MANIFEST}" | sed 's/"/\\"/g' | sed 's/\\/\\\\/g')
+    # Escape backslashes and quotes to make content PlistBuddy-compatible. Backslashes first:
+    # the other way round, the backslash that was just put before a quote is doubled again.
+    manifest_content=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' "${MANIFEST}")
     /usr/libexec/PlistBuddy -c "Delete :Information:Notes" "$plist" 2>/dev/null || true
-    # Use a temporary file to handle multiline content
-    echo "$manifest_content" > /tmp/manifest_content.txt
     /usr/libexec/PlistBuddy -c "Add :Information:Notes string" "$plist"
-    /usr/libexec/PlistBuddy -c "Set :Information:Notes \"$(cat /tmp/manifest_content.txt)\"" "$plist"
-    rm -f /tmp/manifest_content.txt
+    /usr/libexec/PlistBuddy -c "Set :Information:Notes \"${manifest_content}\"" "$plist"
 
     # Verify architecture in config.plist
     local plist_arch

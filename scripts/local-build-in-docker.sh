@@ -74,7 +74,7 @@ docker run --rm -it \
   --privileged \
   -v "$REPO_ROOT":/repo/ \
   --workdir /repo \
-  --name homebridge-vm-build-${RELEASE_STREAM}-${ARCH} \
+  --name "homebridge-vm-build-${RELEASE_STREAM}-${ARCH}" \
   "$DOCKER_IMAGE_TAG" \
   bash ./build-debian-image.sh "$ARCH" "${RELEASE_STREAM}" 
 

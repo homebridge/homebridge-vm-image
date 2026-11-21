@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Loaded by the Homebridge apt package (/opt/homebridge/source.sh), which is a /bin/sh script.
 # Keep this file plain sh.
 #
@@ -5,5 +6,6 @@
 # is decided in this file. It only loads the file below, which belongs to root and is outside
 # that folder.
 if [ -r /usr/local/lib/homebridge-vm/vm-env.sh ]; then
+  # shellcheck source=vm-env.sh
   . /usr/local/lib/homebridge-vm/vm-env.sh
 fi

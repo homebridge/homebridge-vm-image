@@ -21,6 +21,13 @@ for _ in $(seq 200); do
 done
 same "the first byte always marks a made-up address for one machine" "$bad" "0"
 
+# the notes of the VM are put inside double quotes for PlistBuddy: quotes and backslashes in
+# the manifest must be escaped, each one once
+ESCAPE="$(sed -n 's/^ *manifest_content=\$(\(sed .*\) "\${MANIFEST}")$/\1/p' "$SCRIPT")"
+printf 'say "hi" and a \\ sign\n' > "$W/manifest"
+same "a quote and a backslash in the notes are each escaped once" "$(eval "$ESCAPE" '"$W/manifest"')" 'say \"hi\" and a \\ sign'
+hasnt "the packaging uses no fixed file name in /tmp" "$SCRIPT" "/tmp/"
+
 has "the packaging writes a new address into the VM config" "$SCRIPT" 'Set :Network:0:MacAddress $(random_mac_address)'
 
 # the template of the VM settings (a property list; python reads it)

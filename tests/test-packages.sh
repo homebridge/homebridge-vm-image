@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # single quotes are meant: the text is looked for, or passed on, as it is
 # The package lists of the image: nothing that is unused, empty or gone from Debian 13.
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
@@ -7,7 +8,7 @@ BASE="$REPO/scripts/chroot-base-setup.sh"
 
 # every package name the image build asks for: the three lists of the base setup and the stage lists
 names() {
-  { sed -n '/^[A-Z_]*=($/,/^)$/p' "$BASE" | grep -E '^  [a-z0-9]' ; grep -hv '^#' "$REPO"/assets/*/00-packages; } | tr -d ' ' | sed 's/\${ARCH}/ARCH/' | sort
+  { sed -n '/^[A-Z_]*=($/,/^)$/p' "$BASE" | grep -E '^  ["a-z0-9]' ; grep -hv '^#' "$REPO"/assets/*/00-packages; } | tr -d ' "' | sed 's/\${ARCH}/ARCH/' | sort
 }
 names > "$W/names"
 
@@ -25,9 +26,9 @@ done
 same "no package is named twice" "$(uniq -d "$W/names" | tr '\n' ' ')" ""
 
 # every line of a stage list is a package name or a comment (the build drops lines that start with #)
-same "the stage lists hold only names and comments" "$(grep -hvE '^(#.*|[a-z0-9][a-z0-9+.-]*)$' "$REPO"/assets/*/00-packages | wc -l | tr -d ' ')" "0"
+same "the stage lists hold only names and comments" "$(cat "$REPO"/assets/*/00-packages | grep -cvE '^(#.*|[a-z0-9][a-z0-9+.-]*)$')" "0"
 
-base_setup
+base_setup arm64
 same "the base setup ends with code 0" "$BASE_SETUP_CODE" "0"
 isnt "the base setup does not ask apt for a package that is commented out" grep -qE '^apt-get install .* #' "$W/calls.log"
 

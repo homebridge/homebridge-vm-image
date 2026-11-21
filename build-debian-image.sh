@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 # Configuration
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 # The Debian release the image is built on (13 = "trixie"). The Raspberry Pi image uses the same one.
 readonly DISTRO="trixie"
 readonly SIZE_MB=5120  # 5GB total disk size
@@ -11,8 +12,13 @@ readonly DEBIAN_KEYRING="/usr/share/keyrings/debian-archive-keyring.gpg"
 
 # Debug settings - set DEBUG=1 for verbose output
 readonly DEBUG="${DEBUG:-0}"
-readonly APT_QUIET=$([[ $DEBUG -eq 1 ]] && echo "" || echo "-qq")
-readonly BASH_DEBUG_FLAG=$([[ $DEBUG -eq 1 ]] && echo "x" || echo "")
+APT_QUIET="-qq"
+BASH_DEBUG_FLAG=""
+if [[ $DEBUG -eq 1 ]]; then
+    APT_QUIET=""
+    BASH_DEBUG_FLAG="x"
+fi
+readonly APT_QUIET BASH_DEBUG_FLAG
 
 set -euo pipefail
 [[ $DEBUG -eq 1 ]] && set -x
@@ -63,7 +69,9 @@ cleanup() {
             sudo umount -f "${ROOTFS}" 2>/dev/null || true
         fi
         
-        [[ -n "${ESP_MOUNTDIR:-}" ]] && sudo umount -f "${ESP_MOUNTDIR}" 2>/dev/null || true
+        if [[ -n "${ESP_MOUNTDIR:-}" ]]; then
+            sudo umount -f "${ESP_MOUNTDIR}" 2>/dev/null || true
+        fi
         
         # Remove partition mappings
         sudo kpartx -d "$LOOP_DEV" 2>/dev/null || true
@@ -176,7 +184,8 @@ setup_loop_device() {
     sleep 2
     sudo udevadm settle
     
-    local base_name=$(basename "$LOOP_DEV")
+    local base_name
+    base_name=$(basename "$LOOP_DEV")
     ESP_PART="/dev/mapper/${base_name}p1"
     ROOT_PART="/dev/mapper/${base_name}p2"
     
@@ -201,7 +210,6 @@ setup_loop_device() {
 
 # Bootstrap or restore cached rootfs
 setup_rootfs() {
-    local arch="$1"
     local cache_file="${CACHE_DIR}/debootstrap-${DISTRO}-${ARCH}.tar.gz"
     
     sudo mount "$ROOT_PART" "$ROOTFS"
@@ -256,12 +264,11 @@ mount_for_chroot() {
 
 # Configure base system in chroot
 configure_base_system() {
-    local arch="$1"
-    
     group_log "Configuring base system"
 
     # Run scripts/chroot-base-setup.sh inside the new system
-    sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < "${SCRIPT_DIR}/scripts/chroot-base-setup.sh"
+    # shellcheck disable=SC2024  # the script file is read by the build user, as meant; only chroot needs root
+    sudo chroot "$ROOTFS" /bin/bash "-eu${BASH_DEBUG_FLAG}" /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < "${SCRIPT_DIR}/scripts/chroot-base-setup.sh"
     group_end
 }
 
@@ -284,7 +291,7 @@ install_staged_assets() {
             # (with DEBUG=1 it is shown as it comes).
             local show_output="false"
             [[ $DEBUG -eq 1 ]] && show_output="true"
-            sudo chroot "$ROOTFS" /bin/bash -euc${BASH_DEBUG_FLAG} "
+            sudo chroot "$ROOTFS" /bin/bash "-euc${BASH_DEBUG_FLAG}" "
                 export DEBIAN_FRONTEND=noninteractive
                 run() {
                     if $show_output; then \"\$@\"; return; fi
@@ -395,11 +402,11 @@ main() {
     group_log "Creating and partitioning disk image"
     create_image "$IMG_PATH" "$SIZE_MB"
     setup_loop_device "$IMG_PATH" 
-    setup_rootfs "${ARCH}"
+    setup_rootfs
     mount_for_chroot
     group_end
 
-    configure_base_system "${ARCH}"
+    configure_base_system
     
     group_log "Installing Homebridge VM customizations"
     # Install customizations, these are copied from homebridge-raspbian-image
@@ -409,6 +416,7 @@ main() {
     # The versions to build, from <stream>/package.json. The npm version "2.1.0-beta.4" is the
     # apt version "2.1.0~beta.4".
     HOMEBRIDGE_APT_PKG_NPM_VERSION="$(pinned_version "${RELEASE_STREAM}" "@homebridge/homebridge-apt-pkg")"
+    # shellcheck disable=SC2001  # sed on purpose: in a ${x/-/~} form bash would turn "~" into the home folder
     HOMEBRIDGE_APT_PKG_VERSION="$(sed 's/-/~/' <<< "${HOMEBRIDGE_APT_PKG_NPM_VERSION}")"
     FFMPEG_FOR_HOMEBRIDGE_VERSION="v$(pinned_version "${RELEASE_STREAM}" "ffmpeg-for-homebridge")"
     export HOMEBRIDGE_APT_PKG_NPM_VERSION HOMEBRIDGE_APT_PKG_VERSION FFMPEG_FOR_HOMEBRIDGE_VERSION
@@ -432,8 +440,9 @@ main() {
       install_staged_assets "$stage"
       group_end
     done < <(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
-    local APT_MANIFEST_FILE
-    APT_MANIFEST_FILE=$(ls "${ROOTFS}/opt/homebridge/homebridge_apt_pkg"*.manifest 2>/dev/null | head -n 1)
+    # the manifest file of the Homebridge apt package (its name holds the version)
+    local apt_manifests=("${ROOTFS}"/opt/homebridge/homebridge_apt_pkg*.manifest)
+    local APT_MANIFEST_FILE="${apt_manifests[0]}"
     local APT_MANIFEST=""
     if [[ -f "$APT_MANIFEST_FILE" ]]; then
         # Preserve all lines from the manifest file except header lines, keeping original line returns

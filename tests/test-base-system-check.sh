@@ -15,7 +15,12 @@ fake du 'echo "1M x"'
 fake zstd
 (
   PATH="$W/bin:$PATH"
-  log() { :; }; info() { :; }; warn() { :; }
+  # shellcheck disable=SC2317  # called by the function under test
+  log() { :; }
+  # shellcheck disable=SC2317
+  info() { :; }
+  # shellcheck disable=SC2317
+  warn() { :; }
   eval "$(sed -n 's/^readonly \(DISTRO\|DEBIAN_KEYRING\)=/\1=/p' "$BUILD")"
   eval "$(sed -n '/^setup_rootfs() {$/,/^}$/p' "$BUILD")"
   # shellcheck disable=SC2034  # read by setup_rootfs
