@@ -90,7 +90,9 @@ jobs:
     - name: Create Release Body
       id: release_body
       run: |
-        ./scripts/create-release-body.sh "$RELEASE_STREAM"
+        # CURRENT_TAG: on a second build of the same day the tag exists already; the notes must
+        # then compare with the release before it, not with itself
+        CURRENT_TAG="$TAG" ./scripts/create-release-body.sh "$RELEASE_STREAM"
       env:
         GH_TOKEN: ${{ github.token }}
 
