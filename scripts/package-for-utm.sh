@@ -188,6 +188,19 @@ get_architecture() {
     fi
 }
 
+# Prints a random network card address for the VM.
+# The template holds one fixed address. With that, the stable and the beta package on the same
+# network would use the same address and knock each other off the network. Every package that
+# is built now gets its own address. (UTM gives a VM a new address when the user clones it.)
+# The first byte is even and has the "locally administered" bit set, as the rules for made-up
+# addresses ask.
+random_mac_address() {
+    local bytes
+    bytes=$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
+    printf '%02X:%s:%s:%s:%s:%s\n' "$(( (0x${bytes:0:2} & 0xFC) | 0x02 ))" \
+        "${bytes:2:2}" "${bytes:4:2}" "${bytes:6:2}" "${bytes:8:2}" "${bytes:10:2}" | tr 'a-f' 'A-F'
+}
+
 # Function to configure the VM
 configure_vm() {
     local plist="${VM_DIR}/config.plist"
@@ -242,6 +255,7 @@ configure_vm() {
     /usr/libexec/PlistBuddy -c "Set :Information:IconCustom true" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:ImageName $disk_filename" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:Identifier $uuid" "$plist"
+    /usr/libexec/PlistBuddy -c "Set :Network:0:MacAddress $(random_mac_address)" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:Architecture ${UTM_ARCHITECTURE}" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:CPUCount $cpu_cores" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:MemorySize $VM_RAM" "$plist"

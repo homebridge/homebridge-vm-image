@@ -67,6 +67,7 @@ check "automatic updates never restart the VM" sh -c "apt-config dump | grep -qx
 check "the daily update timer is on" systemctl is-enabled apt-daily-upgrade.timer
 
 echo "--- made on this VM, not in the image"
+check "the VM made its own machine id" grep -qE '^[0-9a-f]{32}$' /etc/machine-id
 same "the VM made its SSH host keys" "$(find /etc/ssh -maxdepth 1 -name 'ssh_host_*_key' | wc -l)" "3"
 check "the SSH server is active" systemctl is-active ssh
 
