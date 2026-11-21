@@ -24,10 +24,15 @@ install -m 755 files/updateIssueVMName "${ROOTFS_DIR}/usr/local/sbin/"
 # Makes the SSH host keys on the first start (the image holds none, see scripts/seal-image.sh)
 install -m 644 files/hb-ssh-host-keys.service "${ROOTFS_DIR}/etc/systemd/system/"
 
-# VM detection script
-
+# VM detection and the image versions.
+#   - vm-env.sh holds them. It belongs to root and sits outside /opt/homebridge, so the user
+#     Homebridge runs as can not change what root loads.
+#   - /opt/homebridge/source-vm.sh is the name the Homebridge apt package loads. It only loads
+#     the file above.
+install -v -d "${ROOTFS_DIR}/usr/local/lib/homebridge-vm"
+install -m 644 files/vm-env.sh "${ROOTFS_DIR}/usr/local/lib/homebridge-vm/"
 install -v -d "${ROOTFS_DIR}/opt/homebridge/"
-install -m 755 files/source-vm.sh "${ROOTFS_DIR}/opt/homebridge/"
+install -m 644 files/source-vm.sh "${ROOTFS_DIR}/opt/homebridge/"
 #
 # MOTD
 #
@@ -68,12 +73,13 @@ echo "8581" > /etc/hb-ui-port
 # prioritise dns over mdns
 sed -i 's/files mdns4_minimal \[NOTFOUND=return\] dns/files dns mdns4_minimal \[NOTFOUND=return\]/' /etc/nsswitch.conf
 
-# Store versions in source-vm.sh
-
-echo "# Appended by 00-run.sh" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
-echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
-echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
-echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
+# Store versions in vm-env.sh
+{
+  echo "# Appended by 00-run.sh"
+  echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}"
+  echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}"
+  echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}"
+} >> /usr/local/lib/homebridge-vm/vm-env.sh
 
 systemctl daemon-reload
 systemctl enable homebridge
