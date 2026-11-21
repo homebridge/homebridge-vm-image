@@ -24,42 +24,52 @@ on:
 
 env:
   VDISK_SIZE: 50G  # Size of the virtual disk, the same as the other packages
+  # The workflow inputs reach every shell line through these names, never pasted into the line.
+  RELEASE_STREAM: ${{ inputs.release_stream }}
+  BUILD_RUN_ID: ${{ inputs.run_id }}
+  TAG: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
 
 concurrency:
   group: package-hyperv
   cancel-in-progress: false
 
+# No rights by default. Each job below asks for what it needs.
+permissions: {}
+
 jobs:
+  # Builds the packages. This job installs programs from outside (qemu, 7-Zip), so it gets no
+  # token that can write: the files go to the release in the next job.
   package-for-hyperv:
     runs-on: windows-2022
     timeout-minutes: 60
+    permissions:
+      contents: read  # checkout
+      actions: read   # download the image that the Stage 2 run built
     strategy:
       max-parallel: 1
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
         hyperv_version: ['8.0', '10.0']
+    env:
+      ARCH: ${{ matrix.arch }}
+      HYPERV_VERSION: ${{ matrix.hyperv_version }}
+      # also the name of the folder inside the zip file and of the zip file itself
+      VM_NAME: homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}
     steps:
-      - name: Create GitHub App Token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
-          private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
-          owner: homebridge
-          repositories: homebridge-vm-image
-          permission-contents: write
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: homebridge-image-${{ matrix.arch }}
           path: output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: List Downloaded Artifacts
         run: dir output
@@ -74,7 +84,7 @@ jobs:
       - name: Convert IMG to VHDX with qemu-img
         run: |
           $imgPath = (Get-ChildItem -Path output -Filter *.img).FullName
-          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.vhdx"
+          $vhdxPath = "output\$env:VM_NAME.vhdx"
           # Find qemu-img.exe in common install locations
           $qemuImgExe = "${env:ProgramFiles}\qemu\qemu-img.exe"
           if (!(Test-Path $qemuImgExe)) {
@@ -111,17 +121,17 @@ jobs:
 
       - name: Create Hyper-V VM Version ${{ matrix.hyperv_version }}
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
-          $vhdxPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.vhdx"
-          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version ${{ matrix.hyperv_version }}
+          $vmName = $env:VM_NAME
+          $vhdxPath = "output\$vmName.vhdx"
+          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version $env:HYPERV_VERSION
           Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
           Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
           Write-Host "VM $vmName created and configured."
 
       - name: Set VM Description (Notes)
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
-          $manifestPath = "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.manifest"
+          $vmName = $env:VM_NAME
+          $manifestPath = "output\homebridge-vm-image-$env:RELEASE_STREAM-$env:ARCH.manifest"
           if (Test-Path $manifestPath) {
             $description = Get-Content $manifestPath | Out-String
             Set-VM -Name $vmName -Notes $description
@@ -132,7 +142,7 @@ jobs:
 
       - name: Export Hyper-V VM
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
+          $vmName = $env:VM_NAME
           $exportPath = "output\$vmName-export"
           Export-VM -Name $vmName -Path $exportPath
           Write-Host "Exported VM $vmName to $exportPath"
@@ -142,7 +152,7 @@ jobs:
 
       - name: Zip Hyper-V Export with 7-Zip
         run: |
-          $vmName = "homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}"
+          $vmName = $env:VM_NAME
           $exportPath = "output\$vmName-export"
           $zipPath = "..\$vmName.zip"
           if (-not (Test-Path $exportPath)) {
@@ -157,6 +167,7 @@ jobs:
             pwd
             # Use '*' to include everything inside the folder; create zip in the output parent folder.
             & 7z a -tzip $zipPath * -r -mx=9
+            if ($LASTEXITCODE -ne 0) { throw "7z failed" }
             Write-Host "Zipped contents of $exportPath to $zipPath (archive root contains export folder contents only)"
           } finally {
             Pop-Location
@@ -166,24 +177,49 @@ jobs:
         run: dir -Recurse output
 
       - name: Upload Hyper-V Appliance as Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: hyperv-appliance-${{ matrix.arch }}-v${{ matrix.hyperv_version }}
-          path: |
-            output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.zip
-            output\*.manifest
-
-      - name: Upload VHDX, ZIP, and HyperV ZIP to GitHub Release
-        run: |
-          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" `
-            "output\homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}-hyperv${{ matrix.hyperv_version }}.zip" --clobber
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # the zip file is compressed already
+          compression-level: 0
+          if-no-files-found: error
+          path: output\${{ env.VM_NAME }}.zip
 
       - name: Packaging complete
         run: |
-          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "::notice::Run ID: ${{ inputs.run_id }}"
-          echo "::notice::Architecture: ${{ matrix.arch }}"
-          echo "::notice::Release Stream: ${{ inputs.release_stream }}"
-          echo "::notice::Hyper-V Version: ${{ matrix.hyperv_version }}"
+          echo "::notice::Homebridge VM image version: $env:TAG"
+          echo "::notice::Run ID: $env:BUILD_RUN_ID"
+          echo "::notice::Architecture: $env:ARCH"
+          echo "::notice::Release Stream: $env:RELEASE_STREAM"
+          echo "::notice::Hyper-V Version: $env:HYPERV_VERSION"
+
+  # Adds the four packages to the release. Only this job gets the token that can write.
+  publish-to-release:
+    needs: [package-for-hyperv]
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download the packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: hyperv-appliance-*
+          path: packages
+          merge-multiple: true
+
+      - name: Create GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+          owner: homebridge
+          repositories: homebridge-vm-image
+          permission-contents: write
+
+      - name: Upload the Hyper-V packages to the GitHub Release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          ls -l packages
+          gh release upload "$TAG" packages/homebridge-vm-image-"${RELEASE_STREAM}"-*-hyperv*.zip --clobber

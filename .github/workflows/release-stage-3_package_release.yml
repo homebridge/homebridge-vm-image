@@ -29,37 +29,42 @@ on:
 
 env:
   VDISK_SIZE: 50G  # Size of the virtual disk for each VM
+  # The workflow inputs reach every shell line through these names, never pasted into the line.
+  RELEASE_STREAM: ${{ inputs.release_stream }}
+  BUILD_RUN_ID: ${{ inputs.run_id }}
+  TAG: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+  GH_REPO: ${{ github.repository }}
 
 concurrency:
   group: package-and-release
   cancel-in-progress: false
 
+# No rights by default. Each job below asks for what it needs.
+# Releases are written with the token of the Homebridge GitHub App, made in the job that needs
+# it, right before the step that uses it.
+permissions: {}
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # checkout, and read the previous release for the release notes
+      actions: read   # download the images that the Stage 2 run built
     steps:
-    - name: Create GitHub App Token
-      id: app-token
-      uses: actions/create-github-app-token@v3
-      with:
-        app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
-        private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
-        owner: homebridge
-        repositories: homebridge-vm-image
-        permission-contents: write
     - name: Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Download Artifacts
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
         pattern: homebridge-image-*
         path: ./output
         run-id: ${{ inputs.run_id }}
         merge-multiple: true
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ github.token }}
 
     - name: List Downloaded Artifacts
       run: ls -lR ./output
@@ -74,26 +79,35 @@ jobs:
     - name: Set Release Title
       id: set_title
       run: |
-        if [[ "${{ inputs.release_stream }}" == "beta" ]]; then
-          echo "RELEASE_TITLE=BETA: Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
-        elif [[ "${{ inputs.release_stream }}" == "alpha" ]]; then
-          echo "RELEASE_TITLE=ALPHA: Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+        if [[ "$RELEASE_STREAM" == "beta" ]]; then
+          echo "RELEASE_TITLE=BETA: Homebridge VM Image Release ${TAG}" >> "$GITHUB_OUTPUT"
+        elif [[ "$RELEASE_STREAM" == "alpha" ]]; then
+          echo "RELEASE_TITLE=ALPHA: Homebridge VM Image Release ${TAG}" >> "$GITHUB_OUTPUT"
         else
-          echo "RELEASE_TITLE=Homebridge VM Image Release ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
+          echo "RELEASE_TITLE=Homebridge VM Image Release ${TAG}" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Create Release Body
       id: release_body
       run: |
-        ./scripts/create-release-body.sh "${{ inputs.release_stream }}"
+        ./scripts/create-release-body.sh "$RELEASE_STREAM"
       env:
         GH_TOKEN: ${{ github.token }}
+
+    - name: Create GitHub App Token
+      id: app-token
+      uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+      with:
+        app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
+        private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+        owner: homebridge
+        repositories: homebridge-vm-image
+        permission-contents: write
 
     - name: Create GitHub Prerelease
       id: create_release
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        TAG: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
         TITLE: ${{ steps.set_title.outputs.release_title }}
       run: |
         if gh release view "$TAG" >/dev/null 2>&1; then
@@ -113,41 +127,41 @@ jobs:
 
     - name: Convert, Compress, and Upload Each Virtual Disk Format
       run: |
-        ./scripts/convert-img-to-virtual-disk.sh ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+        ./scripts/convert-img-to-virtual-disk.sh "$TAG"
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
     - name: Release created
+      env:
+        TITLE: ${{ steps.set_title.outputs.release_title }}
       run: |
-        echo "::notice::Release ${{ steps.set_title.outputs.RELEASE_TITLE }} created successfully."
+        echo "::notice::Release ${TITLE} created successfully."
 
   invoke-appliance-packaging:
     needs: [create-release]
     runs-on: ubuntu-latest
+    permissions:
+      actions: write  # start the Stage 4 workflows and find their runs
     strategy:
       max-parallel: 1
       fail-fast: false
       matrix:
         packaging_workflow: [release-stage-4_package-for-utm.yml, release-stage-4_package-for-virtualbox.yml, release-stage-4_package-for-hyperv.yml]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACKAGING_WORKFLOW: ${{ matrix.packaging_workflow }}
     steps:
-    # Step 1: Checkout the repository
-    - name: Checkout repository
-      uses: actions/checkout@v7
-
-    # Step 2: Trigger Packaging and Validation Workflow
     - name: Trigger Appliance Packaging Workflow
       run: |
-        gh workflow run "${{ matrix.packaging_workflow }}" \
+        gh workflow run "$PACKAGING_WORKFLOW" \
           --ref "latest" \
-          --field release_stream="${{ inputs.release_stream }}" \
-          --field run_id="${{ inputs.run_id }}" \
-          --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          --field release_stream="$RELEASE_STREAM" \
+          --field run_id="$BUILD_RUN_ID" \
+          --field HOMEBRIDGE_VM_IMAGE_VERSION="$TAG"
 
     - name: Wait for Appliance Packaging Workflow to be visible to GH CLI
       run: |
-        echo "::group::Waiting for ${{ inputs.run_id }} workflow to appear in run list..."
+        echo "::group::Waiting for ${BUILD_RUN_ID} workflow to appear in run list..."
 
         # Initialize variables
         WORKFLOW_URL=""
@@ -157,8 +171,8 @@ jobs:
         # Retry loop
         while [[ -z "$WORKFLOW_URL" || "$WORKFLOW_URL" == "null" ]]; do
           if [[ $RETRY_COUNT -ge $MAX_RETRIES ]]; then
-            echo "::error::Could not find triggered ${{ inputs.run_id }} workflow run after 1 minute"
-            gh run list --workflow "${{ matrix.packaging_workflow }}" --event workflow_dispatch --branch "main" --limit 5 --json url,name
+            echo "::error::Could not find triggered ${BUILD_RUN_ID} workflow run after 1 minute"
+            gh run list --workflow "$PACKAGING_WORKFLOW" --event workflow_dispatch --limit 5 --json url,name || true
             exit 1
           fi
 
@@ -166,42 +180,38 @@ jobs:
           RETRY_COUNT=$((RETRY_COUNT + 1))
 
           # Check for the workflow run
-          WORKFLOW_URL=$(gh run list --workflow "${{ matrix.packaging_workflow }}" \
+          WORKFLOW_URL=$(gh run list --workflow "$PACKAGING_WORKFLOW" \
             --event workflow_dispatch \
             --limit 10 \
-            --json url,name \
-            --jq '[.[] | select(.name | contains("${{ inputs.run_id }}"))] | .[].url' | \
-            head -n 1)
+            --json url,name | jq -r --arg run_id "$BUILD_RUN_ID" '[.[] | select(.name | contains($run_id))][0].url // empty') || WORKFLOW_URL=""
 
           if [[ -z "$WORKFLOW_URL" || "$WORKFLOW_URL" == "null" ]]; then
-            echo "::notice::Retry $RETRY_COUNT/$MAX_RETRIES: ${{ inputs.run_id }} workflow not found. Retrying in 5 seconds..."
+            echo "::notice::Retry $RETRY_COUNT/$MAX_RETRIES: ${BUILD_RUN_ID} workflow not found. Retrying in 5 seconds..."
             sleep 5
           fi
         done
-        echo "::notice::Found triggered ${{ inputs.run_id }} workflow: $WORKFLOW_URL"
+        echo "::notice::Found triggered ${BUILD_RUN_ID} workflow: $WORKFLOW_URL"
         echo "::endgroup::"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
+
   wait-for-appliance-packaging:
       needs: [invoke-appliance-packaging]
       runs-on: ubuntu-latest
+      permissions:
+        actions: read  # read the state of the Stage 4 runs
       steps:
-            # Step 1: Checkout the repository
-        - name: Checkout repository
-          uses: actions/checkout@v7
-
         - name: Wait for all Release Stage 4 packaging workflows with matching run_id to complete
+          env:
+            GH_TOKEN: ${{ github.token }}
           run: |
-            workflows=$(gh run list --json name,databaseId,status,workflowName \
-              | jq -r --arg run_id "${{ inputs.run_id }}" '.[] | select(.name | startswith("Release Stage 4 - Package for")) | select(.name | test($run_id)) | "\(.databaseId) \(.name) \(.status)"')
+            workflows=$(gh run list --limit 50 --json name,databaseId,status,workflowName \
+              | jq -r --arg run_id "$BUILD_RUN_ID" '.[] | select(.name | startswith("Release Stage 4 - Package for")) | select(.name | contains($run_id)) | "\(.databaseId) \(.status) \(.name)"')
 
             if [ -z "$workflows" ]; then
-              echo "::error::No matching Release Stage 4 packaging workflows found for run_id: ${{ inputs.run_id }}"
+              echo "::error::No matching Release Stage 4 packaging workflows found for run_id: ${BUILD_RUN_ID}"
               exit 1
             fi
 
-            while read -r run_id name status; do
+            while read -r run_id status name; do
               echo "::group::Waiting for workflow: $name (run_id: $run_id, status: $status)"
               while [ "$status" != "completed" ]; do
                 sleep 30
@@ -216,21 +226,33 @@ jobs:
               fi
               echo "::endgroup::"
             done <<< "$workflows"
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cleanup-old-releases-and-tags:
     needs: [invoke-appliance-packaging]
+    if: ${{ inputs.release_stream != 'stable' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # checkout (the local action)
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Create GitHub App Token
+      id: app-token
+      uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+      with:
+        app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
+        private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+        owner: homebridge
+        repositories: homebridge-vm-image
+        permission-contents: write
 
     - name: Cleanup older beta and alpha release and tags
-      if: ${{ inputs.release_stream != 'stable' }}
       uses: ./.github/actions/cleanup-old-releases-and-tags
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ steps.app-token.outputs.token }}
         release-stream: ${{ inputs.release_stream }}
         releases-to-keep: 5
 
@@ -244,21 +266,19 @@ jobs:
     steps:
     - name: Create GitHub App Token
       id: app-token
-      uses: actions/create-github-app-token@v3
+      uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
       with:
         app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
         private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
         owner: homebridge
         repositories: homebridge-vm-image
         permission-contents: write
-    - name: Checkout repository
-      uses: actions/checkout@v7
 
     # Mark stable release as non-prerelease and latest
     - name: Mark Stable Release as Non-Prerelease and Latest
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
       run: |
-        gh release edit ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }} \
+        gh release edit "$TAG" \
           --prerelease=false \
           --latest
