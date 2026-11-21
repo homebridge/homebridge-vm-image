@@ -85,7 +85,9 @@ same "the system says time sync is in use" "$(timedatectl show -p NTP --value)" 
 
 echo "--- start order"
 same "systemd found no loop in the start order" "$(journalctl -b --no-pager | grep -ciE 'ordering cycle|to break ordering')" "0"
-check "all login prompts are up (getty.target)" systemctl is-active getty.target
+# While the wizard waits, the login prompts wait behind it. Their job must be in the queue: a
+# job that systemd dropped to break a loop is not there at all.
+same "the login prompts are queued behind the wizard, not dropped" "$(systemctl list-jobs --no-legend --plain | awk '$2 == "getty.target" {print $3 " " $4}')" "start waiting"
 same "the setup wizard is waiting on the screen console" "$(systemctl show -p ActiveState --value first-boot-homebridge)" "activating"
 same "the login prompt of the screen console waits for the wizard" "$(systemctl list-jobs --no-legend --plain | awk '$2 == "getty@tty1.service" {print $3 " " $4}')" "start waiting"
 
@@ -98,6 +100,9 @@ echo "--- facts (not checks)"
 echo "kernel: $(uname -r)   Debian: $(cat /etc/debian_version)   up: $(cut -d' ' -f1 /proc/uptime)s"
 echo "time zone: $(timedatectl show -p Timezone --value 2> /dev/null)   virtualisation: $(systemd-detect-virt 2> /dev/null)"
 df -h / | tail -n 1
+echo "system state: $(systemctl is-system-running 2> /dev/null)   multi-user.target: $(systemctl is-active multi-user.target)"
+systemctl list-jobs --no-legend --plain | sed 's/^/job: /'
+systemctl list-timers --no-pager --no-legend | awk '{print "timer: " $(NF-1) " -> " $NF}'
 
 [ "$FAILED" -eq 0 ] || { echo "$FAILED checks failed"; exit 1; }
 echo "all checks passed"
