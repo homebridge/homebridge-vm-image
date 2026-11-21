@@ -18,6 +18,7 @@ inside() {
   fake tar 'exit 0'
   fake apt-get 'exit 0'
   fake systemctl 'exit 0'
+  fake visudo 'exit 0'
   fake gpg "case \"\$*\" in *--show-keys*) echo 'pub:-:4096:1:DF5B0FE88C8F5D92:1:::-:::scESC::::::23::0:'; echo \"fpr:::::::::\$(cat '$W/key-fingerprint'):\" ;; *) cat ;; esac"
   [ "${1:-}" = "no-ffmpeg" ] || fake ffmpeg 'echo "ffmpeg version 8.0"'
   # only the stand-ins and the basic tools are on the PATH, so a real ffmpeg on this machine is not found

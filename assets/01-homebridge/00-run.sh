@@ -30,6 +30,11 @@ install -m 755 files/updateIssueVMName "${ROOTFS_DIR}/usr/local/sbin/"
 # Makes the SSH host keys on the first start (the image holds none, see scripts/seal-image.sh)
 install -m 644 files/hb-ssh-host-keys.service "${ROOTFS_DIR}/etc/systemd/system/"
 
+# Lets the Homebridge UI restart and shut down the VM: its two buttons run "sudo -n shutdown".
+# The file allows the homebridge user these three commands and nothing else.
+install -v -d "${ROOTFS_DIR}/etc/sudoers.d"
+install -m 0440 files/010_homebridge-nopasswd "${ROOTFS_DIR}/etc/sudoers.d/"
+
 # VM detection and the image versions.
 #   - vm-env.sh holds them. It belongs to root and sits outside /opt/homebridge, so the user
 #     Homebridge runs as can not change what root loads.
@@ -101,6 +106,9 @@ sed -i 's/files mdns4_minimal \[NOTFOUND=return\] dns/files dns mdns4_minimal \[
   echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}"
   echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}"
 } >> /usr/local/lib/homebridge-vm/vm-env.sh
+
+# the build stops when sudo would refuse its rules
+visudo -c > /dev/null
 
 systemctl daemon-reload
 systemctl enable homebridge
