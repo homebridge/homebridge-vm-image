@@ -1,9 +1,15 @@
 #!/bin/bash
+#
+# Grows the root (/) ext4 file system to fill the virtual disk.
+#
+# It runs at every start of the VM (hb-expand-rootfs.service) and from "sudo hb-config".
+# Most of the time there is nothing to do, and it changes nothing. It only does something after
+# the virtual disk was made larger in the VM program.
+#
+# Exit code 0: the file system fills the disk (grown now, or it already did).
+# Exit code 1: something failed. The output says what. The log is /var/log/diskexpand.log.
 
-# Script to automatically expand root (/) ext4 filesystem to maximum available space
-# For use after resizing virtual disk in UTM/QEMU
-
-set -e  # Exit on error
+set -u
 
 # Define color codes for logging
 GREEN='\033[0;32m'
@@ -13,99 +19,86 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Log helper functions
-log() { echo -e "$*" >&2; }
 warn() { echo -e "${YELLOW}WARN:${NC} $*" >&2; }
 error() { echo -e "${RED}ERROR:${NC} $*" >&2; }
 info() { echo -e "$*" >&2; }
 
-# Set up logging to file
 LOGFILE="/var/log/diskexpand.log"
-exec > >(tee -a "$LOGFILE") 2>&1
 
-info "================================"
-info "Auto-Expand Root Filesystem"
-info "================================"
-info ""
-info "Log file: $LOGFILE"
-info "Started at: $(date)"
-info ""
+expand() {
+    info "================================"
+    info "Auto-Expand Root Filesystem"
+    info "================================"
+    info "Started at: $(date)"
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-    error "This script must be run as root"
-    error "Please run: sudo $0"
-    exit 1
-fi
+    if [ "$(id -u)" -ne 0 ]; then
+        error "This script must be run as root"
+        error "Please run: sudo $0"
+        return 1
+    fi
 
-# Find the device mounted at /
-ROOT_PARTITION=$(df / | tail -1 | awk '{print $1}')
-info "Root partition: ${GREEN}$ROOT_PARTITION${NC}"
+    # The device mounted at /, for example /dev/sda2, /dev/vda2 or /dev/nvme0n1p2
+    local root_partition fs_type part_name disk_name part_num device
+    root_partition=$(findmnt -n -o SOURCE /)
+    fs_type=$(findmnt -n -o FSTYPE /)
+    info "Root partition: ${GREEN}${root_partition}${NC} (${fs_type})"
 
-# Extract device name and partition number
-# Handle both /dev/sda1 and /dev/vda1, /dev/nvme0n1p1 formats
-if [[ $ROOT_PARTITION =~ (.*[^0-9])([0-9]+)$ ]]; then
-    DEVICE="${BASH_REMATCH[1]}"
-    PART_NUM="${BASH_REMATCH[2]}"
-elif [[ $ROOT_PARTITION =~ (.*)p([0-9]+)$ ]]; then
-    # Handle nvme style (nvme0n1p1)
-    DEVICE="${BASH_REMATCH[1]}"
-    PART_NUM="${BASH_REMATCH[2]}"
-else
-    error "Could not parse partition information from $ROOT_PARTITION"
-    exit 1
-fi
+    if [ "$fs_type" != "ext4" ]; then
+        error "Root filesystem is ${fs_type:-unknown}, not ext4"
+        error "This script only supports ext4 filesystems"
+        return 1
+    fi
 
-info "Device: ${BLUE}$DEVICE${NC}"
-info "Partition number: ${BLUE}$PART_NUM${NC}"
-info ""
+    # The disk and the partition number are asked from the system. They are not cut out of the
+    # name: "the digits at the end" is right for sda2, and wrong for nvme0n1p2 or mmcblk0p2.
+    part_name=$(basename "$root_partition")
+    disk_name=$(lsblk -no PKNAME "$root_partition" 2> /dev/null | head -n 1)
+    part_num=$(cat "/sys/class/block/${part_name}/partition" 2> /dev/null)
 
-# Verify filesystem type
-FS_TYPE=$(lsblk -no FSTYPE "$ROOT_PARTITION")
-info "Filesystem type: ${GREEN}$FS_TYPE${NC}"
+    if [ -n "$disk_name" ] && [ -n "$part_num" ]; then
+        device="/dev/${disk_name}"
+        info "Device: ${BLUE}${device}${NC}, partition number: ${BLUE}${part_num}${NC}"
 
-if [ "$FS_TYPE" != "ext4" ]; then
-    error "Root filesystem is $FS_TYPE, not ext4"
-    error "This script only supports ext4 filesystems"
-    exit 1
-fi
+        if ! command -v growpart > /dev/null 2>&1; then
+            error "growpart not found. Install it with: sudo apt-get install cloud-guest-utils"
+            return 1
+        fi
 
-info ""
-info "Current disk usage:"
-df -h /
-info ""
+        # growpart ends with code 0 when it grew the partition, and prints NOCHANGE (code 1)
+        # when the partition already fills the disk. Anything else is a failure.
+        local grow_output grow_code
+        grow_output=$(growpart "$device" "$part_num" 2>&1)
+        grow_code=$?
+        info "$grow_output"
+        if [ "$grow_code" -eq 0 ]; then
+            info "${GREEN}Partition expanded successfully${NC}"
+            # tell the kernel about the new size (growpart does this too; this is a second try)
+            partx -u "$device" 2> /dev/null || true
+        elif printf '%s' "$grow_output" | grep -q "NOCHANGE"; then
+            info "Partition is already at maximum size"
+        else
+            error "growpart failed with code ${grow_code}. The partition was not changed."
+            return 1
+        fi
+    else
+        # for example a file system that sits on the whole disk, with no partitions
+        warn "${root_partition} is not a partition of a disk. Only the file system is grown."
+    fi
 
-# Install growpart if needed
-if ! command -v growpart &> /dev/null; then
-    warn "growpart not found, installing cloud-guest-utils..."
-    apt-get update -qq
-    apt-get install -y cloud-guest-utils
-    info ""
-fi
+    # Grow the file system into the partition. This works while the system runs, and it does
+    # nothing when the file system already fills the partition.
+    info "Expanding ext4 filesystem..."
+    if ! resize2fs "$root_partition"; then
+        error "resize2fs failed. The file system was not changed."
+        return 1
+    fi
 
-# Expand the partition
-info "Expanding partition $ROOT_PARTITION..."
-if growpart "$DEVICE" "$PART_NUM" 2>&1 | grep -q "NOCHANGE"; then
-    warn "Partition is already at maximum size"
-else
-    info "${GREEN}Partition expanded successfully${NC}"
-fi
+    info "Disk usage now:"
+    df -h /
+    info "${GREEN}Root filesystem expansion complete!${NC}"
+    info "Completed at: $(date)"
+}
 
-# Force kernel to re-read partition table
-info ""
-info "Updating kernel partition table..."
-partprobe "$DEVICE" 2>/dev/null || true
-
-# Resize the filesystem
-info ""
-info "Expanding ext4 filesystem..."
-resize2fs "$ROOT_PARTITION"
-
-info ""
-info "New disk usage:"
-df -h /
-
-info ""
-info "================================"
-info "${GREEN}Root filesystem expansion complete!${NC}"
-info "================================"
-info "Completed at: $(date)"
+# the output goes to the screen (or the journal) and to the log file
+expand 2>&1 | tee -a "$LOGFILE"
+exit "${PIPESTATUS[0]}"
