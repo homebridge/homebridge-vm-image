@@ -22,39 +22,48 @@ on:
         required: true
         type: string
 
+env:
+  # The workflow inputs reach every shell line through these names, never pasted into the line.
+  RELEASE_STREAM: ${{ inputs.release_stream }}
+  BUILD_RUN_ID: ${{ inputs.run_id }}
+  TAG: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+
 concurrency:
   group: package-virtualbox
   cancel-in-progress: false
 
+# No rights by default. Each job below asks for what it needs.
+permissions: {}
+
 jobs:
+  # Builds the packages. This job installs a program from outside (VirtualBox), so it gets no
+  # token that can write: the files go to the release in the next job.
   package-for-virtual-box:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read  # checkout
+      actions: read   # download the image that the Stage 2 run built
     strategy:
       max-parallel: 1
       fail-fast: false
       matrix:
         arch: [arm64, amd64]
+    env:
+      ARCH: ${{ matrix.arch }}
     steps:
-      - name: Create GitHub App Token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
-          private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
-          owner: homebridge
-          repositories: homebridge-vm-image
-          permission-contents: write
       - name: Checkout repository
-        uses: actions/checkout@v7
-   
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Download Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: homebridge-image-${{ matrix.arch }}
           path: ./output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: List Downloaded Artifacts
         run: ls -lR ./output
@@ -63,33 +72,55 @@ jobs:
         uses: ./.github/actions/install-virtualbox
 
       - name: Package VirtualBox Appliance
-        id: package_appliance
         run: |
-          ./scripts/package-for-virtual-box.sh "${{ matrix.arch }}" "${{ inputs.release_stream }}" "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "OVA_FILE=./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.ova" >> $GITHUB_OUTPUT
-          echo "VDI_FILE=./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vdi.gz" >> $GITHUB_OUTPUT
+          ./scripts/package-for-virtual-box.sh "$ARCH" "$RELEASE_STREAM"
 
-      - name: Upload image and manifest artifacts
-        uses: actions/upload-artifact@v7
+      - name: Upload the OVA and VDI files as an artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 7
           name: virtualbox-appliance-${{ matrix.arch }}
+          # both files are compressed already
+          compression-level: 0
+          if-no-files-found: error
           path: |
-            ${{ steps.package_appliance.outputs.OVA_FILE }}
-            ./output/*.manifest
-            ./output/*.img
-
-      - name: Upload OVA and VDI to GitHub Release
-        run: |
-          set -e
-          RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
-          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "${{ steps.package_appliance.outputs.OVA_FILE }}" "${{ steps.package_appliance.outputs.VDI_FILE }}" --clobber
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+            ./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.ova
+            ./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vdi.gz
 
       - name: Packaging complete
         run: |
-          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "::notice::Run ID: ${{ inputs.run_id }}"
-          echo "::notice::Architecture: ${{ matrix.arch }}"
-          echo "::notice::Release Stream: ${{ inputs.release_stream }}"
+          echo "::notice::Homebridge VM image version: ${TAG}"
+          echo "::notice::Run ID: ${BUILD_RUN_ID}"
+          echo "::notice::Architecture: ${ARCH}"
+          echo "::notice::Release Stream: ${RELEASE_STREAM}"
+
+  # Adds the packages to the release. Only this job gets the token that can write.
+  publish-to-release:
+    needs: [package-for-virtual-box]
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download the packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: virtualbox-appliance-*
+          path: packages
+          merge-multiple: true
+
+      - name: Create GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+          owner: homebridge
+          repositories: homebridge-vm-image
+          permission-contents: write
+
+      - name: Upload OVA and VDI to GitHub Release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          ls -l packages
+          gh release upload "$TAG" packages/homebridge-vm-image-"${RELEASE_STREAM}"-*.ova packages/homebridge-vm-image-"${RELEASE_STREAM}"-*.vdi.gz --clobber

@@ -31,34 +31,35 @@ concurrency:
   group: stage-2-build-and-push
   cancel-in-progress: false
 
+# No rights by default. Each job below asks for what it needs.
+permissions: {}
+
 jobs:
   set-versions:
     runs-on: ubuntu-latest
     outputs:
-      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ steps.release_tag.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-
-    - name: Set Docker Homebridge version
-      id: docker_version
+    - name: Set the release tag
+      id: release_tag
+      env:
+        RELEASE_STREAM: ${{ inputs.release_stream }}
       run: |
-        if [[ "${{ inputs.release_stream }}" == "stable" ]]; then
-          export HOMEBRIDGE_VM_IMAGE_VERSION="$(date +%Y-%m-%d)"
+        # stable: YYYY-MM-DD, beta and alpha: <stream>-YYYY-MM-DD
+        # (the wiki, the clean-up and the release notes use these forms)
+        if [[ "$RELEASE_STREAM" == "stable" ]]; then
+          HOMEBRIDGE_VM_IMAGE_VERSION="$(date +%Y-%m-%d)"
         else
-          export HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.release_stream }}-$(date +%Y-%m-%d)"
+          HOMEBRIDGE_VM_IMAGE_VERSION="${RELEASE_STREAM}-$(date +%Y-%m-%d)"
         fi
-        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> $GITHUB_OUTPUT
-
-    - name: Output versions
-      run: |
-        echo "::group::Version Information"
-        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-        echo "::endgroup::"
+        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "::notice::HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}"
 
   build-img-file:
     needs: set-versions
+    permissions:
+      contents: read
     strategy:
       max-parallel: 1
       fail-fast: false
@@ -70,28 +71,29 @@ jobs:
           - arch: amd64
             runs-on: ubuntu-24.04
     runs-on: ${{ matrix.runs-on }}
+    env:
+      ARCH: ${{ matrix.arch }}
+      RELEASE_STREAM: ${{ inputs.release_stream }}
+      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Setup build environemnt
       - name: Install dependencies
-        env:
-          ARCH: ${{ matrix.arch }}
         run: sudo ./scripts/install-build-deps.sh "$ARCH"
 
       # Step 2: Start the build process
       - name: run build-debian-image.sh script
         run: |
-          ./build-debian-image.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          ./build-debian-image.sh "$ARCH" "$RELEASE_STREAM" "$HOMEBRIDGE_VM_IMAGE_VERSION"
 
       # Step 3: Start the image as a virtual machine and check it from the inside.
       # When this step fails, nothing is uploaded and Stage 3 (the release) is never started.
       - name: Boot test
-        env:
-          ARCH: ${{ matrix.arch }}
-          RELEASE_STREAM: ${{ inputs.release_stream }}
         run: |
           # the apt package version the image must hold (npm "2.1.0-beta.4" is apt "2.1.0~beta.4")
           APT_VERSION="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' "${RELEASE_STREAM}/package.json" | sed -e 's/^\^//' -e 's/-/~/')"
@@ -99,34 +101,42 @@ jobs:
 
       # Step 4: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 7
           name: homebridge-image-${{ matrix.arch }}
           path: output/*
 
       - name: Steps complete
+        env:
+          RUN_ID: ${{ github.run_id }}
         run: |
-          echo "::notice::Homebridge VM image version: ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "::notice::Run ID: ${{ github.run_id }}"
-          echo "::notice::Architecture: ${{ matrix.arch }}"
-          echo "::notice::Release Stream: ${{ inputs.release_stream }}"
+          echo "::notice::Homebridge VM image version: ${HOMEBRIDGE_VM_IMAGE_VERSION}"
+          echo "::notice::Run ID: ${RUN_ID}"
+          echo "::notice::Architecture: ${ARCH}"
+          echo "::notice::Release Stream: ${RELEASE_STREAM}"
 
   invoke-package-and-release:
     name: Invoke Stage 3 - Package and Release
     needs: [set-versions, build-img-file]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # checkout (the local action)
+      actions: write  # start the Stage 3 workflow and read its state
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
+    # This step fails when Stage 3 or a Stage 4 packaging workflow fails.
     - name: Trigger and Wait for ${{ inputs.release_stream }} Stage 3 Workflow
       uses: ./.github/actions/trigger-and-wait-workflow
       with:
         workflow-file: 'release-stage-3_package_release.yml'
         ref: 'latest'
-        github-token: ${{ secrets.GH_TOKEN }}
+        github-token: ${{ github.token }}
         # Stage 3 also waits for the three Stage 4 packaging workflows
         timeout-minutes: '240'
         workflow-fields: |
