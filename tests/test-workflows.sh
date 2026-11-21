@@ -110,6 +110,15 @@ isnt "Stage 3 never deletes the files of an existing release before the new ones
 same "every upload to a release replaces a file of the same name" \
   "$(grep -rh 'gh release upload' "$WORKFLOWS" "$REPO/scripts" | grep -vc -- '--clobber')" "0"
 
+# the Hyper-V package (it can only be built and tried on Windows, so these read the workflow)
+HYPERV="$WORKFLOWS/release-stage-4_package-for-hyperv.yml"
+isnt "the Hyper-V package gets no second network card" grep -q 'Add-VMNetworkAdapter' "$HYPERV"
+has "the one network card of the Hyper-V VM is connected when the VM is made" "$HYPERV" '-Version $env:HYPERV_VERSION -SwitchName "Default Switch"'
+has "the packaging stops when the VM does not have exactly one network card" "$HYPERV" 'if ($cards.Count -ne 1) { throw'
+isnt "the four Hyper-V packages are not built one after the other" grep -q 'max-parallel: 1' "$HYPERV"
+same "every Hyper-V package is still built (v8.0 and v10.0, amd64 and arm64)" \
+  "$(sed -n '/^      matrix:/,/^    env:/p' "$HYPERV" | grep -E 'arch:|hyperv_version:' | tr -s ' ' | tr '\n' ';')" " arch: [amd64, arm64]; hyperv_version: ['8.0', '10.0'];"
+
 has "the VirtualBox signing key is only used when it has the expected fingerprint" "$ACTIONS/install-virtualbox/action.yml" 'if [[ "$FOUND_FINGERPRINT" != "$ORACLE_KEY_FINGERPRINT" ]]; then'
 
 finish
