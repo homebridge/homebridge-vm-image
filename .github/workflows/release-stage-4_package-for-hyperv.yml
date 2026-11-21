@@ -46,7 +46,7 @@ jobs:
       contents: read  # checkout
       actions: read   # download the image that the Stage 2 run built
     strategy:
-      max-parallel: 1
+      # the four packages are built at the same time, each on its own machine
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
@@ -123,9 +123,14 @@ jobs:
         run: |
           $vmName = $env:VM_NAME
           $vhdxPath = "output\$vmName.vhdx"
-          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version $env:HYPERV_VERSION
+          # New-VM always makes one network card. -SwitchName connects that card. (Adding a card
+          # afterwards gave the package two cards: one not connected, one on the switch.)
+          New-VM -Name $vmName -MemoryStartupBytes 4096MB -Generation 2 -VHDPath $vhdxPath -Version $env:HYPERV_VERSION -SwitchName "Default Switch"
           Set-VMFirmware -VMName $vmName -EnableSecureBoot Off
-          Add-VMNetworkAdapter -VMName $vmName -SwitchName "Default Switch"
+          $cards = @(Get-VMNetworkAdapter -VMName $vmName)
+          $cards | Format-Table Name, SwitchName, MacAddress
+          if ($cards.Count -ne 1) { throw "The VM must have exactly one network card, it has $($cards.Count)" }
+          if ($cards[0].SwitchName -ne "Default Switch") { throw "The network card is not connected to the Default Switch" }
           Write-Host "VM $vmName created and configured."
 
       - name: Set VM Description (Notes)
