@@ -70,6 +70,11 @@ echo "--- made on this VM, not in the image"
 same "the VM made its SSH host keys" "$(find /etc/ssh -maxdepth 1 -name 'ssh_host_*_key' | wc -l)" "3"
 check "the SSH server is active" systemctl is-active ssh
 
+echo "--- time"
+check "the time sync service is switched on" systemctl is-enabled systemd-timesyncd
+check "the time sync service is active" systemctl is-active systemd-timesyncd
+same "the system says time sync is in use" "$(timedatectl show -p NTP --value)" "yes"
+
 echo "--- the system as a whole"
 same "no unit failed" "$(systemctl --failed --no-legend --plain | awk '{print $1}' | tr '\n' ' ')" ""
 ROOT_GB="$(df --output=size -BG / | tail -n 1 | tr -dc '0-9')"
