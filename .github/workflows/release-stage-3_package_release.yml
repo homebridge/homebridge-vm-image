@@ -57,6 +57,21 @@ jobs:
         fetch-depth: 0
         persist-credentials: false
 
+    - name: Check Release Branch
+      env:
+        RELEASE_STREAM: ${{ inputs.release_stream }}
+      run: |
+        # Only beta and alpha may build from a pre-release branch (e.g. beta-2026.11.18).
+        # Stable must come from latest, so a branch can never publish a stable release.
+        if [[ "$RELEASE_STREAM" != "beta" && "$RELEASE_STREAM" != "alpha" && "$GITHUB_REF_NAME" != "latest" ]]; then
+          echo "::error::${RELEASE_STREAM} releases must be built from the latest branch, not ${GITHUB_REF_NAME}"
+          exit 1
+        fi
+        if [[ "$GITHUB_REF_NAME" != "latest" && ! "$GITHUB_REF_NAME" =~ ^${RELEASE_STREAM}-[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+          echo "::error::${RELEASE_STREAM} releases must be built from latest or a ${RELEASE_STREAM}-YYYY.M.D branch, not ${GITHUB_REF_NAME}"
+          exit 1
+        fi
+
     - name: Download Artifacts
       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
@@ -91,8 +106,9 @@ jobs:
       id: release_body
       run: |
         # CURRENT_TAG: on a second build of the same day the tag exists already; the notes must
-        # then compare with the release before it, not with itself
-        CURRENT_TAG="$TAG" ./scripts/create-release-body.sh "$RELEASE_STREAM"
+        # then compare with the release before it, not with itself.
+        # The branch name lets a build from a pre-release branch list what is not yet in stable.
+        CURRENT_TAG="$TAG" ./scripts/create-release-body.sh "$RELEASE_STREAM" "$GITHUB_REF_NAME"
       env:
         GH_TOKEN: ${{ github.token }}
 
@@ -158,8 +174,9 @@ jobs:
     steps:
     - name: Trigger Appliance Packaging Workflow
       run: |
+        # stay on the branch that was built
         gh workflow run "$PACKAGING_WORKFLOW" \
-          --ref "latest" \
+          --ref "$GITHUB_REF_NAME" \
           --field release_stream="$RELEASE_STREAM" \
           --field run_id="$BUILD_RUN_ID" \
           --field HOMEBRIDGE_VM_IMAGE_VERSION="$TAG"
