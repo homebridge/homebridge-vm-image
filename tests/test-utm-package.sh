@@ -23,4 +23,20 @@ same "the first byte always marks a made-up address for one machine" "$bad" "0"
 
 has "the packaging writes a new address into the VM config" "$SCRIPT" 'Set :Network:0:MacAddress $(random_mac_address)'
 
+# the template of the VM settings (a property list; python reads it)
+TEMPLATE="$REPO/assets/template-utm-config.plist"
+python3 - "$TEMPLATE" > "$W/plist-facts" <<'PYTHON'
+import plistlib, sys
+with open(sys.argv[1], "rb") as handle:
+    config = plistlib.load(handle)
+print("debug-log", config["QEMU"]["DebugLog"])
+print("icon", config["Information"]["Icon"])
+print("network-mode", config["Network"][0]["Mode"])
+print("uefi", config["QEMU"]["UEFIBoot"])
+PYTHON
+same "the template is a valid property list" "$?" "0"
+has "UTM does not write a debug log for every run of the VM" "$W/plist-facts" "debug-log False"
+has "the icon name in the template is a file name" "$W/plist-facts" "icon homebridge-icon.png"
+has "the VM is on the home network (bridged), which HomeKit needs" "$W/plist-facts" "network-mode Bridged"
+
 finish
