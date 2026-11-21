@@ -52,6 +52,21 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Check Release Branch
+      env:
+        RELEASE_STREAM: ${{ inputs.release_stream }}
+      run: |
+        # Only beta and alpha may build from a pre-release branch (e.g. beta-2026.11.18).
+        # Stable must come from latest, so a branch can never publish a stable release.
+        if [[ "$RELEASE_STREAM" != "beta" && "$RELEASE_STREAM" != "alpha" && "$GITHUB_REF_NAME" != "latest" ]]; then
+          echo "::error::${RELEASE_STREAM} releases must be built from the latest branch, not ${GITHUB_REF_NAME}"
+          exit 1
+        fi
+        if [[ "$GITHUB_REF_NAME" != "latest" && ! "$GITHUB_REF_NAME" =~ ^${RELEASE_STREAM}-[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+          echo "::error::${RELEASE_STREAM} releases must be built from latest or a ${RELEASE_STREAM}-YYYY.M.D branch, not ${GITHUB_REF_NAME}"
+          exit 1
+        fi
+
     - name: Download Artifacts
       uses: actions/download-artifact@v8
       with:
@@ -85,7 +100,7 @@ jobs:
     - name: Create Release Body
       id: release_body
       run: |
-        ./scripts/create-release-body.sh "${{ inputs.release_stream }}"
+        ./scripts/create-release-body.sh "${{ inputs.release_stream }}" "${GITHUB_REF_NAME}"
       env:
         GH_TOKEN: ${{ github.token }}
 
@@ -138,7 +153,7 @@ jobs:
     - name: Trigger Appliance Packaging Workflow
       run: |
         gh workflow run "${{ matrix.packaging_workflow }}" \
-          --ref "latest" \
+          --ref "${GITHUB_REF_NAME}" \
           --field release_stream="${{ inputs.release_stream }}" \
           --field run_id="${{ inputs.run_id }}" \
           --field HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
