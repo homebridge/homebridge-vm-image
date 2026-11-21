@@ -29,8 +29,28 @@ info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
 echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99nolang
 echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/99norecommends
 
-# Update package lists
+# The Debian package sources: the release itself, its updates and its security fixes.
+# debootstrap leaves only the first one, and that one is frozen between point releases, so a
+# system without the other two never gets a security fix.
+DISTRO="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+rm -f /etc/apt/sources.list
+cat > /etc/apt/sources.list.d/debian.sources <<SOURCES_EOF
+Types: deb
+URIs: https://deb.debian.org/debian
+Suites: ${DISTRO} ${DISTRO}-updates
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp
+
+Types: deb
+URIs: https://deb.debian.org/debian-security
+Suites: ${DISTRO}-security
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp
+SOURCES_EOF
+
+# Update package lists, and bring the base system up to date with the security fixes
 apt-get update
+apt-get -y dist-upgrade
 
 log "Installing base system packages"
 # Install essential packages first
@@ -74,7 +94,7 @@ SYSTEM_UTILITIES=(
   dbus
   gnupg
   iproute2
-  dhcpcd5
+  dhcpcd
   ssh
   zstd
   avahi-daemon

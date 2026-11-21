@@ -94,3 +94,22 @@ finish() {
   fi
   exit 0
 }
+
+# base_setup [arch]: runs scripts/chroot-base-setup.sh (the script the build runs inside the new
+# system) with its system paths moved into $W/root and with fake package and boot tools.
+# The calls are in $W/calls.log, the output in $W/base-setup.log, the exit code in $BASE_SETUP_CODE.
+base_setup() {
+  rm -rf "${W:?}/root" "${W:?}/calls.log"
+  mkdir -p "$W/root/etc/apt/apt.conf.d" "$W/root/etc/apt/sources.list.d" "$W/root/etc/initramfs-tools/conf.d" \
+    "$W/root/etc/default" "$W/root/etc/ssh" "$W/root/boot/efi/EFI" "$W/root/var/lib/apt/lists" "$W/root/usr/share/keyrings"
+  printf 'VERSION_CODENAME=trixie\n' > "$W/root/etc/os-release"
+  printf '# en_GB.UTF-8 UTF-8\n' > "$W/root/etc/locale.gen"
+  echo "deb http://deb.debian.org/debian trixie main" > "$W/root/etc/apt/sources.list"
+  local tool
+  for tool in apt-get locale-gen update-locale grub-install update-grub update-initramfs debconf-set-selections systemctl; do
+    [ -x "$W/bin/$tool" ] || fake "$tool"
+  done
+  in_sandbox "$REPO/scripts/chroot-base-setup.sh" > "$W/chroot-base-setup.sh"
+  PATH="$W/bin:$PATH" bash -eu "$W/chroot-base-setup.sh" "${1:-arm64}" ROOT-UUID ESP-UUID 0 > "$W/base-setup.log" 2>&1
+  BASE_SETUP_CODE=$?
+}
