@@ -143,5 +143,3 @@ else
     exit 1
 fi
 
-/usr/local/sbin/updateIssueVMName
-/usr/local/sbin/expandVirtualFilesystem

@@ -7,7 +7,7 @@
 #
 # What it does:
 #   - The image file is not changed. The VM runs on a throw-away copy-on-write disk on top of it.
-#     That disk is 3 GB larger than the image.
+#     That disk is 3 GB larger than the image, to see that the system grows into a larger disk.
 #   - The VM starts the same way a user's VM does: UEFI firmware, GRUB, kernel, systemd.
 #   - The checks (scripts/boot-test-checks.sh) run inside the VM through the QEMU guest agent,
 #     which the image installs. No account and no password are needed.
@@ -109,8 +109,9 @@ if ! kill -0 "$QEMU_PID" 2> /dev/null; then
   exit 1
 fi
 
-# the smallest size the root file system must have, in GB (0 = not checked)
-MIN_ROOT_GB=0
+# The root file system must have grown into the larger disk by itself, with nobody at the
+# console: the disk size less the small boot partition ("df" rounds up to whole GB).
+MIN_ROOT_GB=$((DISK_GB - 1))
 
 CODE=0
 python3 "$SCRIPT_DIR/boot-test-guest.py" "$WORK/agent.sock" "$SCRIPT_DIR/boot-test-checks.sh" "$WAIT_VM" 900 \
