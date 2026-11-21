@@ -232,8 +232,10 @@ jobs:
               echo "::endgroup::"
             done <<< "$workflows"
 
+  # Old beta and alpha releases are only deleted after the new release is complete (every
+  # Stage 4 workflow passed). So a good old release is never removed for a new one that failed.
   cleanup-old-releases-and-tags:
-    needs: [invoke-appliance-packaging]
+    needs: [wait-for-appliance-packaging]
     if: ${{ inputs.release_stream != 'stable' }}
     runs-on: ubuntu-latest
     permissions:
