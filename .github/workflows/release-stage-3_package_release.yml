@@ -111,10 +111,13 @@ jobs:
         TITLE: ${{ steps.set_title.outputs.release_title }}
       run: |
         if gh release view "$TAG" >/dev/null 2>&1; then
-          echo "Release $TAG exists, clearing attachments and updating"
-          gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r asset; do
-            gh release delete-asset "$TAG" "$asset" --yes
-          done
+          # A second build on the same day uses the same tag. The files of the first build stay
+          # in place: every upload below, and in Stage 4, replaces one file by the new one of
+          # the same name (--clobber). So the release is never empty, and a download link by
+          # name keeps working while the new files arrive.
+          # Until Stage 4 is done the release is a pre-release again, so "latest" does not
+          # point at a release that is half old and half new.
+          echo "Release $TAG exists, updating it; its files are replaced one by one"
           gh release edit "$TAG" --title "$TITLE" --notes-file ./output/release-body.md --prerelease --draft=false
         else
           gh release create "$TAG" --target "$GITHUB_SHA" --title "$TITLE" --notes-file ./output/release-body.md --prerelease
