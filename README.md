@@ -48,6 +48,8 @@ The wiki includes:
 | **Beta** | Current | Beta V2 | Beta | Latest | Testing new features |
 | **Alpha** | Current | Alpha | Alpha | Latest | Experimental/development |
 
+**Beta and alpha may include features not yet in `latest`.** When they do, the release notes for that build have a **Pre-release Changes** section listing them and the branch the image was built from.
+
 ---
 
 ## Developer Documentation
