@@ -9,7 +9,7 @@ The tests are made for Linux. On a Mac or on Windows, run them in a Debian conta
 ```bash
 docker run --rm -v "$PWD":/repo:ro -w /repo debian:trixie-slim bash -c '
   apt-get update -qq &&
-  apt-get install -y -qq --no-install-recommends bash ca-certificates dash git jq nginx openssl passwd python3 python3-yaml > /dev/null &&
+  apt-get install -y -qq --no-install-recommends bash ca-certificates dash git jq nginx openssl passwd python3 python3-yaml qemu-utils > /dev/null &&
   git config --global --add safe.directory /repo &&
   tests/run.sh'
 ```
