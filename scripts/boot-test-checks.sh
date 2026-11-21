@@ -75,6 +75,12 @@ check "the time sync service is switched on" systemctl is-enabled systemd-timesy
 check "the time sync service is active" systemctl is-active systemd-timesyncd
 same "the system says time sync is in use" "$(timedatectl show -p NTP --value)" "yes"
 
+echo "--- start order"
+same "systemd found no loop in the start order" "$(journalctl -b --no-pager | grep -ciE 'ordering cycle|to break ordering')" "0"
+check "all login prompts are up (getty.target)" systemctl is-active getty.target
+same "the setup wizard is waiting on the screen console" "$(systemctl show -p ActiveState --value first-boot-homebridge)" "activating"
+same "the login prompt of the screen console waits for the wizard" "$(systemctl list-jobs --no-legend --plain | awk '$2 == "getty@tty1.service" {print $3 " " $4}')" "start waiting"
+
 echo "--- the system as a whole"
 same "no unit failed" "$(systemctl --failed --no-legend --plain | awk '{print $1}' | tr '\n' ' ')" ""
 ROOT_GB="$(df --output=size -BG / | tail -n 1 | tr -dc '0-9')"
