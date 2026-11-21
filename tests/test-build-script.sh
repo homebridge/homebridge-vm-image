@@ -62,8 +62,9 @@ isnt "the clean-up is not also set for INT and TERM" grep -q '^trap cleanup EXIT
 # ---- versions from <stream>/package.json
 version_of() { # version_of <content of package.json> <package>
   # a copy of the script in a folder of its own: the script reads the version files next to itself
-  mkdir -p "$W/v/stable"
+  mkdir -p "$W/v/stable" "$W/v/scripts"
   cp "$BUILD" "$W/v/build-debian-image.sh"
+  cp "$REPO/scripts/lib.sh" "$W/v/scripts/"
   printf '%s\n' "$1" > "$W/v/stable/package.json"
   # shellcheck disable=SC1091  # the copy made above
   ( source "$W/v/build-debian-image.sh"; trap - EXIT INT TERM; set +e; pinned_version stable "$2" ) 2> "$W/version.err"

@@ -12,7 +12,7 @@ fi
 
 # the real script and the real qemu-img, on a small stand-in image and with a small target size
 mkdir -p "$W/repo/scripts" "$W/repo/output"
-cp "$REPO/scripts/convert-img-to-virtual-disk.sh" "$W/repo/scripts/"
+cp "$REPO/scripts/convert-img-to-virtual-disk.sh" "$REPO/scripts/lib.sh" "$W/repo/scripts/"
 truncate -s 8M "$W/repo/output/homebridge-vm-image-stable-arm64.img"
 echo "data" | dd of="$W/repo/output/homebridge-vm-image-stable-arm64.img" conv=notrunc status=none
 

@@ -6,52 +6,24 @@
 # copies homebridge-icon.png, and sets manifest contents (same basename as disk image, preserving newlines) as Information:Notes.
 # Prerequisites: UTM installed, utmctl in PATH, template-utm-config.plist in script directory,
 # ../assets/homebridge-icon.png, disk image and .manifest in output/.
-# Usage: ./configure_and_export_utm_vm.sh [RELEASE_STREAM] [ARCH]
-# RELEASE_STREAM: alpha, beta, stable (default: stable)
+# Usage: ./package-for-utm.sh [ARCH] [RELEASE_STREAM]
 # ARCH: arm64, amd64 (default: host architecture)
+# RELEASE_STREAM: alpha, beta, stable (default: stable)
 
 # Exit on error
 set -e
 
-# Logging functions
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-group_log() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::group::$*"
-    else
-        log "$*"
-    fi
-}
-group_end() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::endgroup::"
-    fi
-}
 
 # Determine repository root
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Auto-detect architecture based on host system
-detect_default_arch() {
-    case "$(uname -m)" in
-        arm64|aarch64) echo "arm64" ;;
-        x86_64) echo "amd64" ;;
-        *) echo "amd64" ;; # fallback to amd64 for unknown architectures
-    esac
-}
+# shellcheck source=lib.sh
+source "${REPO_ROOT}/scripts/lib.sh"
 
 # Set inputs with defaults
-ARCH="${2:-$(detect_default_arch)}"
-RELEASE_STREAM="${1:-stable}" # Default to "stable" if not provided
+# The same argument order as the other scripts: the CPU type first, then the stream.
+ARCH="${1:-$(detect_arch)}"
+RELEASE_STREAM="${2:-stable}" # Default to "stable" if not provided
 
 # Validate architecture
 if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
@@ -336,9 +308,9 @@ export_vm() {
 
 # Check for arguments
 if [[ $# -gt 2 ]]; then
-    error "Usage: $0 [RELEASE_STREAM] [ARCH]"
-    error "RELEASE_STREAM: alpha, beta, stable (default: stable)"
+    error "Usage: $0 [ARCH] [RELEASE_STREAM]"
     error "ARCH: arm64, amd64 (default: host architecture)"
+    error "RELEASE_STREAM: alpha, beta, stable (default: stable)"
     exit 1
 fi
 
