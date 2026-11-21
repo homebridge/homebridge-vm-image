@@ -300,6 +300,8 @@ install_staged_assets() {
                 export HOMEBRIDGE_APT_PKG_VERSION='${HOMEBRIDGE_APT_PKG_VERSION:-}'
                 export FFMPEG_FOR_HOMEBRIDGE_VERSION='${FFMPEG_FOR_HOMEBRIDGE_VERSION:-}'
                 export RELEASE_STREAM='${RELEASE_STREAM:-stable}'
+                export ARCH='${ARCH}'
+                export FFMPEG_SHA256='${FFMPEG_SHA256:-}'
                 
                 on_chroot() {
                     chroot '$SCRIPT_DIR/$ROOTFS' /bin/bash -euo${BASH_DEBUG_FLAG} pipefail \"\$@\"
@@ -383,6 +385,14 @@ main() {
     log "Using homebridge-apt-pkg NPM version: ${BLUE}${HOMEBRIDGE_APT_PKG_NPM_VERSION}${NC}"
     log "Using homebridge-apt-pkg version: ${BLUE}${HOMEBRIDGE_APT_PKG_VERSION}${NC}"
     log "Using ffmpeg-for-homebridge version: ${BLUE}${FFMPEG_FOR_HOMEBRIDGE_VERSION}${NC}"
+
+    # The ffmpeg file is unpacked into / of the image as root. Its SHA-256 checksum is asked from
+    # GitHub here, and the ffmpeg stage only unpacks a download that matches it.
+    local FFMPEG_ARCH="aarch64"
+    [[ "${ARCH}" == "amd64" ]] && FFMPEG_ARCH="x86_64"
+    FFMPEG_SHA256="$("${SCRIPT_DIR}/scripts/ffmpeg-checksum.sh" "${FFMPEG_FOR_HOMEBRIDGE_VERSION}" "${FFMPEG_ARCH}")"
+    export FFMPEG_SHA256
+    log "Expected ffmpeg checksum: ${BLUE}${FFMPEG_SHA256}${NC}"
     
     for stage in $(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
       group_log "Stage: $stage"

@@ -1,21 +1,43 @@
-#!/bin/bash -e 
+#!/bin/bash -e
 
 #
 # Install ffmpeg
 #
+# The build passes in the release tag and the SHA-256 checksum of the file for this
+# architecture (see scripts/ffmpeg-checksum.sh). The build stops here when one is missing.
+: "${FFMPEG_FOR_HOMEBRIDGE_VERSION:?FFMPEG_FOR_HOMEBRIDGE_VERSION is not set}"
+: "${FFMPEG_SHA256:?FFMPEG_SHA256 is not set}"
 
-on_chroot << 'EOF'
+case "$ARCH" in
+  arm64)
+    FFMPEG_ARCH="aarch64"
+    ;;
+  amd64)
+    FFMPEG_ARCH="x86_64"
+    ;;
+  *)
+    echo "Unsupported ARCH: $ARCH"
+    exit 1
+    ;;
+esac
+
+on_chroot << EOF
 uname -a
 
 set -e
 
-case "$(uname -m)" in
-  x86_64) FFMPEG_ARCH='x86_64' ;;
-  armv7l) FFMPEG_ARCH='arm32v7' ;;
-  aarch64) FFMPEG_ARCH='aarch64' ;;
-  *) echo "unsupported architecture"; exit 1 ;;
-esac
+FFMPEG_TMP=\$(mktemp -d)
+FFMPEG_FILE="\$FFMPEG_TMP/ffmpeg-alpine-${FFMPEG_ARCH}.tar.gz"
 
-curl -Lfs "https://github.com/homebridge/ffmpeg-for-homebridge/releases/download/${FFMPEG_FOR_HOMEBRIDGE_VERSION}/ffmpeg-alpine-${FFMPEG_ARCH}.tar.gz" | tar xzf - -C / --no-same-owner
-ffmpeg -version || exit 0
+# curl is installed by the Homebridge stage (01-homebridge/00-packages)
+curl -sSfL -o "\$FFMPEG_FILE" "https://github.com/homebridge/ffmpeg-for-homebridge/releases/download/${FFMPEG_FOR_HOMEBRIDGE_VERSION}/ffmpeg-alpine-${FFMPEG_ARCH}.tar.gz" < /dev/null
+
+# the file is unpacked into / as root, so it is only used when its checksum is the expected one
+echo "${FFMPEG_SHA256}  \$FFMPEG_FILE" | sha256sum -c -
+
+tar xzf "\$FFMPEG_FILE" -C / --no-same-owner
+rm -rf "\$FFMPEG_TMP"
+
+# the build fails when ffmpeg is missing or does not run on this architecture
+ffmpeg -version < /dev/null
 EOF
