@@ -48,6 +48,11 @@ check "nginx accepts its config" nginx -t
 check "Node.js runs" /opt/homebridge/bin/node --version
 check "ffmpeg runs" ffmpeg -version
 
+same "loading the VM settings prints nothing (as root, the way hb-shell does)" "$(bash -c '. /opt/homebridge/source.sh' 2>&1)" ""
+same "the Homebridge start log has no shell error and no 'Unknown VM' line" "$(journalctl -b -u homebridge --no-pager | grep -ciE 'Unknown VM|not found')" "0"
+same "the settings name the VM program" "$(sh -c '. /opt/homebridge/source-vm.sh; echo "$VM_SOFTWARE"')" "QEMU / UTM"
+check "the login screen names the VM program" grep -q 'VM Software:' /etc/issue
+
 echo "--- versions"
 if [ "$EXPECTED_RELEASE" != "-" ]; then
   same "/etc/hb-release holds the release" "$(cat /etc/hb-release 2> /dev/null)" "$EXPECTED_RELEASE"

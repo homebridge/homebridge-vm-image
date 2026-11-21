@@ -399,13 +399,12 @@ main() {
 
     sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
 
-    # Append environment variables to source.sh
-    # Only append source-vm.sh sourcing block if not already present
-    if ! sudo grep -q "source /opt/homebridge/source-vm.sh" "${ROOTFS}/opt/homebridge/source.sh"; then
-        echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-        echo "if [ -f '/opt/homebridge/source-vm.sh' ]; then" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-        echo "  . /opt/homebridge/source-vm.sh" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-        echo "fi" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    # The Homebridge apt package's source.sh loads /opt/homebridge/source-vm.sh by itself, so
+    # nothing is added to that file here. Stop the build if the package ever stops doing so:
+    # the VM settings would then silently be missing in Homebridge.
+    if ! sudo grep -q '/opt/homebridge/source-vm.sh' "${ROOTFS}/opt/homebridge/source.sh"; then
+        error "The Homebridge apt package's source.sh no longer loads /opt/homebridge/source-vm.sh"
+        exit 1
     fi
 
     # Last step: take out what must not be the same in every copy of the image

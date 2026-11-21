@@ -7,7 +7,7 @@
 # given to the user Homebridge runs as).
 source /usr/local/lib/homebridge-vm/vm-env.sh
 
-if [ -z "$VM_SOFTWARE" ]; then
+if [ -z "${VM_SOFTWARE:-}" ]; then
     echo "VM_SOFTWARE is not set or empty, exiting without updating /etc/issue"
     exit 0
 fi
