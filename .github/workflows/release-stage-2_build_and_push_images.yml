@@ -117,9 +117,10 @@ jobs:
         workflow-file: 'release-stage-3_package_release.yml'
         ref: 'latest'
         github-token: ${{ secrets.GH_TOKEN }}
-        timeout-minutes: '120'
+        # Stage 3 also waits for the three Stage 4 packaging workflows
+        timeout-minutes: '240'
         workflow-fields: |
           release_stream=${{ inputs.release_stream }}
-          run_id="${{ github.run_id }}"
-          HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          run_id=${{ github.run_id }}
+          HOMEBRIDGE_VM_IMAGE_VERSION=${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
         run-name: "${{ inputs.release_stream }}:${{ github.run_id }}"
