@@ -170,8 +170,7 @@ do_expand_filesystem() {
     /usr/local/sbin/expandVirtualFilesystem
     RET=$?
     if [ $RET -eq 0 ]; then 
-      whiptail --title "Success" --msgbox "The filesystem has been expanded successfully.\n\nYou need to reboot for the changes to take effect.\n\nIf needed the output is here - /var/log/diskexpand.log" 20 60 1
-      ASK_TO_REBOOT=1
+      whiptail --title "Success" --msgbox "The filesystem now fills the virtual disk. No restart is needed.\n\nIf needed the output is here - /var/log/diskexpand.log" 20 60 1
     else
       whiptail --title "Error" --msgbox "An error occured while attempting to expand the filesystem. Pls see output here - /var/log/diskexpand.log" 20 60 1
     fi

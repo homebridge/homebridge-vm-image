@@ -13,6 +13,23 @@ same "the wizard runs once logins are allowed" "$(unit_value "$WIZARD" After)" "
 same "the wizard is started with the system" "$(unit_value "$WIZARD" WantedBy)" "multi-user.target"
 has "the boot test looks for a loop in the start order" "$REPO/scripts/boot-test-checks.sh" "ordering cycle"
 
+# growing the disk and naming the VM program need no person, so they must not wait for the wizard
+GROW="$FILES/hb-expand-rootfs.service"
+same "the disk is grown before Homebridge and before the wizard" "$(unit_value "$GROW" Before)" "homebridge.service first-boot-homebridge.service"
+same "the disk is grown at every start" "$(unit_value "$GROW" WantedBy)" "multi-user.target"
+isnt "growing the disk has no first-boot-only condition (a disk can be made larger later)" grep -q '^Condition' "$GROW"
+same "the grow unit runs the grow script" "$(unit_value "$GROW" ExecStart)" "/usr/local/sbin/expandVirtualFilesystem"
+same "the VM program's name is written before the login prompts" "$(unit_value "$FILES/hb-vm-issue.service" Before)" "getty.target first-boot-homebridge.service"
+
+hasnt "the wizard script no longer grows the disk (it only runs when someone is at the console)" "$FILES/first-boot-homebridge" "expandVirtualFilesystem"
+hasnt "the wizard script no longer writes the login screen" "$FILES/first-boot-homebridge" "updateIssueVMName"
+
+run_stage 01-homebridge 00-run.sh
+for unit in hb-expand-rootfs hb-vm-issue first-boot-homebridge; do
+  is "the stage installs $unit.service" test -f "$W/root/etc/systemd/system/$unit.service"
+  has "the stage switches $unit on" "$W/chroot-script" "systemctl enable $unit"
+done
+
 # every unit file ends with a line end (a file without one breaks tools that add a line)
 for unit in "$REPO"/assets/*/files/*.service; do
   same "$(basename "$unit") ends with a line end" "$(tail -c 1 "$unit" | od -An -c | tr -d ' ')" '\n'

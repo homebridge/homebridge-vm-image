@@ -15,7 +15,13 @@ install -m 755 files/hb-config "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 install -v -d "${ROOTFS_DIR}/etc/hb-service/homebridge/prestart.d"
 install -m 755 files/20-hb-nginx-check "${ROOTFS_DIR}/etc/hb-service/homebridge/prestart.d/"
 
-# First boot service
+# Start-up tasks that need no person: grow the file system into the virtual disk, and write
+# the name of the VM program on the login screen. They run at every start and do nothing when
+# there is nothing to do.
+install -m 644 files/hb-expand-rootfs.service "${ROOTFS_DIR}/etc/systemd/system/"
+install -m 644 files/hb-vm-issue.service "${ROOTFS_DIR}/etc/systemd/system/"
+
+# First boot service: the wizard that makes the user account. It needs a person at the console.
 install -m 644 files/first-boot-homebridge.service "${ROOTFS_DIR}/etc/systemd/system/"
 install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
@@ -85,5 +91,7 @@ systemctl daemon-reload
 systemctl enable homebridge
 systemctl enable first-boot-homebridge
 systemctl enable hb-ssh-host-keys
+systemctl enable hb-expand-rootfs
+systemctl enable hb-vm-issue
 EOF
 
