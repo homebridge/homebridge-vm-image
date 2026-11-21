@@ -68,11 +68,17 @@ fi
 
 echo "--- package sources and updates"
 CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+same "the image holds no package lists (apt fetches fresh ones)" "$(find /var/lib/apt/lists -type f ! -name lock | wc -l)" "0"
+# the real thing: apt reads the lists of every source over the network
+check "apt-get update works with every source" apt-get update
 check "apt knows the Debian security source" sh -c "apt-cache policy | grep -q '${CODENAME}-security'"
 check "apt knows the Debian updates source" sh -c "apt-cache policy | grep -q '${CODENAME}-updates'"
 check "apt knows the Homebridge source" sh -c "apt-cache policy | grep -q 'repo.homebridge.io'"
+same "apt installs recommended packages, as normal Debian does" "$(apt-config dump | sed -n 's/^APT::Install-Recommends //p')" '"1";'
 same "automatic updates take Debian security fixes only" \
   "$(apt-config dump | sed -n 's/^Unattended-Upgrade::Origins-Pattern:: //p')" "\"origin=Debian,codename=\${distro_codename}-security,label=Debian-Security\";"
+same "the update tool itself reads it that way" "$(unattended-upgrade --dry-run -d 2> /dev/null | sed -n 's/^Allowed origins are: //p' | head -n 1)" "origin=Debian,codename=${CODENAME}-security,label=Debian-Security"
+check "the update tool leaves the Homebridge package and Node.js alone" sh -c "unattended-upgrade --dry-run -d 2> /dev/null | grep -q '^Initial blacklist: homebridge nodejs'"
 check "automatic updates never restart the VM" sh -c "apt-config dump | grep -qx 'Unattended-Upgrade::Automatic-Reboot \"false\";'"
 check "the daily update timer is on" systemctl is-enabled apt-daily-upgrade.timer
 
@@ -133,6 +139,7 @@ echo "--- facts (not checks)"
 echo "kernel: $(uname -r)   Debian: $(cat /etc/debian_version)   up: $(cut -d' ' -f1 /proc/uptime)s"
 echo "time zone: $(timedatectl show -p Timezone --value 2> /dev/null)   virtualisation: $(systemd-detect-virt 2> /dev/null)"
 df -h / | tail -n 1
+echo "boot menu: $(sed -n 's/^set timeout=//p' /boot/grub/grub.cfg | tr '\n' ' ')"
 echo "system state: $(systemctl is-system-running 2> /dev/null)   multi-user.target: $(systemctl is-active multi-user.target)"
 systemctl list-jobs --no-legend --plain | sed 's/^/job: /'
 systemctl list-timers --no-pager --no-legend | awk '{print "timer: " $(NF-1) " -> " $NF}'

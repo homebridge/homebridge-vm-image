@@ -26,6 +26,18 @@ if [[ -e "$ROOTFS/var/lib/dbus/machine-id" && ! -L "$ROOTFS/var/lib/dbus/machine
   ln -sf /etc/machine-id "$ROOTFS/var/lib/dbus/machine-id"
 fi
 
+# What the build left behind and no VM needs: package lists and downloaded packages (apt fetches
+# fresh lists in the VM), build logs, and root's cache folder.
+rm -rf "$ROOTFS"/var/lib/apt/lists/*
+rm -f "$ROOTFS"/var/cache/apt/archives/*.deb "$ROOTFS"/var/cache/apt/*.bin
+rm -f "$ROOTFS/var/log/bootstrap.log" "$ROOTFS/var/log/dpkg.log" "$ROOTFS/var/log/alternatives.log"
+rm -f "$ROOTFS"/var/log/apt/*
+rm -rf "$ROOTFS/root/.cache"
+
+# The two apt settings that are for the build only (see scripts/chroot-base-setup.sh). Without
+# them apt in the VM works like normal Debian: "apt install" brings recommended packages along.
+rm -f "$ROOTFS/etc/apt/apt.conf.d/99norecommends" "$ROOTFS/etc/apt/apt.conf.d/99nolang"
+
 # Stop the build when anything above is still there.
 LEFT="$(find "$ROOTFS/etc/ssh" -maxdepth 1 -name 'ssh_host_*' 2> /dev/null || true)"
 [[ -s "$ROOTFS/etc/machine-id" ]] && LEFT="${LEFT}${LEFT:+$'\n'}$ROOTFS/etc/machine-id (not empty)"
