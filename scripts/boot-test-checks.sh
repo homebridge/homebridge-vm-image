@@ -53,6 +53,11 @@ same "the Homebridge start log has no shell error and no 'Unknown VM' line" "$(j
 same "the settings name the VM program" "$(sh -c '. /opt/homebridge/source-vm.sh; echo "$VM_SOFTWARE"')" "QEMU / UTM"
 check "the login screen names the VM program" grep -q 'VM Software:' /etc/issue
 
+same "the UI's restart and shut down buttons can work: the homebridge user may run these, and only these, as root" \
+  "$(sudo -u homebridge sudo -n -l 2> /dev/null | sed -n 's/^ *(root) NOPASSWD: //p')" \
+  "/sbin/shutdown, /sbin/reboot, /sbin/poweroff, /usr/sbin/shutdown, /usr/sbin/reboot, /usr/sbin/poweroff"
+same "the homebridge user is in no extra group" "$(id -Gn homebridge)" "homebridge"
+
 echo "--- versions"
 if [ "$EXPECTED_RELEASE" != "-" ]; then
   same "/etc/hb-release holds the release" "$(cat /etc/hb-release 2> /dev/null)" "$EXPECTED_RELEASE"
