@@ -36,18 +36,16 @@ ARCH="${1:-$(detect_arch)}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCKERFILE="$REPO_ROOT/scripts/Dockerfile"
 
-# Generate a checksum for the Dockerfile
-DOCKERFILE_HASH=$(sha256sum "$DOCKERFILE" | awk '{print $1}')
+# Generate a checksum for the Dockerfile and the package list it installs
+DOCKERFILE_HASH=$(cat "$DOCKERFILE" "$REPO_ROOT/scripts/install-build-deps.sh" | sha256sum | awk '{print $1}')
 
 # Use the checksum as part of the image tag
 DOCKER_IMAGE_TAG="homebridge-vm-builder:${RELEASE_STREAM}-$ARCH-$DOCKERFILE_HASH"
 
 if [[ "$ARCH" == "arm64" ]]; then
   BASE_IMAGE="arm64v8/ubuntu:24.04"
-  GRUB_EFI_PKG="grub-efi-arm64-bin"
 elif [[ "$ARCH" == "amd64" ]]; then
   BASE_IMAGE="ubuntu:24.04"
-  GRUB_EFI_PKG="grub-efi-amd64-bin"
 else
   error "Unsupported architecture: $ARCH"
   exit 1
@@ -63,7 +61,7 @@ if ! docker image inspect "$DOCKER_IMAGE_TAG" > /dev/null 2>&1; then
   info "==> Dockerfile has changed or image does not exist. Building the Docker image."
   docker build \
     --build-arg BASE_IMAGE="$BASE_IMAGE" \
-    --build-arg GRUB_EFI_PKG="$GRUB_EFI_PKG" \
+    --build-arg ARCH="$ARCH" \
     -t "$DOCKER_IMAGE_TAG" \
     -f "$DOCKERFILE" \
     "$REPO_ROOT"
