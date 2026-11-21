@@ -105,6 +105,7 @@ check "the boot loader is in Debian's own place too" test -d /boot/efi/EFI/debia
 same "each console is on the kernel line once" "$(tr ' ' '\n' < /proc/cmdline | grep -c '^console=tty0$')" "1"
 same "the screen is the last console (it gets the start-up messages and the emergency prompt)" "$(tr ' ' '\n' < /proc/cmdline | grep '^console=' | tail -n 1)" "console=tty0"
 check "no made-up GRUB folder is left in the image" test ! -e /usr/lib/grub/amd64-efi
+check "the boot menu shows for 2 seconds" grep -qE '^ *set timeout=2$' /boot/grub/grub.cfg
 # What a later update of the GRUB package does: its set-up step runs again. It must write a
 # fresh copy of the boot loader to the boot partition.
 touch -d '2001-01-01' "$REMOVABLE"
@@ -139,7 +140,6 @@ echo "--- facts (not checks)"
 echo "kernel: $(uname -r)   Debian: $(cat /etc/debian_version)   up: $(cut -d' ' -f1 /proc/uptime)s"
 echo "time zone: $(timedatectl show -p Timezone --value 2> /dev/null)   virtualisation: $(systemd-detect-virt 2> /dev/null)"
 df -h / | tail -n 1
-echo "boot menu: $(sed -n 's/^set timeout=//p' /boot/grub/grub.cfg | tr '\n' ' ')"
 echo "system state: $(systemctl is-system-running 2> /dev/null)   multi-user.target: $(systemctl is-active multi-user.target)"
 systemctl list-jobs --no-legend --plain | sed 's/^/job: /'
 systemctl list-timers --no-pager --no-legend | awk '{print "timer: " $(NF-1) " -> " $NF}'
