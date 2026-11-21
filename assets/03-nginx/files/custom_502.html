@@ -337,7 +337,7 @@
           document.getElementById('startupLongTime').innerHTML = `
             <p>Homebridge doesn't usually take this long to start.</p>
             <p>Something may be wrong, but if you're running a Raspberry Pi 1 or Zero, the initial startup process may take up to 10 minutes, please be patient.</p>
-            <p>To troubleshoot the problem, please <a href="https://github.com/homebridge/homebridge-raspbian-image/wiki/How-To-Connect-Via-SSH" target="_blank">connect via ssh</a> and <a href="https://github.com/homebridge/homebridge-raspbian-image/wiki#useful-commands" target="_blank">look at the Homebridge logs</a>.
+            <p>To troubleshoot the problem, please <a href="https://github.com/homebridge/homebridge/wiki/Install-Homebridge-on-Virtual-Machine" target="_blank">connect via ssh</a> and look at the Homebridge logs with <code>sudo hb-service logs</code>.
           `;
         }, 120000);
       }());
