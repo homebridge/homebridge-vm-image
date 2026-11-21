@@ -402,6 +402,9 @@ main() {
         echo "fi" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
     fi
 
+    # Last step: take out what must not be the same in every copy of the image
+    sudo "${SCRIPT_DIR}/scripts/seal-image.sh" "${ROOTFS}"
+
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
 

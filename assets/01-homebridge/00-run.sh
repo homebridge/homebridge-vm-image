@@ -21,6 +21,9 @@ install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/updateIssueVMName "${ROOTFS_DIR}/usr/local/sbin/"
 
+# Makes the SSH host keys on the first start (the image holds none, see scripts/seal-image.sh)
+install -m 644 files/hb-ssh-host-keys.service "${ROOTFS_DIR}/etc/systemd/system/"
+
 # VM detection script
 
 install -v -d "${ROOTFS_DIR}/opt/homebridge/"
@@ -75,5 +78,6 @@ echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo te
 systemctl daemon-reload
 systemctl enable homebridge
 systemctl enable first-boot-homebridge
+systemctl enable hb-ssh-host-keys
 EOF
 
