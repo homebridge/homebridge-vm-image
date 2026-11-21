@@ -23,6 +23,8 @@ install -m 644 files/hb-vm-issue.service "${ROOTFS_DIR}/etc/systemd/system/"
 
 # First boot service: the wizard that makes the user account. It needs a person at the console.
 install -m 644 files/first-boot-homebridge.service "${ROOTFS_DIR}/etc/systemd/system/"
+install -v -d "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d"
+install -m 644 files/getty-tty1-homebridge-setup.conf "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d/10-homebridge-setup.conf"
 install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/updateIssueVMName "${ROOTFS_DIR}/usr/local/sbin/"
