@@ -1,0 +1,16 @@
+[Unit]
+Description=Make the SSH host keys of this VM
+Before=ssh.service ssh.socket
+ConditionFileIsExecutable=/usr/bin/ssh-keygen
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Makes each kind of host key that is missing. Keys that exist are left as they are.
+# The image holds no host keys, so every VM makes its own the first time it starts.
+ExecStart=/usr/bin/ssh-keygen -A
+# "sudo hb-config" reads this file to know that the keys were made on this VM
+ExecStartPost=/usr/bin/install -D -m 644 /dev/null /var/lib/hb-image/ssh-host-keys-made
+
+[Install]
+WantedBy=multi-user.target

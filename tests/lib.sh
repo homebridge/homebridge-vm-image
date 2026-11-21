@@ -113,3 +113,25 @@ base_setup() {
   PATH="$W/bin:$PATH" bash -eu "$W/chroot-base-setup.sh" "${1:-arm64}" ROOT-UUID ESP-UUID 0 > "$W/base-setup.log" 2>&1
   BASE_SETUP_CODE=$?
 }
+
+# run_stage <stage folder> <script>: runs a build stage script (assets/<stage>/<script>) the way
+# build-debian-image.sh does, with the new system in $W/root. What the script would run inside
+# the new system (on_chroot) is not run: it is written to $W/chroot-script for the test to read.
+# The exit code is in $STAGE_CODE, the output in $W/stage.log.
+run_stage() {
+  mkdir -p "$W/root/usr/local/sbin" "$W/root/etc/systemd/system" "$W/root/etc/update-motd.d" "$W/root/tmp" \
+    "$W/root/etc/nginx/sites-available" "$W/root/usr/share/nginx/html" "$W/root/etc/sudoers.d" "$W/root/usr/lib" \
+    "$W/root/etc/apt/apt.conf.d" "$W/root/var/lib"
+  : > "$W/chroot-script"
+  (
+    cd "$REPO/assets/$1" || exit 1
+    export ROOTFS_DIR="$W/root" BUILD_VERSION="${BUILD_VERSION:-2026-01-02}" RELEASE_STREAM="${RELEASE_STREAM:-stable}"
+    export HOMEBRIDGE_APT_PKG_VERSION="${HOMEBRIDGE_APT_PKG_VERSION:-2.0.26}" FFMPEG_FOR_HOMEBRIDGE_VERSION="${FFMPEG_FOR_HOMEBRIDGE_VERSION:-v2.2.2}"
+    export CHROOT_SCRIPT="$W/chroot-script"
+    on_chroot() { cat >> "$CHROOT_SCRIPT"; }
+    export -f on_chroot
+    # shellcheck disable=SC1090  # the stage script is named by the test
+    bash -euo pipefail -c "source './$2'"
+  ) > "$W/stage.log" 2>&1
+  STAGE_CODE=$?
+}
