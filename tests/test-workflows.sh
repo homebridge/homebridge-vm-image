@@ -71,6 +71,8 @@ job_rights() {
 S1=release-stage-1_update_dependencies.yml
 S2=release-stage-2_build_and_push_images.yml
 S3=release-stage-3_package_release.yml
+job_rights ci.yml lint "contents:read"
+job_rights ci.yml actionlint "contents:read"
 job_rights ci.yml tests "contents:read"
 job_rights ci.yml build-host-packages "contents:read"
 job_rights $S1 define-matrix "none"
@@ -87,7 +89,7 @@ for kind in hyperv:package-for-hyperv utm:package-for-utm-vm virtualbox:package-
   job_rights "release-stage-4_package-for-${kind%%:*}.yml" "${kind##*:}" "actions:read,contents:read"
   job_rights "release-stage-4_package-for-${kind%%:*}.yml" publish-to-release "none"
 done
-same "every job is in the list above" "$(grep -c '^job ' "$W/workflow-facts")" "18"
+same "every job is in the list above" "$(grep -c '^job ' "$W/workflow-facts")" "20"
 
 # A value pasted into a shell line becomes shell code. Values must come in through "env:".
 same "no shell line has a \${{ }} value pasted into it" "$(grep '^expr ' "$W/workflow-facts")" ""

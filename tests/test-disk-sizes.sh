@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # single quotes are meant: the text is looked for, or passed on, as it is
 # Every disk format must come out with the same virtual disk size (50 GB in a release).
 # VHDX and VMDK used to stay at the 5 GB of the raw image.
 # shellcheck source=lib.sh

@@ -150,11 +150,13 @@ base_setup() {
   done
   # grub-install "writes" the boot loader to both places, as the real one does with --force-extra-removable
   if [ ! -x "$W/bin/grub-install" ] || grep -q 'base_setup default' "$W/bin/grub-install"; then
+    # shellcheck disable=SC2016  # $f is for the fake command, when it runs
     fake grub-install '# base_setup default' 'mkdir -p "'"$W"'/root/boot/efi/EFI/BOOT" "'"$W"'/root/boot/efi/EFI/debian"' \
       'for f in BOOT/BOOTX64.EFI BOOT/BOOTAA64.EFI debian/grubx64.efi debian/grubaa64.efi; do echo grub > "'"$W"'/root/boot/efi/EFI/$f"; done'
   fi
   in_sandbox "$REPO/scripts/chroot-base-setup.sh" > "$W/chroot-base-setup.sh"
   PATH="$W/bin:$PATH" bash -eu "$W/chroot-base-setup.sh" "${1:-arm64}" ROOT-UUID ESP-UUID 0 > "$W/base-setup.log" 2>&1
+  # shellcheck disable=SC2034  # read by the tests
   BASE_SETUP_CODE=$?
 }
 
@@ -173,10 +175,12 @@ run_stage() {
     export HOMEBRIDGE_APT_PKG_VERSION="${HOMEBRIDGE_APT_PKG_VERSION:-2.0.26}" FFMPEG_FOR_HOMEBRIDGE_VERSION="${FFMPEG_FOR_HOMEBRIDGE_VERSION:-v2.2.2}"
     export ARCH="${ARCH:-arm64}" FFMPEG_SHA256="${FFMPEG_SHA256-0000000000000000000000000000000000000000000000000000000000000000}"
     export CHROOT_SCRIPT="$W/chroot-script"
+    # shellcheck disable=SC2317  # called by the stage script
     on_chroot() { cat >> "$CHROOT_SCRIPT"; }
     export -f on_chroot
     # shellcheck disable=SC1090  # the stage script is named by the test
     bash -euo pipefail -c "source './$2'"
   ) > "$W/stage.log" 2>&1
+  # shellcheck disable=SC2034  # read by the tests
   STAGE_CODE=$?
 }

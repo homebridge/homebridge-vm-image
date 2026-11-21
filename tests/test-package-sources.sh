@@ -7,7 +7,7 @@
 
 same "the image is built on Debian 13 (trixie)" "$(sed -n 's/^readonly DISTRO="\(.*\)"$/\1/p' "$REPO/build-debian-image.sh")" "trixie"
 
-base_setup
+base_setup arm64
 same "the base setup ends with code 0" "$BASE_SETUP_CODE" "0"
 
 SOURCES="$W/root/etc/apt/sources.list.d/debian.sources"

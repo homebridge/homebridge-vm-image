@@ -56,7 +56,7 @@ check_dependencies() {
 
 prepare_validation_bundle() {
   group_log "📦 Preparing validation bundle..."
-  rm -rf "$VALIDATION_DIR"/*
+  rm -rf "${VALIDATION_DIR:?}"/*
   if [[ -f "$UTM_BUNDLE" && "$UTM_BUNDLE" == *.tgz ]]; then
     log "Expanding UTM bundle archive: $UTM_BUNDLE"
     tar -xzf "$UTM_BUNDLE" -C "$VALIDATION_DIR"

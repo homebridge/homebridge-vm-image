@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # single quotes are meant: the text is looked for, or passed on, as it is
 # The image must hold no SSH host keys and no machine id. Each VM makes its own on its first start.
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"

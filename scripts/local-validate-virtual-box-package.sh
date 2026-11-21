@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-BASH_DEBUG="" # "" or "x" for debugging
-
-set -euo${BASH_DEBUG} pipefail
+set -euo pipefail
+# for debugging: set -x
 
 # VirtualBox OVA Validation Script
 # Validates that the OVA file boots and serves the Homebridge web interface.
@@ -34,7 +33,6 @@ group_end() {
 
 OVA_FILE="${1:-}"
 VM_NAME="homebridge-validation-vm"
-VM_RAM="1024"
 
 TEST_URL="http://localhost:8581"
 
@@ -82,7 +80,7 @@ start_vm() {
   VM_LOG_FOLDER="$(VBoxManage showvminfo "${VM_NAME}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)"
   info "VM log folder: '$VM_LOG_FOLDER'"
   # Wait for VM to power on (max 60s)
-  for i in {1..12}; do
+  for _ in {1..12}; do
     sleep 5
     VM_STATE=$(VBoxManage showvminfo "${VM_NAME}" --machinereadable | grep -E '^VMState=' | cut -d'"' -f2)
     if [[ "$VM_STATE" == "running" ]]; then
@@ -101,7 +99,7 @@ start_vm() {
 
 wait_for_homebridge() {
   log "⏳ Waiting for ${TEST_URL} to become available..."
-  for i in {1..12}; do
+  for _ in {1..12}; do
     sleep 5
     STATUS=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" ${TEST_URL}|| echo "000")
     log "HTTP status from Homebridge UI: $STATUS"

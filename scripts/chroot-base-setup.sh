@@ -94,9 +94,9 @@ log "Installing kernel, bootloader, and utilities"
 # Define package lists
 # The kernel and the boot loader. (No kernel headers: nothing in the image builds kernel modules.)
 KERNEL_PACKAGES=(
-  linux-image-${ARCH}
-  grub-efi-${ARCH}
-  grub-efi-${ARCH}-bin
+  "linux-image-${ARCH}"
+  "grub-efi-${ARCH}"
+  "grub-efi-${ARCH}-bin"
   grub-common
   grub2-common
 )

@@ -4,7 +4,7 @@
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
-base_setup
+base_setup arm64
 same "the base setup ends with code 0" "$BASE_SETUP_CODE" "0"
 is "the base setup installs systemd-timesyncd" grep -qE '^apt-get install .* systemd-timesyncd( |$)' "$W/calls.log"
 isnt "no package list names ntpdate (a tool that nothing ran)" grep -rqw ntpdate "$REPO/scripts/chroot-base-setup.sh" "$REPO/assets/01-homebridge/00-packages"

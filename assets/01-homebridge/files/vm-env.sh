@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Homebridge VM image: which VM program this system runs in, and the versions of the image.
 #
 # /opt/homebridge/source-vm.sh loads this file, and the Homebridge apt package loads that one

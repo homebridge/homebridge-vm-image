@@ -5,6 +5,7 @@
 
 # The root-owned file is loaded directly, never the copy in /opt/homebridge (that folder is
 # given to the user Homebridge runs as).
+# shellcheck source=vm-env.sh
 source /usr/local/lib/homebridge-vm/vm-env.sh
 
 if [ -z "${VM_SOFTWARE:-}" ]; then

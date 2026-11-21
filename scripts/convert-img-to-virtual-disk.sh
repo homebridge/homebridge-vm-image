@@ -38,16 +38,16 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
   log "Using GitHub TAG: $GITHUB_TAG"
 fi
 
-for img in ${REPO_ROOT}/output/*.img; do
+for img in "${REPO_ROOT}"/output/*.img; do
   log "Processing $img"
   group_log "Converting $img to qcow2"
   base_name=$(basename "$img" .img)
   # Convert to qcow2 format
   ext=qcow2
   out_file="${REPO_ROOT}/output/${base_name}.${ext}"
-  qemu-img convert -c -O $ext "$img" "$out_file"
+  qemu-img convert -c -O "$ext" "$img" "$out_file"
   log "Resizing $out_file to ${VDISK_SIZE}"
-  qemu-img resize "$out_file" ${VDISK_SIZE}
+  qemu-img resize "$out_file" "${VDISK_SIZE}"
   if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
     log "Uploading $out_file to release"
     gh release upload "${GITHUB_TAG}" "$out_file" --clobber
@@ -67,7 +67,7 @@ for img in ${REPO_ROOT}/output/*.img; do
     out_file="${REPO_ROOT}/output/${base_name}.${ext}"
     gz_file="${out_file}.gz"
     log "Converting $img to $ext format (${VDISK_SIZE})"
-    qemu-img convert -f raw -O $ext "$grown_img" "$out_file"
+    qemu-img convert -f raw -O "$ext" "$grown_img" "$out_file"
     log "Compressing $out_file"
     gzip -f -k "$out_file"
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
@@ -81,4 +81,4 @@ for img in ${REPO_ROOT}/output/*.img; do
   rm -f "$grown_img"
 done
 log "Deleting original IMG files"
-rm -f ${REPO_ROOT}/output/*.img
+rm -f "${REPO_ROOT}"/output/*.img

@@ -2,6 +2,8 @@
 # shellcheck disable=SC2016  # single quotes are meant: the text is looked for as it is
 # build-debian-image.sh: what happens with wrong arguments, with a failed build, and with a
 # version file that has no usable version.
+# shellcheck disable=SC2030,SC2031  # the build script is loaded in subshells on purpose: nothing it sets may leak into the test
+# shellcheck disable=SC2317  # the stand-in functions are called by the functions under test
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
@@ -86,7 +88,7 @@ has "the script moves to its own folder, so it works from anywhere" "$BUILD" 'cd
 
 # ---- the base setup: a package list that does not install must stop the build and say why
 fake apt-get 'case "$*" in *hyperv-daemons*) echo "E: Unable to locate package hyperv-daemons"; exit 100 ;; esac; exit 0'
-base_setup
+base_setup arm64
 isnt "a VM helper package that is missing stops the build" test "$BASE_SETUP_CODE" -eq 0
 has "the error of the failed install is shown" "$W/base-setup.log" "Unable to locate package hyperv-daemons"
 rm -f "$W/bin/apt-get"

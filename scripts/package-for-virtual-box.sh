@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-BASH_DEBUG="" # "" or "x" for debugging
-
-set -euo${BASH_DEBUG} pipefail
+set -euo pipefail
+# for debugging: set -x
 
 # VirtualBox Appliance Packaging Script
 # Supports multiple release streams: alpha, beta, stable
@@ -71,7 +70,7 @@ convert_image_to_vdi() {
   local img_gz_file="$OUTPUT_DIR/${VM_NAME}.img.gz"
   local img_file="$OUTPUT_DIR/${VM_NAME}.img"
 
-  mkdir -p $OUTPUT_DIR/tmp
+  mkdir -p "$OUTPUT_DIR/tmp"
 
   if [[ -f "$TMP_VDI_FILE" ]]; then
     rm -f "$TMP_VDI_FILE"
@@ -94,9 +93,8 @@ convert_image_to_vdi() {
       exit 1
     fi
     log "Resizing VDI to ${VDISK_SIZE_MB}..."
-    VBoxManage modifymedium "$TMP_VDI_FILE" --resize ${VDISK_SIZE_MB}
+    VBoxManage modifymedium "$TMP_VDI_FILE" --resize "${VDISK_SIZE_MB}"
     log "✅ Conversion to VDI completed: $TMP_VDI_FILE"
-    mkdir -p $OUTPUT_DIR/tmp
     cp -f "$TMP_VDI_FILE" "$VDI_FILE"
     gzip -f "$VDI_FILE"
     ls -l "$VDI_FILE.gz"
@@ -193,7 +191,7 @@ package_as_ova() {
     --draganddrop disabled
 
   VBoxManage modifyvm "$VM_NAME" --iconfile "${REPO_ROOT}/assets/homebridge-icon.png"
-  VBoxManage modifyvm "$VM_NAME" --description "$(cat ${MANIFEST_FILE})"
+  VBoxManage modifyvm "$VM_NAME" --description "$(cat "${MANIFEST_FILE}")"
 
   log "Exporting to OVA..."
   VBoxManage export "$VM_NAME" --output "$OVA_FILE"
@@ -218,7 +216,7 @@ main() {
   echo "  Name: $VM_NAME"
   echo "  Architecture: $ARCH"
   echo "  Release Stream: $RELEASE_STREAM"
-  echo "  $(cat ${MANIFEST_FILE}| grep 'Release Version: ')"
+  echo "  $(grep 'Release Version: ' "${MANIFEST_FILE}")"
   echo "  RAM: ${VM_RAM}MB"
   echo "  VDI Size: ${VDISK_SIZE_MB}MB"
   echo "  OVA File: $OVA_FILE"

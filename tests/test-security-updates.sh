@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # single quotes are meant: the text is looked for, or passed on, as it is
 # Automatic updates: security fixes only, never a restart, and never the Homebridge package or
 # Node.js (decided by BP, 2026-11-21).
 # shellcheck source=lib.sh

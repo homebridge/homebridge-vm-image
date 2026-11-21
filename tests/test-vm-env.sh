@@ -13,7 +13,7 @@ LOADER="$W/root/opt/homebridge/source-vm.sh"
 is "the file with the settings is installed outside /opt/homebridge" test -f "$ENV_FILE"
 is "the name the apt package loads is still there" test -f "$LOADER"
 same "that file only loads the root-owned one (its lines that are not comments)" \
-  "$(grep -v '^#' "$LOADER" | tr -s ' \n' ' ')" "if [ -r /usr/local/lib/homebridge-vm/vm-env.sh ]; then . /usr/local/lib/homebridge-vm/vm-env.sh fi "
+  "$(grep -v '^ *#' "$LOADER" | tr -s ' \n' ' ')" "if [ -r /usr/local/lib/homebridge-vm/vm-env.sh ]; then . /usr/local/lib/homebridge-vm/vm-env.sh fi "
 is "the loader is plain sh" dash -n "$LOADER"
 
 has "the image versions are written to the root-owned file" "$W/chroot-script" ">> /usr/local/lib/homebridge-vm/vm-env.sh"
