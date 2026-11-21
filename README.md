@@ -193,11 +193,6 @@ sudo journalctl -b
 sudo journalctl -u first-boot-homebridge -b
 ```
 
-#### Check VirtualBox Guest Additions Installation
-```bash
-sudo journalctl -u install-vb-guest-additions -b
-```
-
 #### Check Timezone Update Service
 ```bash
 sudo journalctl -u tzupdate -b
