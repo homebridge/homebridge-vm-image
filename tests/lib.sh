@@ -84,7 +84,7 @@ calls() {
 
 # in_sandbox <file>: prints the file with the system paths in it moved into $W/root
 in_sandbox() {
-  sed -E "s#(^|[[:space:]=\"'>\[(])/(etc|usr|opt|boot|proc|var|run|sys)/#\\1$W/root/\\2/#g" "$1"
+  sed -E "s#(^|[[:space:]=\"'>\[(])/(etc|usr|opt|boot|proc|var|run|sys|lib)/#\\1$W/root/\\2/#g" "$1"
 }
 
 # nginx_accepts <site config file>: runs nginx's own config check on a site file, with a
@@ -101,6 +101,26 @@ nginx_accepts() {
   local code=$?
   cat "$dir/answer"
   [ "$code" -eq 0 ] && ! grep -q '\[warn\]\|\[emerg\]' "$dir/answer"
+}
+
+# hb_config_functions <file>: writes the functions of hb-config (everything above its menu loop)
+# to <file>, with the system paths moved into $W/root. Tests load that file in dash, the shell
+# that runs hb-config in the VM, and call one function at a time with fake commands on the PATH.
+hb_config_functions() {
+  mkdir -p "$W/root/usr/share/keyrings" "$W/root/etc/apt/sources.list.d" "$W/root/etc/nginx/sites-available" \
+    "$W/root/usr/local/sbin" "$W/root/etc/ssh" "$W/root/var/lib" "$W/root/tmp"
+  sed '/^# Everything else needs to be run as root/,$d' "$FILES/hb-config" > "$W/hb-config-cut"
+  in_sandbox "$W/hb-config-cut" > "$1"
+}
+
+# hb_config <shell lines>: runs the lines in dash with the hb-config functions loaded.
+# whiptail is a stand-in that answers "yes" to every question, or "no" when WHIPTAIL_ANSWER=1.
+hb_config() {
+  hb_config_functions "$W/hb-config-functions"
+  # shellcheck disable=SC2016  # the stand-in reads WHIPTAIL_ANSWER when it runs
+  [ -x "$W/bin/whiptail" ] || fake whiptail 'exit "${WHIPTAIL_ANSWER:-0}"'
+  [ -x "$W/bin/pstree" ] || fake pstree 'echo "systemd---sshd---bash"'
+  ( cd "$W" && PATH="$W/bin:$PATH" TMPDIR="$W/root/tmp" dash -c ". '$W/hb-config-functions'; $1" ) > "$W/hb-config.log" 2>&1
 }
 
 finish() {
