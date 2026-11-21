@@ -146,7 +146,20 @@ package_as_ova() {
   fi
 
   log "📦 Packaging VirtualBox Appliance (OVA)..."
-  VBoxManage createvm --name "$VM_NAME" --register --ostype="Debian12_${ARCH}" --platform-architecture=$( [[ "$ARCH" == "arm64" ]] && echo "arm" || echo "x86" )
+  # VirtualBox's own names for "Debian, 64-bit": Debian_64 on Intel/AMD and Debian_arm64 on ARM.
+  # They do not name a Debian version, so they stay right when the image moves to a new Debian.
+  local os_type platform
+  if [[ "$ARCH" == "arm64" ]]; then
+    os_type="Debian_arm64"
+    platform="arm"
+  else
+    os_type="Debian_64"
+    platform="x86"
+  fi
+  if ! VBoxManage list ostypes | grep -qE "^ID:[[:space:]]+${os_type}\$"; then
+    warn "This VirtualBox does not list the system type ${os_type}"
+  fi
+  VBoxManage createvm --name "$VM_NAME" --register --ostype="$os_type" --platform-architecture="$platform"
   VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
     --cpus 2 \
@@ -173,12 +186,13 @@ package_as_ova() {
     --medium "$TMP_VDI_FILE"
 
   log "Configuring VM settings..."
+  # Shared clipboard and drag and drop need the VirtualBox guest additions inside the VM.
+  # The image does not have them, so both are off (decided by BP, 2026-11-21).
   VBoxManage modifyvm "$VM_NAME" \
-    --clipboard-mode bidirectional \
-    --draganddrop bidirectional
+    --clipboard-mode disabled \
+    --draganddrop disabled
 
   VBoxManage modifyvm "$VM_NAME" --iconfile "${REPO_ROOT}/assets/homebridge-icon.png"
-  VBoxManage modifyvm "$VM_NAME" --os-type="Debian12_${ARCH}"
   VBoxManage modifyvm "$VM_NAME" --description "$(cat ${MANIFEST_FILE})"
 
   log "Exporting to OVA..."
