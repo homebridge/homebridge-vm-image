@@ -2,7 +2,8 @@
 
 # Configuration
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly DISTRO="bookworm"
+# The Debian release the image is built on (13 = "trixie"). The Raspberry Pi image uses the same one.
+readonly DISTRO="trixie"
 readonly SIZE_MB=5120  # 5GB total disk size
 readonly ESP_SIZE_MB=256
 
@@ -200,7 +201,8 @@ setup_rootfs() {
             sudo apt-get install -y -qq zstd ${APT_REDIRECT} || true
         fi
         
-        sudo debootstrap --arch="${ARCH}" --variant=minbase "$DISTRO" "$ROOTFS" \
+        # ca-certificates: the package sources of the image use https://
+        sudo debootstrap --arch="${ARCH}" --variant=minbase --include=ca-certificates "$DISTRO" "$ROOTFS" \
             http://deb.debian.org/debian
         
         if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
