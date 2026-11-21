@@ -184,9 +184,11 @@ esac
 #     emergency prompt. A serial port still gets the kernel messages and a login prompt.
 #   - root=UUID=...: update-grub runs here inside the build, where it can only see the build
 #     machine's name for the disk. This option comes later on the kernel line, so it wins.
+#   - GRUB_TIMEOUT=2: the boot menu shows for 2 seconds, so an older kernel or the rescue entry
+#     can be picked when a new kernel does not start (decided by BP, 2026-11-21).
 cat > /etc/default/grub <<GRUB_EOF
 GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
+GRUB_TIMEOUT=2
 GRUB_DISTRIBUTOR="Homebridge VM on ${ARCH}"
 GRUB_CMDLINE_LINUX_DEFAULT=""
 GRUB_CMDLINE_LINUX="console=${SERIAL_CONSOLE} console=tty0 root=UUID=$ROOT_UUID"

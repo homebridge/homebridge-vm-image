@@ -17,6 +17,7 @@ same "amd64: later GRUB updates refresh the boot partition too" "$(cat "$W/debco
 same "amd64: the kernel options name the serial port first and the screen last" "$(kernel_options)" "console=ttyS0 console=tty0 root=UUID=ROOT-UUID"
 same "amd64: the second variable for kernel options is empty (GRUB adds both to the kernel line)" "$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=//p' "$GRUB_DEFAULT")" '""'
 # (the mount point is left out: the test moved the paths of the script into its scratch folder)
+same "the boot menu shows for 2 seconds, so an older kernel can be picked" "$(sed -n 's/^GRUB_TIMEOUT=//p' "$GRUB_DEFAULT")" "2"
 same "the boot partition is checked after the root file system (order 2)" "$(awk '$3 == "vfat" {print $1, $3, $4, $5, $6}' "$W/root/etc/fstab")" "UUID=ESP-UUID vfat umask=0077 0 2"
 same "the root file system is checked first (order 1)" "$(awk '$3 == "ext4" {print $1, $2, $3, $4, $5, $6}' "$W/root/etc/fstab")" "UUID=ROOT-UUID / ext4 defaults,noatime 0 1"
 
