@@ -244,12 +244,6 @@ configure_base_system() {
     
     group_log "Configuring base system"
     
-    # Copy GRUB modules for amd64 compatibility
-    if [[ "${ARCH}" == "amd64" && -d "/usr/lib/grub/x86_64-efi" ]]; then
-        sudo mkdir -p "${ROOTFS}/usr/lib/grub/amd64-efi"
-        sudo cp -r /usr/lib/grub/x86_64-efi/* "${ROOTFS}/usr/lib/grub/amd64-efi/"
-    fi
-    
 
     # Run scripts/chroot-base-setup.sh inside the new system
     sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < "${SCRIPT_DIR}/scripts/chroot-base-setup.sh"

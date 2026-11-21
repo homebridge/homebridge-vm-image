@@ -88,6 +88,26 @@ check "the time sync service is switched on" systemctl is-enabled systemd-timesy
 check "the time sync service is active" systemctl is-active systemd-timesyncd
 same "the system says time sync is in use" "$(timedatectl show -p NTP --value)" "yes"
 
+echo "--- boot loader"
+DEB_ARCH="$(dpkg --print-architecture)"
+case "$DEB_ARCH" in
+  amd64) REMOVABLE=/boot/efi/EFI/BOOT/BOOTX64.EFI ;;
+  *) REMOVABLE=/boot/efi/EFI/BOOT/BOOTAA64.EFI ;;
+esac
+check "the boot loader is in the place every VM program looks in" test -s "$REMOVABLE"
+check "the boot loader is in Debian's own place too" test -d /boot/efi/EFI/debian
+same "each console is on the kernel line once" "$(tr ' ' '\n' < /proc/cmdline | grep -c '^console=tty0$')" "1"
+same "the screen is the last console (it gets the start-up messages and the emergency prompt)" "$(tr ' ' '\n' < /proc/cmdline | grep '^console=' | tail -n 1)" "console=tty0"
+check "no made-up GRUB folder is left in the image" test ! -e /usr/lib/grub/amd64-efi
+# What a later update of the GRUB package does: its set-up step runs again. It must write a
+# fresh copy of the boot loader to the boot partition.
+touch -d '2001-01-01' "$REMOVABLE"
+if dpkg-reconfigure -f noninteractive "grub-efi-${DEB_ARCH}" > /tmp/grub-reconfigure.log 2>&1 && [ "$(date -r "$REMOVABLE" +%Y)" != "2001" ]; then
+  ok "an update of the GRUB package refreshes the boot loader on the boot partition"
+else
+  fail "an update of the GRUB package refreshes the boot loader on the boot partition" "$(tail -n 5 /tmp/grub-reconfigure.log)"
+fi
+
 echo "--- start order"
 same "systemd found no loop in the start order" "$(journalctl -b --no-pager | grep -ciE 'ordering cycle|to break ordering')" "0"
 # The start of the system must finish while the setup wizard still waits for a person.

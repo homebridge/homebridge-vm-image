@@ -69,6 +69,11 @@ sed -i "s/# *\(${LANG} UTF-8\)/\1/" /etc/locale.gen
 locale-gen
 update-locale LANG=${LANG}
 
+# Later updates of the GRUB package must also refresh the copy of the boot loader in EFI/BOOT,
+# the one that starts the VM. Debian only does that when this setting is on. It is set before
+# the package is installed, so the package takes it over.
+echo "grub-efi-${ARCH} grub2/force_efi_extra_removable boolean true" | debconf-set-selections
+
 log "Installing kernel, bootloader, and utilities"
 # Define package lists
 KERNEL_PACKAGES=(
@@ -127,23 +132,48 @@ else
 fi
 
 log "Setting up GRUB bootloader"
-# Configure GRUB
+# GRUB's own name for the CPU type. Debian calls 64-bit Intel/AMD "amd64"; GRUB calls it "x86_64".
+case "${ARCH}" in
+  amd64) GRUB_TARGET="x86_64-efi" ;;
+  arm64) GRUB_TARGET="arm64-efi" ;;
+  *) error "Unsupported architecture: ${ARCH}"; exit 1 ;;
+esac
+
+# The boot loader is installed in two places on the boot partition:
+#   - EFI/debian: Debian's own place. The GRUB package only updates the boot partition later
+#     when this folder exists.
+#   - EFI/BOOT ("removable"): the place every VM program looks in. A VM has no saved boot entry
+#     (--no-nvram), so this is the copy that starts the system.
+# --force-extra-removable writes both. The setting of the same name (set before the package was
+# installed, see above) makes every later update of the GRUB package refresh both as well.
 grub-install \
-    --target=${ARCH}-efi \
+    --target="${GRUB_TARGET}" \
     --efi-directory=/boot/efi \
     --boot-directory=/boot \
     --bootloader-id=debian \
     --no-nvram \
-    --removable \
+    --force-extra-removable \
     --recheck
 
-# GRUB configuration with serial console and resolution
+# The serial port: ttyS0 on Intel/AMD, ttyAMA0 on ARM VMs.
+case "${ARCH}" in
+  arm64) SERIAL_CONSOLE="ttyAMA0" ;;
+  *) SERIAL_CONSOLE="ttyS0" ;;
+esac
+
+# GRUB configuration with serial console and resolution.
+#   - The kernel options are in ONE variable. GRUB adds both variables to the kernel line, so
+#     the same text in both was passed twice.
+#   - The screen (tty0) is the LAST console: the last one gets the start-up messages and the
+#     emergency prompt. A serial port still gets the kernel messages and a login prompt.
+#   - root=UUID=...: update-grub runs here inside the build, where it can only see the build
+#     machine's name for the disk. This option comes later on the kernel line, so it wins.
 cat > /etc/default/grub <<GRUB_EOF
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=0
 GRUB_DISTRIBUTOR="Homebridge VM on ${ARCH}"
-GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
-GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
+GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_CMDLINE_LINUX="console=${SERIAL_CONSOLE} console=tty0 root=UUID=$ROOT_UUID"
 GRUB_TERMINAL="console serial"
 GRUB_SERIAL_COMMAND="serial --speed=921600 --unit=0 --word=8 --parity=no --stop=1"
 GRUB_GFXMODE=1024x768
@@ -153,10 +183,11 @@ GRUB_EOF
 update-grub
 
 log "Configuring fstab"
-# Create fstab
+# Create fstab. The last number is the order of the file system check at start: 1 for /, 2 for
+# every other file system.
 cat > /etc/fstab <<FSTAB_EOF
 UUID=$ROOT_UUID / ext4 defaults,noatime 0 1
-UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1
+UUID=$ESP_UUID /boot/efi vfat umask=0077 0 2
 FSTAB_EOF
 
 log "Updating initramfs"
@@ -164,15 +195,17 @@ log "Updating initramfs"
 echo "RESUME=none" > /etc/initramfs-tools/conf.d/resume
 update-initramfs -c -k all
 
-# Create fallback EFI bootloader
-mkdir -p /boot/efi/EFI/BOOT
-BOOT_FILE=$(find /boot/efi/EFI -name "grub*.efi" ! -path "*/BOOT/*" | head -1)
-if [[ -n "$BOOT_FILE" ]]; then
-    case "$BOOT_FILE" in
-        *x64*) cp "$BOOT_FILE" /boot/efi/EFI/BOOT/BOOTX64.EFI ;;
-        *aa64*) cp "$BOOT_FILE" /boot/efi/EFI/BOOT/BOOTAA64.EFI ;;
-    esac
-fi
+# The build stops when the boot loader is not in both places.
+case "${ARCH}" in
+  amd64) BOOT_FILES="/boot/efi/EFI/BOOT/BOOTX64.EFI /boot/efi/EFI/debian/grubx64.efi" ;;
+  arm64) BOOT_FILES="/boot/efi/EFI/BOOT/BOOTAA64.EFI /boot/efi/EFI/debian/grubaa64.efi" ;;
+esac
+for BOOT_FILE in $BOOT_FILES; do
+  if [[ ! -s "$BOOT_FILE" ]]; then
+    error "The boot loader file $BOOT_FILE is missing"
+    exit 1
+  fi
+done
 
 # System configuration
 echo "homebridge-vm" > /etc/hostname
