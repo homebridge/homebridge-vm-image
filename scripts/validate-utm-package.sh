@@ -75,7 +75,7 @@ configure_networking_shared() {
     exit 1
   fi
   if command -v /usr/libexec/PlistBuddy &> /dev/null; then
-    /usr/libexec/PlistBuddy -c "Set :Networking:0:Mode shared" "$PLIST"
+    /usr/libexec/PlistBuddy -c "Set :Network:0:Mode Shared" "$PLIST"
     log "✅ Networking set to 'Shared Network' in config.plist"
   else
     error "PlistBuddy not found. Cannot modify config.plist networking mode."
