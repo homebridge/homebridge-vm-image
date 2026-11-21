@@ -1,0 +1,22 @@
+// Homebridge VM image: install Debian security fixes by themselves (decided by BP, 2026-11-21).
+//
+//   - Only fixes from the Debian security source are installed. Nothing else is touched.
+//   - The Homebridge package comes from another source (repo.homebridge.io), so it is never
+//     updated here. Node.js is inside that package. Both names are also listed below, so they
+//     stay as they are even if Debian packages with these names are installed one day.
+//   - The VM is never restarted by this. A new kernel is used after the next restart.
+//
+// This file is read after Debian's own 50unattended-upgrades, so these values win.
+// To switch the automatic updates off: sudo dpkg-reconfigure unattended-upgrades
+
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+  "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+};
+
+Unattended-Upgrade::Package-Blacklist {
+  "homebridge";
+  "nodejs";
+};
+
+Unattended-Upgrade::Automatic-Reboot "false";
