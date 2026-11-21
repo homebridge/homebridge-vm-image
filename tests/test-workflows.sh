@@ -104,6 +104,12 @@ same "every App token names the one right it needs" \
   "$(grep -rc 'uses: actions/create-github-app-token' "$WORKFLOWS" | awk -F: '{n += $2} END {print n}')" \
   "$(grep -rc 'permission-contents: write' "$WORKFLOWS" | awk -F: '{n += $2} END {print n}')"
 
+# a second build on the same day must not empty the release that users download from
+STAGE3="$WORKFLOWS/release-stage-3_package_release.yml"
+isnt "Stage 3 never deletes the files of an existing release before the new ones are there" grep -q 'delete-asset' "$STAGE3"
+same "every upload to a release replaces a file of the same name" \
+  "$(grep -rh 'gh release upload' "$WORKFLOWS" "$REPO/scripts" | grep -vc -- '--clobber')" "0"
+
 has "the VirtualBox signing key is only used when it has the expected fingerprint" "$ACTIONS/install-virtualbox/action.yml" 'if [[ "$FOUND_FINGERPRINT" != "$ORACLE_KEY_FINGERPRINT" ]]; then'
 
 finish
