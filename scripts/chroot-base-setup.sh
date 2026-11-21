@@ -92,6 +92,9 @@ SYSTEM_UTILITIES=(
   net-tools
   libnss-mdns
   dbus
+  # keeps the clock right. A VM's clock stops while the host computer sleeps, and Debian only
+  # "recommends" this package, so it must be named here.
+  systemd-timesyncd
   gnupg
   iproute2
   dhcpcd
