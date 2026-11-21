@@ -23,30 +23,9 @@ readonly APT_QUIET BASH_DEBUG_FLAG
 set -euo pipefail
 [[ $DEBUG -eq 1 ]] && set -x
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
-
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-group_log() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::group::$*"
-    else
-        log "---> $* <---"
-    fi
-}
-group_end() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::endgroup::"
-    fi
-}
+# The shared helpers: log, warn, error, info, group_log, group_end
+# shellcheck source=scripts/lib.sh
+source "${SCRIPT_DIR}/scripts/lib.sh"
 
 # Cleanup function. It runs once, when the script ends for any reason (see the traps below).
 cleanup() {

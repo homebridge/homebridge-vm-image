@@ -7,7 +7,7 @@
 # a small repo with the script, the header, three streams, tags and commits
 G="$W/repo"
 mkdir -p "$G/scripts" "$G/assets" "$G/stable" "$G/beta" "$G/alpha" "$G/output"
-cp "$REPO/scripts/create-release-body.sh" "$G/scripts/"
+cp "$REPO/scripts/create-release-body.sh" "$REPO/scripts/lib.sh" "$G/scripts/"
 cp "$REPO/assets/release-body-header.md" "$G/assets/"
 git() { command git -C "$G" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 pkg() { echo "{\"dependencies\":{\"@homebridge/homebridge-apt-pkg\":\"$2\",\"ffmpeg-for-homebridge\":\"$3\"}}" > "$G/$1/package.json"; }

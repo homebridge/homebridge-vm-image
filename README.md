@@ -59,7 +59,7 @@ The following sections are intended for developers and contributors working on t
 ```
 homebridge-vm-image/
 ├── build-debian-image.sh   # Builds the raw disk image (.img)
-├── scripts/                # Build, test, packaging and release scripts
+├── scripts/                # Build, test, packaging and release scripts (lib.sh: shared helpers)
 ├── assets/                 # What goes into the image: one folder per build stage
 ├── stable/ beta/ alpha/    # package.json per release stream: the versions that are built
 ├── tests/                  # Script tests (run on every pull request)
@@ -105,8 +105,8 @@ The timezone is looked up once, the first time the VM starts with a network, and
   Converts the raw image to QCOW2, VHDX and VMDK, each with a 50 GB virtual disk.
 - **`scripts/package-for-virtual-box.sh [arch] [stream]`**
   Makes the VDI disk and the VirtualBox appliance (OVA). Needs VirtualBox.
-- **`scripts/package-for-utm.sh [stream] [arch]`**
-  Makes the UTM bundle (`.utm.tgz`). Needs a Mac with UTM. Note the argument order: stream first.
+- **`scripts/package-for-utm.sh [arch] [stream]`**
+  Makes the UTM bundle (`.utm.tgz`). Needs a Mac with UTM.
 - **`scripts/create-release-body.sh <stream>`**
   Writes the release notes.
 
@@ -153,7 +153,7 @@ Build the image, then test the boot (both inside Docker, on any host):
 Package it (on a Mac, with UTM or VirtualBox installed):
 
 ```bash
-./scripts/package-for-utm.sh stable arm64
+./scripts/package-for-utm.sh arm64 stable
 ./scripts/package-for-virtual-box.sh arm64 stable
 ```
 

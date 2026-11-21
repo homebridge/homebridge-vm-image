@@ -90,7 +90,7 @@ jobs:
       # Step 3: Run the script
       - name: Run package-for-utm.sh
         run: |
-          ./scripts/package-for-utm.sh "$RELEASE_STREAM" "$ARCH"
+          ./scripts/package-for-utm.sh "$ARCH" "$RELEASE_STREAM"
 
       # Step 4: Verify output
       - name: Verify output

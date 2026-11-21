@@ -20,19 +20,13 @@
 # Exit on error
 set -e
 
-# Logging functions
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
 
 # Determine repository root
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# shellcheck source=lib.sh
+source "${REPO_ROOT}/scripts/lib.sh"
 
 PKG_RELEASE_STREAM="${1:-beta}"
 CURRENT_TAG="${CURRENT_TAG:-}"

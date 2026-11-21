@@ -9,30 +9,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 GITHUB_TAG="${1:-latest}"  # Github Release TAG, not required for local runs
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
-
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-group_log() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::group::$*"
-    else
-        log "---> $* <---"
-    fi
-}
-group_end() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::endgroup::"
-    fi
-}
+# shellcheck source=lib.sh
+source "${REPO_ROOT}/scripts/lib.sh"
 
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
   log "Using GitHub TAG: $GITHUB_TAG"

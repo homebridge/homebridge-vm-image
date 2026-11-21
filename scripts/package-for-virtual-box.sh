@@ -8,28 +8,23 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Auto-detect architecture based on host system
-detect_default_arch() {
-  case "$(uname -m)" in
-    arm64|aarch64) echo "arm64" ;;
-    x86_64) echo "amd64" ;;
-    *) echo "amd64" ;;  # fallback to amd64 for unknown architectures
-  esac
-}
+# shellcheck source=lib.sh
+source "${REPO_ROOT}/scripts/lib.sh"
 
-ARCH="${1:-$(detect_default_arch)}"
+# Usage: package-for-virtual-box.sh [arm64|amd64] [stable|beta|alpha]
+ARCH="${1:-$(detect_arch)}"
 RELEASE_STREAM="${2:-stable}" # Default to "stable" if not provided
 
 # Validate architecture
 if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
-  echo -e "\033[0;31mERROR:\033[0m Unsupported architecture: $ARCH"
+  error "Unsupported architecture: $ARCH"
   echo "Supported architectures: amd64, arm64"
   exit 1
 fi
 
 # Validate release stream
 if [[ "$RELEASE_STREAM" != "alpha" && "$RELEASE_STREAM" != "beta" && "$RELEASE_STREAM" != "stable" ]]; then
-  echo -e "\033[0;31mERROR:\033[0m Unsupported release stream: $RELEASE_STREAM"
+  error "Unsupported release stream: $RELEASE_STREAM"
   echo "Supported release streams: alpha, beta, stable"
   exit 1
 fi
@@ -43,16 +38,6 @@ TMP_VDI_FILE="$OUTPUT_DIR/tmp/${VM_NAME}.vdi"
 OVA_FILE="$OUTPUT_DIR/${VM_NAME}.ova"
 MANIFEST_FILE="$OUTPUT_DIR/${VM_NAME}.manifest"
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
 
 check_dependencies() {
   log "🔍 Checking dependencies..."
