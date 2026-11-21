@@ -1,19 +1,23 @@
 #!/bin/bash
+#
+# The first-boot setup wizard. It asks for a user name and a password on the screen console and
+# makes that account (with sudo rights). first-boot-homebridge.service runs it before the login
+# prompt, at every start, until an account was made.
+#
+# There is no "set -e" here on purpose: Cancel in a dialog and a failed command are normal
+# cases, and each one is handled where it happens.
 
-set -e
+set -u
+
+TITLE="Homebridge VM Image Setup"
 
 # Define color codes for logging
-GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Log helper functions
-log() { echo -e "$*" >&2; }
 warn() { echo -e "${YELLOW}WARN:${NC} $*" >&2; }
 error() { echo -e "${RED}ERROR:${NC} $*" >&2; }
-info() { echo -e "$*" >&2; }
 
 # Clear the screen for a clean setup experience
 clear
@@ -25,121 +29,135 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-validate_user() {
-    RET=0
-    MSG="Entered username is invalid:"
-    if [ -z "$USERNAME" ] || [ ${#USERNAME} -gt 32 ]; then
-        MSG="$MSG\nLength be between 1 and 32 characters."
-        RET=1
-    fi
-    if ! echo "$USERNAME" | grep -q '^[a-z]\{1\}[a-z0-9\-]*$'; then
-        MSG="$MSG\nMust only contain lower-case letters, digits and hyphens, and must start with a letter."
-        RET=1
-    fi
-    if getent passwd "$USERNAME" >/dev/null 2>&1; then
-        MSG="$MSG\nCannot use existing username '$USERNAME'."
-        RET=1
-    fi
-    if [ "$RET" -ne 0 ]; then
-        echo "$MSG"
-    fi
-    return "$RET"
-}
-
-validate_password() {
-    PASSWORD="$1"
-    MSG=""
-    if [ -z "$PASSWORD" ]; then
-        echo "Password cannot be empty."
-        return 1
-    fi
-    if [ ${#PASSWORD} -le 5 ] || [ ${#PASSWORD} -gt 32 ]; then
-        echo "Length be between 6 and 32 characters."
-        return 1
-    fi
-}
-
 display_message() {
-    whiptail --title "Homebridge VM Image Setup" --msgbox "$1" 20 60
+    whiptail --title "$TITLE" --msgbox "$1" 20 60
 }
 
-# Function to prompt for username with retry logic using whiptail
+# Prints why the name can not be used, and returns 1. Prints nothing and returns 0 when it can.
+validate_user() {
+    local name="$1" message=""
+    if [ -z "$name" ] || [ ${#name} -gt 32 ]; then
+        message="${message}\nThe length must be between 1 and 32 characters."
+    fi
+    if ! printf '%s' "$name" | grep -q '^[a-z][a-z0-9-]*$'; then
+        message="${message}\nIt must only contain lower-case letters, digits and hyphens, and must start with a letter."
+    fi
+    if [ -n "$name" ] && getent passwd "$name" > /dev/null 2>&1; then
+        message="${message}\nThe user name '$name' is already in use."
+    elif [ -n "$name" ] && getent group "$name" > /dev/null 2>&1; then
+        # the account gets a group of the same name, so the name of an existing group can not be used
+        message="${message}\nThe name '$name' is already in use by the system (as a group)."
+    fi
+    if [ -n "$message" ]; then
+        printf 'The user name can not be used:%s' "$message"
+        return 1
+    fi
+    return 0
+}
+
+# Prints why the password can not be used, and returns 1. Returns 0 when it can.
+validate_password() {
+    local password="$1"
+    if [ -z "$password" ]; then
+        printf 'The password can not be empty.'
+        return 1
+    fi
+    if [ ${#password} -lt 6 ] || [ ${#password} -gt 32 ]; then
+        printf 'The length must be between 6 and 32 characters.'
+        return 1
+    fi
+    case "$password" in
+        *:*)
+            # a colon would cut the password in two when it is set
+            printf 'The password can not contain a colon (:).'
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+# Cancel was pressed. Returns 0 when the user really wants to leave the setup.
+confirm_leave() {
+    whiptail --title "$TITLE" --defaultno --yesno "Leave the setup?\n\nNo account is made. Homebridge keeps running and can be set up in the web browser.\n\nYou can not log in at this console or over SSH until an account exists. The setup starts again the next time the VM is started." 16 60
+}
+
+leave_setup() {
+    clear
+    warn "The setup was left. No account was made. Restart the VM to run the setup again."
+    sleep 5
+    # code 0: the unit stays switched on, so the wizard comes back at the next start
+    exit 0
+}
+
+# Asks for the user name until a usable one is given. Sets USERNAME.
 prompt_username() {
-    local retries=3
-    local attempt=1
-    while [ $attempt -le $retries ]; do
-        USERNAME=$(whiptail --title "Homebridge VM Image Setup" --inputbox "\nEnter the username for the new account:" 10 60 3>&1 1>&2 2>&3)
-        exitstatus=$?
-        if [ $exitstatus -ne 0 ]; then
-            error "User canceled the setup. Exiting."
-            sleep 5
-            exit 1
+    local message
+    while true; do
+        if ! USERNAME=$(whiptail --title "$TITLE" --inputbox "\nEnter the username for the new account:" 10 60 3>&1 1>&2 2>&3); then
+            confirm_leave && leave_setup
+            continue
         fi
-
-        if MSG=$(validate_user); then
+        if message=$(validate_user "$USERNAME"); then
             return 0
-        else
-            whiptail --msgbox "$MSG" 20 60
         fi
-        ((attempt++))
+        whiptail --title "$TITLE" --msgbox "$message\n\nPlease try again." 20 60
     done
-    error "Maximum retries reached. Exiting."
-    sleep 5
-    exit 1
 }
 
-# Function to prompt for password with retry logic using whiptail
+# Asks for the password twice until both are the same and usable. Sets PASSWORD.
 prompt_password() {
-    local retries=3
-    local attempt=1
-    while [ $attempt -le $retries ]; do
-        PASSWORD=$(whiptail --title "Homebridge VM Image Setup" --passwordbox "\nEnter password for $USERNAME:" 10 60 3>&1 1>&2 2>&3)
-        exitstatus=$?
-        if [ $exitstatus -ne 0 ]; then
-            error "User canceled the setup. Exiting."
-            sleep 5
-            exit 1
+    local confirm message
+    # The console has no keyboard layout setting: it reads the keys as a US keyboard.
+    local note="Note: this console reads the keys as a US keyboard. Letters a-x and digits are the same on most keyboards. Symbols, and y and z, can differ: a password typed here may then need other keys over SSH."
+    while true; do
+        if ! PASSWORD=$(whiptail --title "$TITLE" --passwordbox "\nEnter password for $USERNAME:\n\n$note" 16 60 3>&1 1>&2 2>&3); then
+            confirm_leave && leave_setup
+            continue
         fi
-
-        PASSWORD_CONFIRM=$(whiptail --title "Homebridge VM Image Setup" --passwordbox "\nConfirm password for $USERNAME:" 10 60 3>&1 1>&2 2>&3)
-        exitstatus=$?
-        if [ $exitstatus -ne 0 ]; then
-            error "User canceled the setup. Exiting."
-            sleep 5
-            exit 1
+        if ! confirm=$(whiptail --title "$TITLE" --passwordbox "\nConfirm password for $USERNAME:" 10 60 3>&1 1>&2 2>&3); then
+            confirm_leave && leave_setup
+            continue
         fi
-
-        # Validate password using validate_password
-        if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
-            whiptail --msgbox "Passwords do not match.\nPlease try again." 10 60
-        elif validate_password "$PASSWORD"; then
+        if [ "$PASSWORD" != "$confirm" ]; then
+            whiptail --title "$TITLE" --msgbox "Passwords do not match.\nPlease try again." 10 60
+        elif message=$(validate_password "$PASSWORD"); then
             return 0
         else
-            whiptail --msgbox "Invalid password: $(validate_password "$PASSWORD" 2>&1)\nPlease try again." 10 60
+            whiptail --title "$TITLE" --msgbox "The password can not be used: $message\nPlease try again." 10 60
         fi
-        ((attempt++))
     done
-    error "Maximum retries reached. Exiting."
-    sleep 5
-    exit 1
+}
+
+# Makes the account. When the password can not be set, the half-made account is removed again,
+# so the same name can be used at the next try. Returns 1 when no account was made.
+create_user() {
+    local output
+    if ! output=$(useradd -m -s /bin/bash -G sudo "$USERNAME" 2>&1); then
+        CREATE_ERROR="$output"
+        return 1
+    fi
+    if ! output=$(printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chpasswd 2>&1); then
+        CREATE_ERROR="$output"
+        userdel -r "$USERNAME" > /dev/null 2>&1
+        return 1
+    fi
+    return 0
 }
 
 display_message "Welcome to the Homebridge VM Image Setup!\n\nThis setup will guide you through creating a new user account for your Homebridge VM."
-prompt_username
-prompt_password
 
-useradd -m -s /bin/bash -G sudo "$USERNAME"
-echo "$USERNAME:$PASSWORD" | chpasswd
+while true; do
+    prompt_username
+    prompt_password
+    CREATE_ERROR=""
+    if create_user; then
+        break
+    fi
+    display_message "The account '$USERNAME' could not be made:\n\n$CREATE_ERROR\n\nNothing was kept. Please try again, for example with another user name."
+done
 
+# the wizard has done its job: it does not run again
+systemctl disable first-boot-homebridge > /dev/null 2>&1
+systemctl daemon-reload
 
-# Check if user creation was successful
-if [ $? -eq 0 ]; then
-    display_message "User '$USERNAME' created successfully!\n\nYou can now log in with this username and the password you provided."
-    systemctl disable first-boot-homebridge
-    systemctl daemon-reload
-    sleep 5
-else
-    display_message "Failed to create user '$USERNAME'. Please check the system logs for more details."
-    exit 1
-fi
-
+display_message "User '$USERNAME' created successfully!\n\nYou can now log in with this username and the password you provided."
