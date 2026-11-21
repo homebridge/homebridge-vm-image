@@ -90,16 +90,24 @@ same "the system says time sync is in use" "$(timedatectl show -p NTP --value)" 
 
 echo "--- start order"
 same "systemd found no loop in the start order" "$(journalctl -b --no-pager | grep -ciE 'ordering cycle|to break ordering')" "0"
-# While the wizard waits, the login prompts wait behind it. Their job must be in the queue: a
-# job that systemd dropped to break a loop is not there at all.
-same "the login prompts are queued behind the wizard, not dropped" "$(systemctl list-jobs --no-legend --plain | awk '$2 == "getty.target" {print $3 " " $4}')" "start waiting"
-same "the setup wizard is waiting on the screen console" "$(systemctl show -p ActiveState --value first-boot-homebridge)" "activating"
-same "the login prompt of the screen console waits for the wizard" "$(systemctl list-jobs --no-legend --plain | awk '$2 == "getty@tty1.service" {print $3 " " $4}')" "start waiting"
+# The start of the system must finish while the setup wizard still waits for a person.
+if wait_for 120 systemctl is-active multi-user.target; then ok "the system finished starting (multi-user.target) while the wizard waits"; else fail "the system finished starting (multi-user.target) while the wizard waits" "$(systemctl list-jobs --no-legend --plain)"; fi
+check "all login prompts are done with their start (getty.target)" systemctl is-active getty.target
+same "no start job is left waiting" "$(systemctl list-jobs --no-legend --plain | awk '{print $2}' | tr '\n' ' ')" ""
+same "the setup wizard is running" "$(systemctl show -p ActiveState --value first-boot-homebridge)" "active"
+check "the wizard is what the screen console shows" sh -c "tr -d '\\0' < /dev/vcs1 | grep -q 'Homebridge VM Image Setup'"
+same "the login prompt of the screen console is not started while the wizard uses the console" "$(systemctl is-active 'getty@tty1.service')" "inactive"
 
 echo "--- the system as a whole"
 same "no unit failed" "$(systemctl --failed --no-legend --plain | awk '{print $1}' | tr '\n' ' ')" ""
 ROOT_GB="$(df --output=size -BG / | tail -n 1 | tr -dc '0-9')"
 if [ "${ROOT_GB:-0}" -ge "$MIN_ROOT_GB" ]; then ok "the root file system is ${ROOT_GB} GB (at least ${MIN_ROOT_GB} GB)"; else fail "the root file system is at least ${MIN_ROOT_GB} GB" "it is ${ROOT_GB} GB"; fi
+
+echo "--- when the wizard ends"
+# (this check changes the state of the VM, so it comes last)
+systemctl stop first-boot-homebridge
+if wait_for 30 systemctl is-active 'getty@tty1.service'; then ok "the login prompt of the screen console comes up when the wizard ends"; else fail "the login prompt of the screen console comes up when the wizard ends" "$(systemctl status 'getty@tty1.service' --no-pager 2>&1 | tail -n 5)"; fi
+check "the 'wizard is running' file is gone" test ! -e /run/hb-first-boot-wizard
 
 echo "--- facts (not checks)"
 echo "kernel: $(uname -r)   Debian: $(cat /etc/debian_version)   up: $(cut -d' ' -f1 /proc/uptime)s"

@@ -8,9 +8,15 @@ unit_value() { sed -n "s/^$2=//p" "$1" | tr '\n' ' ' | sed 's/ $//'; }
 
 WIZARD="$FILES/first-boot-homebridge.service"
 isnt "the wizard is not ordered after multi-user.target (that made a loop in the start order)" grep -qE '^After=.*multi-user\.target' "$WIZARD"
-same "the wizard runs before the login prompt of the screen console" "$(unit_value "$WIZARD" Before)" "getty@tty1.service"
+same "the wizard is ready before the login prompt of the screen console is looked at" "$(unit_value "$WIZARD" Before)" "getty@tty1.service"
 same "the wizard runs once logins are allowed" "$(unit_value "$WIZARD" After)" "systemd-user-sessions.service"
 same "the wizard is started with the system" "$(unit_value "$WIZARD" WantedBy)" "multi-user.target"
+same "the start of the system does not wait for the wizard to end (not a oneshot)" "$(unit_value "$WIZARD" Type)" "simple"
+same "the wizard marks the console as in use before it starts" "$(unit_value "$WIZARD" ExecStartPre)" "/usr/bin/touch /run/hb-first-boot-wizard"
+same "when the wizard ends, the mark is removed and the login prompt is started" "$(unit_value "$WIZARD" ExecStopPost)" \
+  "/usr/bin/rm -f /run/hb-first-boot-wizard -/usr/bin/systemctl --no-block start getty@tty1.service"
+same "the login prompt of that console does not start while the mark is there" \
+  "$(unit_value "$FILES/getty-tty1-homebridge-setup.conf" ConditionPathExists)" "!/run/hb-first-boot-wizard"
 has "the boot test looks for a loop in the start order" "$REPO/scripts/boot-test-checks.sh" "ordering cycle"
 
 # growing the disk and naming the VM program need no person, so they must not wait for the wizard
@@ -29,6 +35,8 @@ for unit in hb-expand-rootfs hb-vm-issue first-boot-homebridge; do
   is "the stage installs $unit.service" test -f "$W/root/etc/systemd/system/$unit.service"
   has "the stage switches $unit on" "$W/chroot-script" "systemctl enable $unit"
 done
+
+is "the stage installs the setting for the login prompt of the screen console" test -f "$W/root/etc/systemd/system/getty@tty1.service.d/10-homebridge-setup.conf"
 
 # every unit file ends with a line end (a file without one breaks tools that add a line)
 for unit in "$REPO"/assets/*/files/*.service; do
