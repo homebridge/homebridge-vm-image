@@ -1,4 +1,4 @@
-#!/bin/bash -e 
+#!/bin/bash -e
 
 #
 # Install Homebridge and Homebridge Config UI X
@@ -50,10 +50,9 @@ install -m 644 files/source-vm.sh "${ROOTFS_DIR}/opt/homebridge/"
 # MOTD
 #
 
-install -m 755 files/issue "${ROOTFS_DIR}/etc/issue"
+install -m 644 files/issue "${ROOTFS_DIR}/etc/issue"
 install -m 755 files/motd-linux "${ROOTFS_DIR}/etc/update-motd.d/15-linux"
 install -m 755 files/motd-homebridge "${ROOTFS_DIR}/etc/update-motd.d/20-homebridge"
-install -m 633 files/bashrc.partial "${ROOTFS_DIR}/tmp/bashrc.partial"
 
 #
 # Set Version
@@ -91,9 +90,6 @@ apt-get install -y homebridge=${HOMEBRIDGE_APT_PKG_VERSION} < /dev/null
 
 # make a symlink to the main config directory
 [ -e /root/.homebridge ] || ln -fs /var/lib/homebridge /root/.homebridge
-
-# include homebridge bashrc in first user's bashrc
-rm -rf /tmp/bashrc.partial
 
 # set ui port for use in motd message
 echo "8581" > /etc/hb-ui-port

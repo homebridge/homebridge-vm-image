@@ -61,7 +61,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      max-parallel: 1
+      # both CPU types are built at the same time, each on a runner of its own type
       fail-fast: false
       matrix:
         arch: [arm64, amd64]

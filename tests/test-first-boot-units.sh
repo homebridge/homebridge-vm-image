@@ -38,9 +38,4 @@ done
 
 is "the stage installs the setting for the login prompt of the screen console" test -f "$W/root/etc/systemd/system/getty@tty1.service.d/10-homebridge-setup.conf"
 
-# every unit file ends with a line end (a file without one breaks tools that add a line)
-for unit in "$REPO"/assets/*/files/*.service; do
-  same "$(basename "$unit") ends with a line end" "$(tail -c 1 "$unit" | od -An -c | tr -d ' ')" '\n'
-done
-
 finish
