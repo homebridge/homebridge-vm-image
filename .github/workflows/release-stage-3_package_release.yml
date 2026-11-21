@@ -234,9 +234,11 @@ jobs:
         release-stream: ${{ inputs.release_stream }}
         releases-to-keep: 5
 
-# stable release should be marked as non-prerelease, and latest
+# stable release should be marked as non-prerelease, and latest.
+# Only after every Stage 4 packaging workflow ended with success: until then the release stays
+# a pre-release, so "latest" never points at a release with files missing.
   finalize-stable-release:
-    needs: [invoke-appliance-packaging]
+    needs: [wait-for-appliance-packaging]
     if: ${{ inputs.release_stream == 'stable' }}
     runs-on: ubuntu-latest
     steps:

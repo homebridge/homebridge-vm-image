@@ -86,7 +86,18 @@ jobs:
         run: |
           ./build-debian-image.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
 
-      # Step 3: Upload the IMG file as an artifact
+      # Step 3: Start the image as a virtual machine and check it from the inside.
+      # When this step fails, nothing is uploaded and Stage 3 (the release) is never started.
+      - name: Boot test
+        env:
+          ARCH: ${{ matrix.arch }}
+          RELEASE_STREAM: ${{ inputs.release_stream }}
+        run: |
+          # the apt package version the image must hold (npm "2.1.0-beta.4" is apt "2.1.0~beta.4")
+          APT_VERSION="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' "${RELEASE_STREAM}/package.json" | sed -e 's/^\^//' -e 's/-/~/')"
+          sudo ./scripts/boot-test.sh "output/homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.img" "$ARCH" - "$APT_VERSION"
+
+      # Step 4: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
         uses: actions/upload-artifact@v7
         with:
