@@ -1,0 +1,13 @@
+[Unit]
+Description=Look up the timezone once, at the first start with a network
+Wants=network-online.target
+After=network-online.target
+# After the lookup worked once (or was not needed), this file exists and the unit never runs again.
+ConditionPathExists=!/var/lib/hb-image/timezone-set-once
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hb-timezone-once
+
+[Install]
+WantedBy=multi-user.target

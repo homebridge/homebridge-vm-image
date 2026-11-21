@@ -1,0 +1,65 @@
+#!/bin/sh
+#
+# Homebridge VM Image - set the timezone once
+#
+# hb-timezone-once.service runs this script at the start of the VM, until it worked one time.
+# It looks up the timezone for the VM's public IP address and sets it. After that it never does
+# anything again.
+#
+#   - It asks public "where is this IP address" web services (the tzupdate tool does that).
+#     This is the only time the image contacts such a service.
+#   - It does NOT look anything up when a timezone was already picked, for example with
+#     "sudo timedatectl set-timezone Europe/Berlin". It can tell because the timezone is then no
+#     longer the one the image is built with.
+#   - If the lookup fails (no internet yet), it tries again at the next start of the VM.
+
+# the timezones a fresh image can have: the build sets none, which the system shows as UTC
+IMAGE_TIMEZONES="UTC Etc/UTC"
+
+DONE=/var/lib/hb-image/timezone-set-once
+
+# how often the lookup is tried in one run, and the wait between two tries, in seconds
+TRIES=6
+WAIT=10
+
+[ ! -e "$DONE" ] || exit 0
+
+done_for_good() {
+  mkdir -p "$(dirname "$DONE")"
+  echo "$1" > "$DONE"
+}
+
+CURRENT=$(timedatectl show -p Timezone --value 2> /dev/null)
+case " $IMAGE_TIMEZONES " in
+  *" ${CURRENT:-UTC} "*) ;;
+  *)
+    done_for_good "kept $CURRENT: it was set by the user"
+    exit 0
+    ;;
+esac
+
+# the network can need a moment after the start: try a few times
+ZONE=""
+try=1
+while [ "$try" -le "$TRIES" ]; do
+  ZONE=$(/usr/local/bin/tzupdate --print-only --timeout 10 2> /dev/null) && [ -n "$ZONE" ] && break
+  ZONE=""
+  [ "$try" -lt "$TRIES" ] && sleep "$WAIT"
+  try=$((try + 1))
+done
+
+# no answer (for example no internet): try again at the next start
+[ -n "$ZONE" ] || exit 0
+
+# the answer comes from the internet, so it is only used when it is the name of a real timezone
+case "$ZONE" in
+  /* | *..* | *[!A-Za-z0-9_/+-]*) exit 0 ;;
+esac
+[ -f "/usr/share/zoneinfo/$ZONE" ] || exit 0
+
+if timedatectl set-timezone "$ZONE"; then
+  echo "Timezone set to $ZONE (looked up once, at the first start with a network)"
+  done_for_good "set to $ZONE"
+fi
+
+exit 0

@@ -77,6 +77,8 @@ same "the VM made its SSH host keys" "$(find /etc/ssh -maxdepth 1 -name 'ssh_hos
 check "the SSH server is active" systemctl is-active ssh
 
 echo "--- time"
+check "no unit looks up the timezone at every start any more" sh -c '! systemctl cat tzupdate.service > /dev/null 2>&1'
+check "the one-time timezone lookup is switched on" systemctl is-enabled hb-timezone-once
 check "the time sync service is switched on" systemctl is-enabled systemd-timesyncd
 check "the time sync service is active" systemctl is-active systemd-timesyncd
 same "the system says time sync is in use" "$(timedatectl show -p NTP --value)" "yes"
