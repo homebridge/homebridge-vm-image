@@ -1,0 +1,11 @@
+[Unit]
+Description=Write the name of the VM program on the login screen
+# Runs at every start, with no questions asked. It adds one line to /etc/issue, once.
+Before=getty.target first-boot-homebridge.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/updateIssueVMName
+
+[Install]
+WantedBy=multi-user.target

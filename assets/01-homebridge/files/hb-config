@@ -1,47 +1,24 @@
 #!/bin/sh
+#
+# The hb-config tool of the Homebridge VM image ("sudo hb-config").
+#
+# The image build installs this file as /usr/local/sbin/hb-config.
+#   - VMs made from an image up to November 2026 update the tool from this file on the "latest"
+#     branch.
+#   - Newer VMs update it from this file in the newest release (see do_update_tool below).
+# So the file must stay at this path: assets/01-homebridge/files/hb-config
+#
+# This is a /bin/sh script. In the VM /bin/sh is dash, so bash-only syntax does not work here.
+#
+# When this file changes, set HB_CONFIG_VERSION below to the date of the change. "Update" only
+# installs a tool with a newer version than the one that is running.
+#
 
-INTERACTIVE=True
 ASK_TO_REBOOT=0
-CONFIG=/boot/config.txt
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BOLD='\e[1m'
-NC='\033[0m'
-
-is_live() {
-    grep -q "boot=live" $CMDLINE
-    return $?
-}
-
-is_ssh() {
-  if pstree -p | egrep --quiet --extended-regexp ".*sshd.*\($$\)"; then
-    return 0
-  else
-    return 1
-  fi
-}
-
-is_fkms() {
-  if grep -q okay /proc/device-tree/soc/v3d@7ec00000/status 2> /dev/null || grep -q okay /proc/device-tree/soc/firmwarekms@7e600000/status 2> /dev/null ; then
-    return 0
-  else
-    return 1
-  fi
-}
-
-is_installed() {
-    if [ "$(dpkg -l "$1" 2> /dev/null | tail -n 1 | cut -d ' ' -f 1)" != "ii" ]; then
-      return 1
-    else
-      return 0
-    fi
-}
-
-deb_ver () {
-  ver=`cat /etc/debian_version | cut -d . -f 1`
-  echo $ver
-}
+# The version of this tool: the date of its last change. "Update" never replaces the tool with
+# an older one. Change this value whenever this file changes.
+HB_CONFIG_VERSION="2026.11.21"
 
 calc_wt_size() {
   # NOTE: it's tempting to redirect stderr to /dev/null, so supress error
@@ -56,62 +33,12 @@ calc_wt_size() {
   if [ "$WT_WIDTH" -gt 178 ]; then
     WT_WIDTH=120
   fi
-  WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
-}
-
-set_config_var() {
-  lua - "$1" "$2" "$3" <<EOF > "$3.bak"
-local key=assert(arg[1])
-local value=assert(arg[2])
-local fn=assert(arg[3])
-local file=assert(io.open(fn))
-local made_change=false
-for line in file:lines() do
-  if line:match("^#?%s*"..key.."=.*$") then
-    line=key.."="..value
-    made_change=true
-  end
-  print(line)
-end
-if not made_change then
-  print(key.."="..value)
-end
-EOF
-mv "$3.bak" "$3"
-}
-
-get_web_addresses() {
-  IP=$(hostname -I)
-
-  printf "  ${BOLD}*${NC} ${GREEN}$1://$(hostname).local:$2$3${NC}\n"
-
-  for ip in $IP; do
-    if expr "$ip" : '[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null; then
-      printf "  ${BOLD}*${NC} ${GREEN}$1://$ip:$2$3${NC}\n"
-    else
-      printf "  ${BOLD}*${NC} ${GREEN}$1://[$ip]:$2$3${NC}\n"
-    fi
-  done
-}
-
-get_ip_and_port() {
-  IP=$(hostname -I)
-
-  printf "  ${BOLD}*${NC} ${GREEN}$(hostname).local:$1$2${NC}\n"
-
-  for ip in $IP; do
-    if expr "$ip" : '[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null; then
-      printf "  ${BOLD}*${NC} ${GREEN}$ip:$1$2${NC}\n"
-    else
-      printf "  ${BOLD}*${NC} ${GREEN}[$ip]:$1$2${NC}\n"
-    fi
-  done
+  WT_MENU_HEIGHT=$((WT_HEIGHT - 7))
 }
 
 do_finish() {
-  if [ $ASK_TO_REBOOT -eq 1 ]; then
-    whiptail --yesno "Would you like to reboot now?" 20 60 2
-    if [ $? -eq 0 ]; then # yes
+  if [ "$ASK_TO_REBOOT" -eq 1 ]; then
+    if whiptail --yesno "Would you like to reboot now?" 20 60 2; then
       sync
       reboot
     fi
@@ -119,37 +46,87 @@ do_finish() {
   exit 0
 }
 
-get_first_user() {
-  printf "$(getent passwd 1000 | cut -d: -f1)"
+HB_KEYRING=/usr/share/keyrings/homebridge.gpg
+HB_APT_LIST=/etc/apt/sources.list.d/homebridge.list
+
+# Prints the Homebridge package channel this system uses (stable, beta or alpha).
+# It is read from the apt source file, so a user who chose beta stays on beta.
+hb_apt_channel() {
+  HB_CHANNEL=""
+  if [ -f "$HB_APT_LIST" ]; then
+    HB_CHANNEL=$(sed -n 's#^deb .*https://repo\.homebridge\.io/* \([a-z]*\) main.*#\1#p' "$HB_APT_LIST" | head -n 1)
+  fi
+  case "$HB_CHANNEL" in
+    stable | beta | alpha) ;;
+    *) HB_CHANNEL=stable ;;
+  esac
+  printf '%s\n' "$HB_CHANNEL"
+}
+
+# Downloads the key of the Homebridge package repo and writes the apt source file.
+# The key in use is only replaced when the new one was downloaded and converted in full.
+# Returns 1, and changes nothing, when that fails (for example with no network).
+hb_refresh_apt_source() {
+  HB_TMP=$(mktemp -d) || return 1
+  if curl -sSfL https://repo.homebridge.io/KEY.gpg -o "$HB_TMP/KEY.gpg" \
+    && gpg --dearmor < "$HB_TMP/KEY.gpg" > "$HB_TMP/homebridge.gpg" \
+    && [ -s "$HB_TMP/homebridge.gpg" ]; then
+    HB_CHANNEL=$(hb_apt_channel)
+    install -m 644 "$HB_TMP/homebridge.gpg" "$HB_KEYRING"
+    echo "deb [signed-by=$HB_KEYRING] https://repo.homebridge.io $HB_CHANNEL main" > "$HB_APT_LIST"
+    rm -rf "$HB_TMP"
+    return 0
+  fi
+  rm -rf "$HB_TMP"
+  return 1
 }
 
 do_homebridge_update() {
-  pstree -s $$ | grep "hb-service" > /dev/null
-  if [ "$?" -eq 0 ]; then
+  if pstree -s $$ | grep -q "hb-service"; then
     whiptail --title "Error" --msgbox "You cannot run this command from the Homebridge UI Terminal.\n\nPlease connect using SSH (see wiki for instructions) and try again." 20 60 1
     printf "\n"
     return
   fi
 
-  curl -sfL https://repo.homebridge.io/KEY.gpg | sudo gpg --dearmor | sudo tee /usr/share/keyrings/homebridge.gpg  > /dev/null
-  echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io stable main" | sudo tee /etc/apt/sources.list.d/homebridge.list > /dev/null
-  apt-get update --allow-releaseinfo-change
-  apt-get install -y homebridge
+  if ! hb_refresh_apt_source; then
+    whiptail --title "Error" --msgbox "The key of the Homebridge package repo could not be downloaded.\n\nCheck the network connection and try again. Nothing was changed." 20 60 1
+    return
+  fi
+
+  if ! apt-get update --allow-releaseinfo-change; then
+    whiptail --title "Error" --msgbox "The package lists could not be updated.\n\nCheck the network connection and try again. Homebridge was not changed." 20 60 1
+    return
+  fi
+
+  if ! apt-get install -y homebridge; then
+    whiptail --title "Error" --msgbox "The Homebridge package could not be updated. Review the log above." 20 60 1
+  fi
 }
 
 do_restore_config() {
-  pstree -s $$ | grep "hb-service" > /dev/null
-  if [ "$?" -eq 0 ]; then
+  if pstree -s $$ | grep -q "hb-service"; then
     whiptail --title "Error" --msgbox "You cannot run this command from the Homebridge UI Terminal.\n\nPlease connect using SSH (see wiki for instructions) and try again." 20 60 1
     printf "\n"
     return
   fi
 
-  whiptail --yesno "This will remove all custom Homebridge config, plugins and restore to the factory default. You will need to manually remove any existing connections to this instance in the iOS Home app.\n\nAre you sure you want to proceed?" 20 60 2
-  RET=$?
-  if [ $RET -eq 0 ]; then
-    apt-get purge -y homebridge
-    do_homebridge_update
+  if ! whiptail --defaultno --yesno "This will DELETE ALL Homebridge data on this device:\n\n* the Homebridge config\n* all plugins and their settings\n* the accessory cache\n* the backups stored on this VM\n\nHomebridge is then installed again with its default settings. You will need to manually remove any existing connections to this instance in the iOS Home app.\n\nAre you sure you want to proceed?" 20 60 2; then
+    return
+  fi
+
+  # Nothing is deleted before the package is on this device again: the key, the package lists
+  # and the package file are downloaded first. With no network, this stops here.
+  if ! hb_refresh_apt_source \
+    || ! apt-get update --allow-releaseinfo-change \
+    || ! apt-get install -y --download-only --reinstall homebridge; then
+    whiptail --title "Error" --msgbox "The Homebridge package could not be downloaded.\n\nCheck the network connection and try again. Nothing was deleted." 20 60 1
+    return
+  fi
+
+  apt-get purge -y homebridge
+
+  if ! apt-get install -y homebridge; then
+    whiptail --title "Error" --msgbox "Homebridge was removed, but it could not be installed again. Review the log above, then run:\n\nsudo apt-get install homebridge" 20 60 1
   fi
 }
 
@@ -158,63 +135,60 @@ do_nodejs_update() {
   exit 0
 }
 
-
-
-
-# use the utiltiy /usr/local/sbin/expandVirtualFilesystem
-
+# use the utility /usr/local/sbin/expandVirtualFilesystem
 do_expand_filesystem() {
-  whiptail --title "Warning" --yesno "This will expand the filesystem to use all available space on the virtual disk.\n\nThis operation may take several minutes to complete depending on the size of your virtual disk.\n\nAre you sure you want to continue?" 20 60 1
-  RET=$?
-  if [ $RET -eq 0 ]; then
-    /usr/local/sbin/expandVirtualFilesystem
-    RET=$?
-    if [ $RET -eq 0 ]; then 
-      whiptail --title "Success" --msgbox "The filesystem has been expanded successfully.\n\nYou need to reboot for the changes to take effect.\n\nIf needed the output is here - /var/log/diskexpand.log" 20 60 1
-      ASK_TO_REBOOT=1
-    else
-      whiptail --title "Error" --msgbox "An error occured while attempting to expand the filesystem. Pls see output here - /var/log/diskexpand.log" 20 60 1
-    fi
+  if ! whiptail --title "Warning" --yesno "This will expand the filesystem to use all available space on the virtual disk.\n\nThis operation may take several minutes to complete depending on the size of your virtual disk.\n\nAre you sure you want to continue?" 20 60 1; then
+    return
+  fi
+  if /usr/local/sbin/expandVirtualFilesystem; then
+    whiptail --title "Success" --msgbox "The filesystem now fills the virtual disk. No restart is needed.\n\nIf needed the output is here - /var/log/diskexpand.log" 20 60 1
+  else
+    whiptail --title "Error" --msgbox "An error occured while attempting to expand the filesystem. Pls see output here - /var/log/diskexpand.log" 20 60 1
   fi
 }
 
 get_hostname() {
   tr -d " \t\n\r" < /etc/hostname
-}   
-  
+}
+
 do_hostname() {
-  if [ "$INTERACTIVE" = True ]; then
-    whiptail --msgbox "\
+  whiptail --msgbox "\
 Please note: RFCs mandate that a hostname's labels \
 may contain only the ASCII letters 'a' through 'z' (case-insensitive),
 the digits '0' through '9', and the hyphen.
 Hostname labels cannot begin or end with a hyphen.
 No other symbols, punctuation characters, or blank spaces are permitted.\
 " 20 70 1
-  fi
+
   CURRENT_HOSTNAME=$(get_hostname)
-  if [ "$INTERACTIVE" = True ]; then
-    NEW_HOSTNAME=$(whiptail --inputbox "Please enter a hostname" 20 60 "$CURRENT_HOSTNAME" 3>&1 1>&2 2>&3) 
-  else
-    NEW_HOSTNAME="$1"
-    true
+  if ! NEW_HOSTNAME=$(whiptail --inputbox "Please enter a hostname" 20 60 "$CURRENT_HOSTNAME" 3>&1 1>&2 2>&3); then
+    return
   fi
-  if [ $? -eq 0 ]; then
-    if [ "$INIT" = "systemd" ] && systemctl -q is-active dbus && ! ischroot; then
-      hostnamectl set-hostname "$NEW_HOSTNAME" 2> /dev/null
-    else
-      echo "$NEW_HOSTNAME" > /etc/hostname
-    fi
-    sed -i "s/127\.0\.1\.1.*$CURRENT_HOSTNAME/127.0.1.1\t$NEW_HOSTNAME/g" /etc/hosts
-    whiptail --title "Success" --msgbox "The filesystem has been expanded successfully.\n\nYou need to reboot for the changes to take effect." 20 60 1
-    ASK_TO_REBOOT=1
+
+  # only a name that follows the rules above is used: it is written into system files
+  if ! printf '%s' "$NEW_HOSTNAME" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'; then
+    whiptail --title "Error" --msgbox "'$NEW_HOSTNAME' can not be used as a hostname. Nothing was changed." 20 60 1
+    return
   fi
+
+  if systemctl -q is-active dbus; then
+    hostnamectl set-hostname "$NEW_HOSTNAME" 2> /dev/null
+  fi
+  echo "$NEW_HOSTNAME" > /etc/hostname
+  sed -i "s/^127\.0\.1\.1.*$/127.0.1.1\t$NEW_HOSTNAME/" /etc/hosts
+  whiptail --title "Success" --msgbox "The hostname has been changed to '$NEW_HOSTNAME'.\n\nYou need to reboot for the change to take full effect." 20 60 1
+  ASK_TO_REBOOT=1
+}
+
+do_timezone() {
+  dpkg-reconfigure tzdata
 }
 
 do_advanced_options() {
-  FUN=$(whiptail --title "Homebridge VM Configuration Tool (hb-config)" --menu "Advanced Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Back --ok-button Select \
+  FUN=$(whiptail --title "Homebridge VM Configuration Tool (hb-config)" --menu "Advanced Options" "$WT_HEIGHT" "$WT_WIDTH" "$WT_MENU_HEIGHT" --cancel-button Back --ok-button Select \
     "A1 Change Hostname" "Change hostname for this computer on a network" \
     "A2 Expand Filesystem" "Expand Virtual Filesystem to current allocation" \
+    "A3 Change Timezone" "Choose the timezone of this VM" \
     3>&1 1>&2 2>&3)
   RET=$?
   if [ $RET -eq 1 ]; then
@@ -223,50 +197,77 @@ do_advanced_options() {
     case "$FUN" in
       A1\ *) do_hostname ;;
       A2\ *) do_expand_filesystem ;;
+      A3\ *) do_timezone ;;
       *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
     esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
   fi
 }
 
+# nginx 1.25.1 and newer want the line "http2 on;". Older versions (Debian 12 and before) do not
+# know that line: they need "http2" on the "listen" lines. Returns 0 for the newer kind.
+nginx_has_http2_setting() {
+  NGINX_VERSION=$(nginx -v 2>&1 | sed -n 's#^nginx version: nginx/\([0-9][0-9.]*\).*#\1#p')
+  [ -n "$NGINX_VERSION" ] && [ "$(printf '%s\n' "1.25.1" "$NGINX_VERSION" | sort -V | head -n 1)" = "1.25.1" ]
+}
+
 do_configure_nginx() {
-  whiptail --title "Warning" --yesno "Using this tool will overwrite any manual changes you may have made to the Homebridge Nginx config file.\n\nAre you sure you wish to continue?" 20 60 1
-  RET=$?
-  tempDir=$(mktemp -d)
-  if [ $RET -eq 0 ]; then
-    whiptail --title "Homebridge VM Configuration Tool (hb-config)" --separate-output --checklist "\nNGINX Options:"  20 80 5 --cancel-button Cancel --ok-button Save \
-      "1" "Listen on port 80 - http://        " 1  \
-      "2" "Listen on port 443 - https://      " 1 \
-      "3" "Redirect http:// to https://       " 0 2>$tempDir/results
+  if ! whiptail --title "Warning" --yesno "Using this tool will overwrite any manual changes you may have made to the Homebridge Nginx config file.\n\nAre you sure you wish to continue?" 20 60 1; then
+    return
+  fi
 
-    if [ $? -eq 0 ]; then
-       LISTEN_ON_PORT_80=false
-       LISTEN_ON_PORT_443=false
-       REDIRECT_HTTP_TO_HTTPS=false
+  tempDir=$(mktemp -d) || return 1
 
-       while read choice
-       do
-         case "$choice" in
-           1) LISTEN_ON_PORT_80=true ;;
-           2) LISTEN_ON_PORT_443=true ;;
-           3) REDIRECT_HTTP_TO_HTTPS=true ;;
-           *) ;;
-         esac
-       done < $tempDir/results
+  if ! whiptail --title "Homebridge VM Configuration Tool (hb-config)" --separate-output --checklist "\nNGINX Options:" 20 80 5 --cancel-button Cancel --ok-button Save \
+    "1" "Listen on port 80 - http://        " 1 \
+    "2" "Listen on port 443 - https://      " 1 \
+    "3" "Redirect http:// to https://       " 0 2> "$tempDir/results"; then
+    rm -rf "$tempDir"
+    return
+  fi
 
-NGINX_PORT_80_CONFIG=""
-if [ "$LISTEN_ON_PORT_80" = "true" ]; then
-  NGINX_PORT_80_CONFIG="# http://\n  listen 80;                  # http IPv4\n  listen [::]:80;             # http IPv6\n"
-fi
+  LISTEN_ON_PORT_80=false
+  LISTEN_ON_PORT_443=false
+  REDIRECT_HTTP_TO_HTTPS=false
 
-NGINX_PORT_443_CONFIG=""
-if [ "$LISTEN_ON_PORT_443" = "true" ]; then
-  NGINX_PORT_443_CONFIG="# https://\n  listen 443 ssl http2;       # https IPv4\n  listen [::]:443 ssl http2;  # https IPv6\n"
-fi
+  while read -r choice; do
+    case "$choice" in
+      1) LISTEN_ON_PORT_80=true ;;
+      2) LISTEN_ON_PORT_443=true ;;
+      3) REDIRECT_HTTP_TO_HTTPS=true ;;
+      *) ;;
+    esac
+  done < "$tempDir/results"
 
-NGINX_REDIRECT_HTTP_TO_HTTPS=""
-if [ "$REDIRECT_HTTP_TO_HTTPS" = "true" ] && [ "$LISTEN_ON_PORT_80" = "true" ]; then
+  rm -rf "$tempDir"
+
   NGINX_PORT_80_CONFIG=""
-  NGINX_REDIRECT_HTTP_TO_HTTPS="
+  if [ "$LISTEN_ON_PORT_80" = "true" ]; then
+    NGINX_PORT_80_CONFIG="# http://
+  listen 80;                  # http IPv4
+  listen [::]:80;             # http IPv6
+"
+  fi
+
+  NGINX_PORT_443_CONFIG=""
+  if [ "$LISTEN_ON_PORT_443" = "true" ]; then
+    if nginx_has_http2_setting; then
+      NGINX_PORT_443_CONFIG="# https://
+  listen 443 ssl;             # https IPv4
+  listen [::]:443 ssl;        # https IPv6
+  http2 on;
+"
+    else
+      NGINX_PORT_443_CONFIG="# https://
+  listen 443 ssl http2;       # https IPv4
+  listen [::]:443 ssl http2;  # https IPv6
+"
+    fi
+  fi
+
+  NGINX_REDIRECT_HTTP_TO_HTTPS=""
+  if [ "$REDIRECT_HTTP_TO_HTTPS" = "true" ] && [ "$LISTEN_ON_PORT_80" = "true" ]; then
+    NGINX_PORT_80_CONFIG=""
+    NGINX_REDIRECT_HTTP_TO_HTTPS="
 server {
   listen 80;                  # http IPv4
   listen [::]:80;             # http IPv6
@@ -278,9 +279,15 @@ server {
 
   return 302 https://\$host\$request_uri;
 }"
-fi
+  fi
 
-NGINX_TEMPLATE="# this file was generated using the hb-config tool
+  # the port of the Homebridge UI: digits only, or the default
+  UI_PORT=$(cat /etc/hb-ui-port 2> /dev/null)
+  case "$UI_PORT" in
+    "" | *[!0-9]*) UI_PORT=8581 ;;
+  esac
+
+  NGINX_TEMPLATE="# this file was generated using the hb-config tool
 
 server {
   $NGINX_PORT_80_CONFIG
@@ -319,14 +326,14 @@ server {
   }
 
   location / {
-    proxy_pass                  http://127.0.0.1:$(cat /etc/hb-ui-port);
+    proxy_pass                  http://127.0.0.1:$UI_PORT;
     proxy_http_version          1.1;
     proxy_buffering             off;
     proxy_set_header            Host \$host;
     proxy_set_header            Upgrade \$http_upgrade;
     proxy_set_header            Connection \"Upgrade\";
     proxy_set_header            X-Real-IP \$remote_addr;
-    proxy_set_header            X-Forward-For \$proxy_add_x_forwarded_for;
+    proxy_set_header            X-Forwarded-For \$proxy_add_x_forwarded_for;
   }
 
   location = /custom_502.html {
@@ -337,69 +344,248 @@ server {
 $NGINX_REDIRECT_HTTP_TO_HTTPS
 "
 
-      echo "$NGINX_TEMPLATE" > /etc/nginx/sites-available/homebridge.local
-      /usr/local/sbin/nginx-homebridge-self-signed-cert
-      systemctl enable nginx
+  echo "$NGINX_TEMPLATE" > /etc/nginx/sites-available/homebridge.local
+  /usr/local/sbin/nginx-homebridge-self-signed-cert
+  systemctl enable nginx
 
-      if systemctl is-active --quiet nginx.service; then
-        echo "Restarting Nginx..."
-        systemctl restart nginx
-      else
-        echo "Starting Nginx..."
-        systemctl start nginx
-      fi
+  if systemctl is-active --quiet nginx.service; then
+    echo "Restarting Nginx..."
+    NGINX_ACTION=restart
+  else
+    echo "Starting Nginx..."
+    NGINX_ACTION=start
+  fi
 
-      if [ $? -eq 0 ]; then
-        whiptail --title "Success" --msgbox "NGINX has been configured successfully." 20 60 1
-       else
-        whiptail --title "Error" --msgbox "An error occured while attempting to reload the NGINX config." 20 60 1
-      fi
-
-    fi
+  if systemctl "$NGINX_ACTION" nginx; then
+    whiptail --title "Success" --msgbox "NGINX has been configured successfully." 20 60 1
+  else
+    whiptail --title "Error" --msgbox "An error occured while attempting to reload the NGINX config." 20 60 1
   fi
 }
 
-do_configure_system() {
-  # Use the system configuration tools available on the VM
-  if command -v dpkg-reconfigure >/dev/null 2>&1; then
-    dpkg-reconfigure tzdata
-  else
-    whiptail --title "Error" --msgbox "System configuration tool not available." 20 60 1
+# ---------------------------------------------------------------------------------------------
+# Fixes for VMs that were made from an older image (decided by BP, 2026-11-21).
+#
+# An image is made once, but a VM lives for years, and a new image does not change a VM that is
+# already in use. "Update" brings such a VM up to what a new image has:
+#   1. the Debian package sources for security fixes and updates,
+#   2. SSH host keys that were made on this VM,
+#   3. a service that keeps the clock right.
+# Each part looks first whether it is needed. On a VM from a current image nothing is needed,
+# nothing is asked and nothing is changed.
+# ---------------------------------------------------------------------------------------------
+
+# a new image writes this file when it made its SSH host keys on the first start
+HB_SSH_KEYS_MARKER=/var/lib/hb-image/ssh-host-keys-made
+HB_DEBIAN_EXTRA_LIST=/etc/apt/sources.list.d/debian-security-updates.list
+
+# Prints the code name of the Debian release (bookworm, trixie ...), or nothing.
+debian_codename() {
+  sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2> /dev/null | tr -d '"' | head -n 1
+}
+
+# True when apt has no source for Debian's security fixes.
+repair_needs_sources() {
+  HB_CODENAME=$(debian_codename)
+  case "$HB_CODENAME" in
+    "" | *[!a-z]*) return 1 ;;
+  esac
+  ! grep -rqs -- "${HB_CODENAME}-security" /etc/apt/sources.list /etc/apt/sources.list.d/
+}
+
+# True when the SSH host keys were not made on this VM.
+repair_needs_ssh_keys() {
+  [ -x /usr/bin/ssh-keygen ] && [ ! -e "$HB_SSH_KEYS_MARKER" ]
+}
+
+# True when no service keeps the clock right.
+repair_needs_time_sync() {
+  [ ! -e /lib/systemd/system/systemd-timesyncd.service ] && [ ! -e /usr/lib/systemd/system/systemd-timesyncd.service ] \
+    && ! command -v chronyd > /dev/null 2>&1 && ! command -v ntpd > /dev/null 2>&1
+}
+
+# Adds the Debian sources for security fixes and updates, and reads the package lists.
+repair_sources() {
+  HB_CODENAME=$(debian_codename)
+  {
+    echo "# Added by hb-config: the Debian sources for security fixes and updates."
+    echo "# Images made before December 2026 only had the main source, which gets no security fixes."
+    echo "deb https://deb.debian.org/debian-security ${HB_CODENAME}-security main"
+    echo "deb https://deb.debian.org/debian ${HB_CODENAME}-updates main"
+  } > "$HB_DEBIAN_EXTRA_LIST"
+  chmod 644 "$HB_DEBIAN_EXTRA_LIST"
+
+  if ! apt-get update; then
+    # without working lists the new file would break every later "apt update": take it out again
+    rm -f "$HB_DEBIAN_EXTRA_LIST"
+    apt-get update > /dev/null 2>&1
+    return 1
   fi
 }
 
-do_update() {
-  tempDir=$(mktemp -d)
-  scriptUrl=https://raw.githubusercontent.com/homebridge/homebridge-vm-image/latest/assets/01-homebridge/files/hb-config
+# Installs the Debian updates that are waiting. The Homebridge package is left as it is:
+# "Update Homebridge" in the main menu is the place for that.
+repair_install_updates() {
+  HB_WAS_HELD=$(apt-mark showhold 2> /dev/null | grep -cx homebridge)
+  apt-mark hold homebridge > /dev/null 2>&1
+  DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold dist-upgrade
+  HB_UPGRADE_CODE=$?
+  [ "$HB_WAS_HELD" = "0" ] && apt-mark unhold homebridge > /dev/null 2>&1
+  return "$HB_UPGRADE_CODE"
+}
 
-  # download the update to a temporary directory
-  scriptUrl=$scriptUrl?$(date --iso-8601)
-  printf "Downloading hb-config update...\n$scriptUrl\n"
-  curl -fL# $scriptUrl > $tempDir/hb-config
+# Makes a fresh set of SSH host keys for this VM.
+# The new keys are made first, in a folder of their own. The keys in use are only replaced when
+# all of that worked, so the SSH server is never left without keys.
+repair_ssh_keys() {
+  HB_KEY_TMP=$(mktemp -d) || return 1
+  # "ssh-keygen -A -f <folder>" writes the keys to <folder>/etc/ssh
+  HB_NEW_KEYS="$HB_KEY_TMP/etc/ssh"
+  mkdir -p "$HB_NEW_KEYS"
+  if ! ssh-keygen -A -f "$HB_KEY_TMP" > /dev/null 2>&1 || ! ls "$HB_NEW_KEYS"/ssh_host_*_key > /dev/null 2>&1; then
+    rm -rf "$HB_KEY_TMP"
+    return 1
+  fi
+  rm -f /etc/ssh/ssh_host_*
+  for HB_KEY_FILE in "$HB_NEW_KEYS"/ssh_host_*; do
+    case "$HB_KEY_FILE" in
+      *.pub) install -m 644 "$HB_KEY_FILE" /etc/ssh/ ;;
+      *) install -m 600 "$HB_KEY_FILE" /etc/ssh/ ;;
+    esac
+  done
+  rm -rf "$HB_KEY_TMP"
+  mkdir -p "$(dirname "$HB_SSH_KEYS_MARKER")"
+  : > "$HB_SSH_KEYS_MARKER"
+  # the server reads the new keys. Connections that are open now stay open.
+  systemctl restart ssh > /dev/null 2>&1 || systemctl restart sshd > /dev/null 2>&1
+  return 0
+}
 
-  # check the download was a success
-  RET=$?
-  if [ $RET -ne 0 ]; then
-    whiptail --title "Error" --msgbox "An error occured while attempting to update the hb-config tool." 20 60 1
-  else
-    # syntax check the script is a valid bash script
-    if bash -n $tempDir/hb-config; then
-      chmod +x $tempDir/hb-config
-      mv $tempDir/hb-config /usr/local/sbin/hb-config
-      whiptail --title "Success" --msgbox "The hb-config tool has been updated and will now exit.\n\nIf you like the Homebridge VM image please show your support by starring the project on GitHub:\n\nhttps://github.com/homebridge/homebridge-vm-image" 20 60 1
-      exit 0
+# Installs and starts the service that keeps the clock right.
+repair_time_sync() {
+  apt-get install -y systemd-timesyncd || return 1
+  systemctl enable --now systemd-timesyncd > /dev/null 2>&1
+  return 0
+}
+
+do_system_repair() {
+  HB_TODO=""
+  repair_needs_sources && HB_TODO="${HB_TODO}\n* Add the Debian package sources for security fixes and updates. Without them this VM gets no Debian security fixes."
+  repair_needs_time_sync && HB_TODO="${HB_TODO}\n* Install the service that keeps the clock right (systemd-timesyncd)."
+  repair_needs_ssh_keys && HB_TODO="${HB_TODO}\n* Make a fresh set of SSH host keys for this VM (you are asked again before this is done)."
+
+  [ -n "$HB_TODO" ] || return 0
+
+  if ! whiptail --title "Fixes for this VM" --yesno "This VM was made from an older image. Newer images have these fixes built in:\n${HB_TODO}\n\nApply them now? This needs a network connection." 20 76 2; then
+    return 0
+  fi
+
+  HB_DONE=""
+  HB_FAILED=""
+
+  if repair_needs_sources; then
+    if repair_sources; then
+      HB_DONE="${HB_DONE}\n* The Debian sources for security fixes and updates were added."
+      if whiptail --title "Fixes for this VM" --yesno "The Debian sources were added.\n\nInstall the Debian updates that are waiting now? This can take several minutes. Homebridge itself is not updated by this.\n\nYou can also do it later with:\nsudo apt update && sudo apt full-upgrade" 20 76 2; then
+        if repair_install_updates; then
+          HB_DONE="${HB_DONE}\n* The waiting Debian updates were installed. A new kernel is used after the next restart."
+          ASK_TO_REBOOT=1
+        else
+          HB_FAILED="${HB_FAILED}\n* The Debian updates could not be installed. Review the log above, then run: sudo apt full-upgrade"
+        fi
+      fi
     else
-      whiptail --title "Error" --msgbox "The downloaded script was corrupted and did not pass the syntax check." 20 60 1
+      HB_FAILED="${HB_FAILED}\n* The Debian sources could not be added (no network?). Nothing was changed."
     fi
+  fi
+
+  if repair_needs_time_sync; then
+    if repair_time_sync; then
+      HB_DONE="${HB_DONE}\n* The time sync service was installed and started."
+    else
+      HB_FAILED="${HB_FAILED}\n* The time sync service could not be installed."
+    fi
+  fi
+
+  if repair_needs_ssh_keys; then
+    if whiptail --title "Fixes for this VM" --yesno "Make a fresh set of SSH host keys for this VM?\n\nNewer images make them on the first start of each VM. This VM was made from an older image.\n\nAfter this, your SSH program says ONE time that the host key has changed. That is expected. Remove the old key on your computer with:\n\nssh-keygen -R $(get_hostname).local\n\n(and the same with the IP address, if you connect by IP address), then connect again. A connection that is open now stays open." 22 76 2; then
+      if repair_ssh_keys; then
+        HB_DONE="${HB_DONE}\n* Fresh SSH host keys were made for this VM."
+      else
+        HB_FAILED="${HB_FAILED}\n* The SSH host keys could not be made. The old keys were left in place."
+      fi
+    fi
+  fi
+
+  if [ -n "$HB_FAILED" ]; then
+    whiptail --title "Fixes for this VM" --msgbox "Done:${HB_DONE:-\n(nothing)}\n\nNot done:${HB_FAILED}\n\nChoose Update again to try once more." 20 76 1
+  elif [ -n "$HB_DONE" ]; then
+    whiptail --title "Fixes for this VM" --msgbox "Done:${HB_DONE}" 20 76 1
   fi
 }
 
-do_nmtui() {
-  if systemctl is-active --quiet NetworkManager; then
-    nmtui
-  else
-    whiptail --title "Error" --msgbox "These network options not available when WiFi was configured via VM image setup.\n\nSee the VM documentation for network configuration options." 20 60 1
+# version_older <a> <b>: true when version a is older than version b
+version_older() {
+  [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
+}
+
+HB_IMAGE_REPO_URL=https://github.com/homebridge/homebridge-vm-image
+HB_IMAGE_RAW_URL=https://raw.githubusercontent.com/homebridge/homebridge-vm-image
+
+# Prints the tag of the newest stable image release (for example 2026-11-21), or nothing when it
+# can not be found. GitHub sends ".../releases/latest" on to ".../releases/tag/<tag>".
+hb_latest_release_tag() {
+  curl -sSfIL -o /dev/null -w '%{url_effective}' "$HB_IMAGE_REPO_URL/releases/latest" 2> /dev/null \
+    | sed -n 's#^.*/releases/tag/\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)$#\1#p'
+}
+
+# Menu entry "Update": first the fixes for VMs from an older image, then this tool itself.
+do_update() {
+  do_system_repair
+  do_update_tool
+}
+
+do_update_tool() {
+  tempDir=$(mktemp -d) || return 1
+
+  # The tool is taken from the newest release, not from the tip of the branch. So what is
+  # installed here went through a release build (with its boot test) first.
+  releaseTag=$(hb_latest_release_tag)
+  if [ -z "$releaseTag" ]; then
+    rm -rf "$tempDir"
+    whiptail --title "Error" --msgbox "The newest release could not be found.\n\nCheck the network connection and try again." 20 60 1
+    return
   fi
+
+  scriptUrl="$HB_IMAGE_RAW_URL/$releaseTag/assets/01-homebridge/files/hb-config"
+  printf 'Downloading hb-config from release %s...\n%s\n' "$releaseTag" "$scriptUrl"
+
+  if ! curl -fL# "$scriptUrl" -o "$tempDir/hb-config"; then
+    rm -rf "$tempDir"
+    whiptail --title "Error" --msgbox "An error occured while attempting to update the hb-config tool." 20 60 1
+    return
+  fi
+
+  # The download must be a complete script for the shell that runs this tool (/bin/sh).
+  if [ ! -s "$tempDir/hb-config" ] || [ "$(head -n 1 "$tempDir/hb-config")" != "#!/bin/sh" ] || ! sh -n "$tempDir/hb-config"; then
+    rm -rf "$tempDir"
+    whiptail --title "Error" --msgbox "The downloaded script was corrupted and did not pass the syntax check. The tool was not changed." 20 60 1
+    return
+  fi
+
+  # Never go back to an older tool. (Right after this tool changed, the newest release can
+  # still hold the tool from before the change.)
+  newVersion=$(sed -n 's/^HB_CONFIG_VERSION="\([0-9][0-9.]*\)"$/\1/p' "$tempDir/hb-config" | head -n 1)
+  if [ "${newVersion:-0}" = "$HB_CONFIG_VERSION" ] || version_older "${newVersion:-0}" "$HB_CONFIG_VERSION"; then
+    rm -rf "$tempDir"
+    whiptail --title "Up to date" --msgbox "The hb-config tool is already up to date (version $HB_CONFIG_VERSION).\n\nThe newest release ($releaseTag) has no newer one." 20 60 1
+    return
+  fi
+
+  install -m 755 "$tempDir/hb-config" /usr/local/sbin/hb-config
+  rm -rf "$tempDir"
+  whiptail --title "Success" --msgbox "The hb-config tool has been updated to the one from release $releaseTag and will now exit.\n\nIf you like the Homebridge VM image please show your support by starring the project on GitHub:\n\nhttps://github.com/homebridge/homebridge-vm-image" 20 60 1
+  exit 0
 }
 
 do_about() {
@@ -409,6 +595,7 @@ do_about() {
 This tool provides a straight-forward way of managing Homebridge on a VM. Although it can be run at any time, some of the options may have difficulties if you have heavily customised your installation.
 
 Image Version: $IMAGE_VERSION
+Tool Version: $HB_CONFIG_VERSION
 
 Homebridge - @homebridge
 https://github.com/homebridge/homebridge
@@ -425,7 +612,7 @@ https://github.com/homebridge/homebridge-vm-image
 }
 
 # Everything else needs to be run as root
-if [ $(id -u) -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
   printf "Script must be run as root. Try 'sudo hb-config'\n"
   exit 1
 fi
@@ -433,36 +620,33 @@ fi
 #
 # Interactive use loop
 #
-if [ "$INTERACTIVE" = True ]; then
-  [ -e $CONFIG ] || touch $CONFIG
-  calc_wt_size
-  while true; do
-      FUN=$(whiptail --title "Homebridge VM Image Configuration Tool (hb-config)" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
-        "1 Update Node.js" "Update Node.js to the latest LTS version" \
-        "2 Update Homebridge" "Update Homebridge and Node.js to the latest version using apt-pkg" \
-        "3 Restore Config" "Restores the Homebridge config to the factory default" \
-        "4 Nginx Options" "Configure Homebridge Nginx settings" \
-        "5 Advanced Options" "Advanced Options ie expand file system, change host name" \
-        "8 Update" "Update this tool to the latest version" \
-        "9 About" "Information about this configuration tool" \
-        3>&1 1>&2 2>&3)
-    RET=$?
-    if [ $RET -eq 1 ]; then
-      do_finish
-    elif [ $RET -eq 0 ]; then
+calc_wt_size
 
-        case "$FUN" in
-          1\ *) do_nodejs_update ;;
-          2\ *) do_homebridge_update ;;
-          3\ *) do_restore_config ;;
-          4\ *) do_configure_nginx ;;
-          5\ *) do_advanced_options ;;
-          8\ *) do_update ;;
-          9\ *) do_about ;;
-          *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
-        esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
-    else
-      exit 1
-    fi
-  done
-fi
+while true; do
+  FUN=$(whiptail --title "Homebridge VM Image Configuration Tool (hb-config)" --menu "Setup Options" "$WT_HEIGHT" "$WT_WIDTH" "$WT_MENU_HEIGHT" --cancel-button Finish --ok-button Select \
+    "1 Update Node.js" "Update Node.js to the newest version Homebridge supports" \
+    "2 Update Homebridge" "Update Homebridge and Node.js to the latest version using apt-pkg" \
+    "3 Restore Config" "Delete config, plugins and backups, then install Homebridge again" \
+    "4 Nginx Options" "Configure Homebridge Nginx settings" \
+    "5 Advanced Options" "Advanced Options ie expand file system, hostname, timezone" \
+    "8 Update" "Update this tool, and apply fixes for VMs from an older image" \
+    "9 About" "Information about this configuration tool" \
+    3>&1 1>&2 2>&3)
+  RET=$?
+  if [ $RET -eq 1 ]; then
+    do_finish
+  elif [ $RET -eq 0 ]; then
+    case "$FUN" in
+      1\ *) do_nodejs_update ;;
+      2\ *) do_homebridge_update ;;
+      3\ *) do_restore_config ;;
+      4\ *) do_configure_nginx ;;
+      5\ *) do_advanced_options ;;
+      8\ *) do_update ;;
+      9\ *) do_about ;;
+      *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
+    esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
+  else
+    exit 1
+  fi
+done

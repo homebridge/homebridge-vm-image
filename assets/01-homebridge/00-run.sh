@@ -1,4 +1,4 @@
-#!/bin/bash -e 
+#!/bin/bash -e
 
 #
 # Install Homebridge and Homebridge Config UI X
@@ -15,40 +15,75 @@ install -m 755 files/hb-config "${ROOTFS_DIR}/usr/local/sbin/hb-config"
 install -v -d "${ROOTFS_DIR}/etc/hb-service/homebridge/prestart.d"
 install -m 755 files/20-hb-nginx-check "${ROOTFS_DIR}/etc/hb-service/homebridge/prestart.d/"
 
-# First boot service
+# Start-up tasks that need no person: grow the file system into the virtual disk, and write
+# the name of the VM program on the login screen. They run at every start and do nothing when
+# there is nothing to do.
+install -m 644 files/hb-expand-rootfs.service "${ROOTFS_DIR}/etc/systemd/system/"
+install -m 644 files/hb-vm-issue.service "${ROOTFS_DIR}/etc/systemd/system/"
+
+# First boot service: the wizard that makes the user account. It needs a person at the console.
 install -m 644 files/first-boot-homebridge.service "${ROOTFS_DIR}/etc/systemd/system/"
+install -v -d "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d"
+install -m 644 files/getty-tty1-homebridge-setup.conf "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d/10-homebridge-setup.conf"
 install -m 755 files/first-boot-homebridge "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/expandVirtualFilesystem "${ROOTFS_DIR}/usr/local/sbin/"
 install -m 755 files/updateIssueVMName "${ROOTFS_DIR}/usr/local/sbin/"
 
-# VM detection script
+# Makes the SSH host keys on the first start (the image holds none, see scripts/seal-image.sh)
+install -m 644 files/hb-ssh-host-keys.service "${ROOTFS_DIR}/etc/systemd/system/"
 
+# Lets the Homebridge UI restart and shut down the VM: its two buttons run "sudo -n shutdown".
+# The file allows the homebridge user these three commands and nothing else.
+install -v -d "${ROOTFS_DIR}/etc/sudoers.d"
+install -m 0440 files/010_homebridge-nopasswd "${ROOTFS_DIR}/etc/sudoers.d/"
+
+# VM detection and the image versions.
+#   - vm-env.sh holds them. It belongs to root and sits outside /opt/homebridge, so the user
+#     Homebridge runs as can not change what root loads.
+#   - /opt/homebridge/source-vm.sh is the name the Homebridge apt package loads. It only loads
+#     the file above.
+install -v -d "${ROOTFS_DIR}/usr/local/lib/homebridge-vm"
+install -m 644 files/vm-env.sh "${ROOTFS_DIR}/usr/local/lib/homebridge-vm/"
 install -v -d "${ROOTFS_DIR}/opt/homebridge/"
-install -m 755 files/source-vm.sh "${ROOTFS_DIR}/opt/homebridge/"
+install -m 644 files/source-vm.sh "${ROOTFS_DIR}/opt/homebridge/"
 #
 # MOTD
 #
 
-install -m 755 files/issue "${ROOTFS_DIR}/etc/issue"
+install -m 644 files/issue "${ROOTFS_DIR}/etc/issue"
 install -m 755 files/motd-linux "${ROOTFS_DIR}/etc/update-motd.d/15-linux"
 install -m 755 files/motd-homebridge "${ROOTFS_DIR}/etc/update-motd.d/20-homebridge"
-install -m 633 files/bashrc.partial "${ROOTFS_DIR}/tmp/bashrc.partial"
 
 #
 # Set Version
 #
 echo "$BUILD_VERSION" > "${ROOTFS_DIR}/etc/hb-release"
 
+# The fingerprint of the key that signs the Homebridge package repo (repo.homebridge.io/KEY.gpg).
+# Every Homebridge apt user has this key. If it is ever replaced, this value must change with it.
+HB_KEY_FINGERPRINT="ACAA60814A7524504F07DE07DF5B0FE88C8F5D92"
+
 on_chroot << EOF
 
 set -e
 
-# Original had a sudo tee ....but the build failed with that 'sudo: unable to resolve host b23313a4fe2b: Name or service not known
-curl -sSfL https://repo.homebridge.io/KEY.gpg | gpg --dearmor | tee /usr/share/keyrings/homebridge.gpg  > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io ${RELEASE_STREAM} main" | tee /etc/apt/sources.list.d/homebridge.list > /dev/null
+# The key of the Homebridge package repo is downloaded, and only used when it is the known key.
+HB_KEY_TMP=\$(mktemp -d)
+export GNUPGHOME="\$HB_KEY_TMP/gnupg"
+mkdir -m 700 "\$GNUPGHOME"
+curl -sSfL https://repo.homebridge.io/KEY.gpg -o "\$HB_KEY_TMP/KEY.gpg" < /dev/null
+HB_KEY_FOUND=\$(gpg --show-keys --with-colons "\$HB_KEY_TMP/KEY.gpg" < /dev/null | awk -F: '\$1 == "fpr" { print \$10; exit }')
+if [ "\$HB_KEY_FOUND" != "${HB_KEY_FINGERPRINT}" ]; then
+  echo "The key from repo.homebridge.io is not the known Homebridge key (found: \$HB_KEY_FOUND)" >&2
+  exit 1
+fi
+gpg --dearmor < "\$HB_KEY_TMP/KEY.gpg" > /usr/share/keyrings/homebridge.gpg
+rm -rf "\$HB_KEY_TMP"
+unset GNUPGHOME
+echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io ${RELEASE_STREAM} main" > /etc/apt/sources.list.d/homebridge.list
 
-apt-get update
-apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
+apt-get update < /dev/null
+apt-get install -y homebridge=${HOMEBRIDGE_APT_PKG_VERSION} < /dev/null
 
 # empty motd
 > /etc/motd
@@ -56,24 +91,28 @@ apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
 # make a symlink to the main config directory
 [ -e /root/.homebridge ] || ln -fs /var/lib/homebridge /root/.homebridge
 
-# include homebridge bashrc in first user's bashrc
-rm -rf /tmp/bashrc.partial
-
 # set ui port for use in motd message
 echo "8581" > /etc/hb-ui-port
 
 # prioritise dns over mdns
 sed -i 's/files mdns4_minimal \[NOTFOUND=return\] dns/files dns mdns4_minimal \[NOTFOUND=return\]/' /etc/nsswitch.conf
 
-# Store versions in source-vm.sh
+# Store versions in vm-env.sh
+{
+  echo "# Appended by 00-run.sh"
+  echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}"
+  echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}"
+  echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}"
+} >> /usr/local/lib/homebridge-vm/vm-env.sh
 
-echo "# Appended by 00-run.sh" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
-echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
-echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
-echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}" | sudo tee -a "/opt/homebridge/source-vm.sh" > /dev/null
+# the build stops when sudo would refuse its rules
+visudo -c > /dev/null
 
 systemctl daemon-reload
 systemctl enable homebridge
 systemctl enable first-boot-homebridge
+systemctl enable hb-ssh-host-keys
+systemctl enable hb-expand-rootfs
+systemctl enable hb-vm-issue
 EOF
 

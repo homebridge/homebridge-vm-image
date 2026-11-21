@@ -22,45 +22,53 @@ on:
         required: true
         type: string
 
+env:
+  # The workflow inputs reach every shell line through these names, never pasted into the line.
+  RELEASE_STREAM: ${{ inputs.release_stream }}
+  BUILD_RUN_ID: ${{ inputs.run_id }}
+  TAG: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+
 concurrency:
   group: package-utm
   cancel-in-progress: false
 
+# No rights by default. Each job below asks for what it needs.
+permissions: {}
+
 jobs:
+  # Builds the package. This job installs programs from outside (qemu, UTM), so it gets no
+  # token that can write: the file goes to the release in the next job.
   package-for-utm-vm:
     runs-on: macos-latest
+    permissions:
+      contents: read  # checkout
+      actions: read   # download the image that the Stage 2 run built
     strategy:
       max-parallel: 1
       fail-fast: false
       matrix:
         arch: [arm64]
     name: Run package-for-utm.sh on macOS ARM64
+    env:
+      ARCH: ${{ matrix.arch }}
 
     steps:
-      - name: Create GitHub App Token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
-          private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
-          owner: homebridge
-          repositories: homebridge-vm-image
-          permission-contents: write
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: homebridge-image-${{ matrix.arch }}
           path: ./output
           run-id: ${{ inputs.run_id }}
           merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
-      # Step 6: Install dependencies
+      # Step 2: Install dependencies
       - name: Install dependencies
         run: |
           echo "::group::Installing qemu"
@@ -69,44 +77,71 @@ jobs:
           echo "::group::Installing UTM"
           brew install --cask utm || true
           echo "::endgroup::"
+          if ! command -v qemu-img &> /dev/null; then
+            echo "::error::qemu-img not found. The qemu install failed."
+            exit 1
+          fi
           if ! command -v utmctl &> /dev/null; then
-            echo "utmctl not found. Ensure UTM is installed on the runner."
+            echo "::error::utmctl not found. Ensure UTM is installed on the runner."
             exit 1
           fi
           echo "Dependencies installed."
 
-
-      # Step 6: Run the script
+      # Step 3: Run the script
       - name: Run package-for-utm.sh
         run: |
-          chmod +x ./scripts/package-for-utm.sh
-          ./scripts/package-for-utm.sh ${{ inputs.RELEASE_STREAM }} ${{ matrix.ARCH }}
+          ./scripts/package-for-utm.sh "$ARCH" "$RELEASE_STREAM"
 
-      # Step 7: Verify output
+      # Step 4: Verify output
       - name: Verify output
         run: |
           echo "Checking output directory..."
           ls -lR ./output
 
-      # Step 8: Upload UTM package as artifact
+      # Step 5: Upload UTM package as artifact
       - name: Upload UTM package as artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: utm-package
+          # the file is compressed already
+          compression-level: 0
+          if-no-files-found: error
           path: ./output/*.utm.tgz
           retention-days: 7
 
-      - name: Upload UTM to GitHub Release
-        run: |
-          set -e
-          RELEASE_ID=$(gh release view "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" --json id -q .id)
-          gh release upload "${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}" "./output/*.utm.tgz" --clobber
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-
       - name: Packaging complete
         run: |
-          echo "::notice::Homebridge VM image version: ${{ inputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "::notice::Run ID: ${{ inputs.run_id }}"
-          echo "::notice::Architecture: ${{ matrix.arch }}"
-          echo "::notice::Release Stream: ${{ inputs.release_stream }}" 
+          echo "::notice::Homebridge VM image version: ${TAG}"
+          echo "::notice::Run ID: ${BUILD_RUN_ID}"
+          echo "::notice::Architecture: ${ARCH}"
+          echo "::notice::Release Stream: ${RELEASE_STREAM}"
+
+  # Adds the package to the release. Only this job gets the token that can write.
+  publish-to-release:
+    needs: [package-for-utm-vm]
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: utm-package
+          path: packages
+
+      - name: Create GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.DEPENDENCY_BOT_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+          owner: homebridge
+          repositories: homebridge-vm-image
+          permission-contents: write
+
+      - name: Upload UTM to GitHub Release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          ls -l packages
+          gh release upload "$TAG" packages/homebridge-vm-image-"${RELEASE_STREAM}"-*.utm.tgz --clobber

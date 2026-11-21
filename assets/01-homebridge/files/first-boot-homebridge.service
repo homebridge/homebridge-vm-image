@@ -1,17 +1,33 @@
 [Unit]
 Description=First Boot Homebridge Setup
-After=multi-user.target
+# The wizard uses the screen console (tty1) in place of the login prompt, until an account was
+# made. It must not hold up the start of the system: most VMs are set up in the web browser, and
+# nobody may ever open the console.
+#
+# How the wizard and the login prompt stay out of each other's way:
+#   - While the wizard runs, the file /run/hb-first-boot-wizard exists.
+#   - The login prompt of that console does not start while the file exists
+#     (getty@tty1.service.d/10-homebridge-setup.conf).
+#   - When the wizard ends, the file is removed and the login prompt is started.
+#
+# Do NOT order this unit after multi-user.target, and do not make it a "oneshot" that the login
+# prompt waits for: the login prompts are part of multi-user.target, so the first is a loop in
+# the start order, and the second keeps the system "starting" until someone uses the console.
+After=systemd-user-sessions.service
 Before=getty@tty1.service
-# ConditionPathExists=/etc/first-boot-homebridge
 
 [Service]
-Type=oneshot
+Type=simple
+ExecStartPre=/usr/bin/touch /run/hb-first-boot-wizard
 ExecStart=/usr/local/sbin/first-boot-homebridge
+ExecStopPost=/usr/bin/rm -f /run/hb-first-boot-wizard
+ExecStopPost=-/usr/bin/systemctl --no-block start getty@tty1.service
 StandardInput=tty
 StandardOutput=inherit
 StandardError=inherit
 TTYPath=/dev/tty1
-RemainAfterExit=true
+TTYReset=yes
+TTYVHangup=yes
 
 [Install]
 WantedBy=multi-user.target

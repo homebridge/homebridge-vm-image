@@ -2,7 +2,7 @@
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-BOLD='\e[1m'
+BOLD='\033[1m'
 NC='\033[0m'
 
 # Get system info appropriate for VM
@@ -12,32 +12,40 @@ IP=$(hostname -I)
 UI_PORT=$(cat /etc/hb-ui-port)
 IMAGE_VERSION=$(cat /etc/hb-release)
 
-printf "\n${RED}*** Homebridge VM Image $IMAGE_VERSION ***${NC}\n\n"
+# label <text> <value>: one line with a bold label and a green value
+label() { printf '%b%s%b %b%s%b\n' "$BOLD" "$1" "$NC" "$GREEN" "$2" "$NC"; }
+# address <url>: one line of the list of web addresses
+address() { printf '%b*%b %b%s%b\n' "$BOLD" "$NC" "$GREEN" "$1" "$NC"; }
+
+printf '\n%b*** Homebridge VM Image %s ***%b\n\n' "$RED" "$IMAGE_VERSION" "$NC"
 
 printf "homebridge was created by nfarina and licensed under the Apache License 2.0.\n" | fold -s
 printf "homebridge-config-ui-x was created by oznu and licensed under the MIT License.\n\n" | fold -s
 
 printf "To configure Homebridge browse to the one of the following addresses from another device on your network:" | fold -s
 printf "\n\n"
-printf "${BOLD}*${NC} ${GREEN}http://${HOSTNAME}.local:${UI_PORT}${NC}\n"
+address "http://${HOSTNAME}.local:${UI_PORT}"
 
 for ip in $IP; do
   if [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    printf "${BOLD}*${NC} ${GREEN}http://$ip:${UI_PORT}${NC}\n"
+    address "http://${ip}:${UI_PORT}"
   else
-    printf "${BOLD}*${NC} ${GREEN}http://[$ip]:${UI_PORT}${NC}\n"
+    address "http://[${ip}]:${UI_PORT}"
   fi
 done
 
 printf "\nAll Homebridge configuration can be completed via the Homebridge Web UI.\n" | fold -s
 
-printf "\n${BOLD}Homebridge storage path:${NC} ${GREEN}/var/lib/homebridge${NC}\n"
-printf "${BOLD}Homebridge config.json path:${NC} ${GREEN}/var/lib/homebridge/config.json${NC}\n"
+printf '\n'
+label "Homebridge storage path:" "/var/lib/homebridge"
+label "Homebridge config.json path:" "/var/lib/homebridge/config.json"
 
-printf "\n${BOLD}Restart Homebridge CMD:${NC} ${GREEN}sudo hb-service restart${NC}\n"
-printf "${BOLD}View Logs CMD:${NC} ${GREEN}sudo hb-service logs${NC}\n"
+printf '\n'
+label "Restart Homebridge CMD:" "sudo hb-service restart"
+label "View Logs CMD:" "sudo hb-service logs"
 
-printf "\n${BOLD}Manage Server:${NC} ${GREEN}sudo hb-config${NC}\n"
-printf "${BOLD}Enter Homebridge Runtime Environment:${NC} ${GREEN}sudo hb-shell${NC}\n"
+printf '\n'
+label "Manage Server:" "sudo hb-config"
+label "Enter Homebridge Runtime Environment:" "sudo hb-shell"
 
 printf "\n"

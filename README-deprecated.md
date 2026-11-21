@@ -1,3 +1,6 @@
+> **This page describes the old boot image (release `v0.0.1`). It is kept because older pages link to it.**
+> For the current Homebridge VM image, see the [README](README.md) and the [wiki](https://github.com/homebridge/homebridge/wiki/Install-Homebridge-on-Virtual-Machine).
+
 # Homebridge VM Boot Image
 
 A minimal image that runs Homebridge.

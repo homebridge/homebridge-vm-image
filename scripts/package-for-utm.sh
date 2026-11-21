@@ -6,52 +6,24 @@
 # copies homebridge-icon.png, and sets manifest contents (same basename as disk image, preserving newlines) as Information:Notes.
 # Prerequisites: UTM installed, utmctl in PATH, template-utm-config.plist in script directory,
 # ../assets/homebridge-icon.png, disk image and .manifest in output/.
-# Usage: ./configure_and_export_utm_vm.sh [RELEASE_STREAM] [ARCH]
-# RELEASE_STREAM: alpha, beta, stable (default: stable)
+# Usage: ./package-for-utm.sh [ARCH] [RELEASE_STREAM]
 # ARCH: arm64, amd64 (default: host architecture)
+# RELEASE_STREAM: alpha, beta, stable (default: stable)
 
 # Exit on error
 set -e
 
-# Logging functions
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-group_log() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::group::$*"
-    else
-        log "$*"
-    fi
-}
-group_end() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::endgroup::"
-    fi
-}
 
 # Determine repository root
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Auto-detect architecture based on host system
-detect_default_arch() {
-    case "$(uname -m)" in
-        arm64|aarch64) echo "arm64" ;;
-        x86_64) echo "amd64" ;;
-        *) echo "amd64" ;; # fallback to amd64 for unknown architectures
-    esac
-}
+# shellcheck source=lib.sh
+source "${REPO_ROOT}/scripts/lib.sh"
 
 # Set inputs with defaults
-ARCH="${2:-$(detect_default_arch)}"
-RELEASE_STREAM="${1:-stable}" # Default to "stable" if not provided
+# The same argument order as the other scripts: the CPU type first, then the stream.
+ARCH="${1:-$(detect_arch)}"
+RELEASE_STREAM="${2:-stable}" # Default to "stable" if not provided
 
 # Validate architecture
 if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
@@ -188,6 +160,19 @@ get_architecture() {
     fi
 }
 
+# Prints a random network card address for the VM.
+# The template holds one fixed address. With that, the stable and the beta package on the same
+# network would use the same address and knock each other off the network. Every package that
+# is built now gets its own address. (UTM gives a VM a new address when the user clones it.)
+# The first byte is even and has the "locally administered" bit set, as the rules for made-up
+# addresses ask.
+random_mac_address() {
+    local bytes
+    bytes=$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
+    printf '%02X:%s:%s:%s:%s:%s\n' "$(( (0x${bytes:0:2} & 0xFC) | 0x02 ))" \
+        "${bytes:2:2}" "${bytes:4:2}" "${bytes:6:2}" "${bytes:8:2}" "${bytes:10:2}" | tr 'a-f' 'A-F'
+}
+
 # Function to configure the VM
 configure_vm() {
     local plist="${VM_DIR}/config.plist"
@@ -242,6 +227,7 @@ configure_vm() {
     /usr/libexec/PlistBuddy -c "Set :Information:IconCustom true" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:ImageName $disk_filename" "$plist"
     /usr/libexec/PlistBuddy -c "Set :Drive:0:Identifier $uuid" "$plist"
+    /usr/libexec/PlistBuddy -c "Set :Network:0:MacAddress $(random_mac_address)" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:Architecture ${UTM_ARCHITECTURE}" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:CPUCount $cpu_cores" "$plist"
     /usr/libexec/PlistBuddy -c "Set :System:MemorySize $VM_RAM" "$plist"
@@ -249,14 +235,12 @@ configure_vm() {
     # Read manifest and set as Information:Notes, preserving newlines
     info "Reading manifest from ${MANIFEST}"
     local manifest_content
-    # Escape quotes and backslashes to make content PlistBuddy-compatible
-    manifest_content=$(cat "${MANIFEST}" | sed 's/"/\\"/g' | sed 's/\\/\\\\/g')
+    # Escape backslashes and quotes to make content PlistBuddy-compatible. Backslashes first:
+    # the other way round, the backslash that was just put before a quote is doubled again.
+    manifest_content=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' "${MANIFEST}")
     /usr/libexec/PlistBuddy -c "Delete :Information:Notes" "$plist" 2>/dev/null || true
-    # Use a temporary file to handle multiline content
-    echo "$manifest_content" > /tmp/manifest_content.txt
     /usr/libexec/PlistBuddy -c "Add :Information:Notes string" "$plist"
-    /usr/libexec/PlistBuddy -c "Set :Information:Notes \"$(cat /tmp/manifest_content.txt)\"" "$plist"
-    rm -f /tmp/manifest_content.txt
+    /usr/libexec/PlistBuddy -c "Set :Information:Notes \"${manifest_content}\"" "$plist"
 
     # Verify architecture in config.plist
     local plist_arch
@@ -324,9 +308,9 @@ export_vm() {
 
 # Check for arguments
 if [[ $# -gt 2 ]]; then
-    error "Usage: $0 [RELEASE_STREAM] [ARCH]"
-    error "RELEASE_STREAM: alpha, beta, stable (default: stable)"
+    error "Usage: $0 [ARCH] [RELEASE_STREAM]"
     error "ARCH: arm64, amd64 (default: host architecture)"
+    error "RELEASE_STREAM: alpha, beta, stable (default: stable)"
     exit 1
 fi
 

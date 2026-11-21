@@ -1,46 +1,33 @@
 #!/usr/bin/env bash
 
 # Configuration
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly DISTRO="bookworm"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+# The Debian release the image is built on (13 = "trixie"). The Raspberry Pi image uses the same one.
+readonly DISTRO="trixie"
 readonly SIZE_MB=5120  # 5GB total disk size
 readonly ESP_SIZE_MB=256
+# Debian's signing keys on the build machine (package debian-archive-keyring)
+readonly DEBIAN_KEYRING="/usr/share/keyrings/debian-archive-keyring.gpg"
 
 # Debug settings - set DEBUG=1 for verbose output
 readonly DEBUG="${DEBUG:-0}"
-readonly APT_QUIET=$([[ $DEBUG -eq 1 ]] && echo "" || echo "-qq")
-readonly APT_REDIRECT=$([[ $DEBUG -eq 1 ]] && echo "" || echo "> /dev/null 2>&1")
-readonly BASH_DEBUG_FLAG=$([[ $DEBUG -eq 1 ]] && echo "x" || echo "")
+APT_QUIET="-qq"
+BASH_DEBUG_FLAG=""
+if [[ $DEBUG -eq 1 ]]; then
+    APT_QUIET=""
+    BASH_DEBUG_FLAG="x"
+fi
+readonly APT_QUIET BASH_DEBUG_FLAG
 
 set -euo pipefail
 [[ $DEBUG -eq 1 ]] && set -x
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
+# The shared helpers: log, warn, error, info, group_log, group_end
+# shellcheck source=scripts/lib.sh
+source "${SCRIPT_DIR}/scripts/lib.sh"
 
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-group_log() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::group::$*"
-    else
-        log "---> $* <---"
-    fi
-}
-group_end() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::endgroup::"
-    fi
-}
-
-# Cleanup function
+# Cleanup function. It runs once, when the script ends for any reason (see the traps below).
 cleanup() {
     local exit_code=$?
     [[ $exit_code -ne 0 ]] && error "Build failed with exit code $exit_code"
@@ -61,7 +48,9 @@ cleanup() {
             sudo umount -f "${ROOTFS}" 2>/dev/null || true
         fi
         
-        [[ -n "${ESP_MOUNTDIR:-}" ]] && sudo umount -f "${ESP_MOUNTDIR}" 2>/dev/null || true
+        if [[ -n "${ESP_MOUNTDIR:-}" ]]; then
+            sudo umount -f "${ESP_MOUNTDIR}" 2>/dev/null || true
+        fi
         
         # Remove partition mappings
         sudo kpartx -d "$LOOP_DEV" 2>/dev/null || true
@@ -71,32 +60,49 @@ cleanup() {
         
         info "Cleanup completed"
     fi
-    
-    [[ $exit_code -eq 0 ]] && log "✅ Build completed successfully"
+
+    # Only a finished build is worth making smaller. After a failure (or a wrong argument, when
+    # the output folder is not even known yet) this step is skipped.
+    if [[ $exit_code -eq 0 && -n "${OUTPUT_DIR:-}" ]]; then
+        log "✅ Build completed successfully"
+        zero_free_blocks
+    fi
+    exit $exit_code
+}
+
+# Writes zeros over the unused blocks of the root file system of each image, so the image
+# compresses well and the converted disk formats stay small.
+zero_free_blocks() {
+    local img loop part
     info "Zeroing unused blocks in sparse img files in ${OUTPUT_DIR}"
     for img in "${OUTPUT_DIR}"/*.img; do
         [[ -f "$img" ]] || continue
         info "Running zerofree on $img"
         # Setup loop device for zerofree
-        LOOP=$(sudo losetup --find --show "$img")
-        PART=$(sudo kpartx -av "$LOOP" | awk '/add map/ && /p2/ {print $3}')
-        [[ -z "$PART" ]] && { warn "Could not find root partition for $img"; sudo losetup -d "$LOOP"; continue; }
-        DEV="/dev/mapper/$PART"
-        sudo zerofree "$DEV" || warn "zerofree failed on $DEV"
-        sudo kpartx -d "$LOOP"
-        sudo losetup -d "$LOOP"
+        loop=$(sudo losetup --find --show "$img")
+        part=$(sudo kpartx -av "$loop" | awk '/add map/ && /p2/ {print $3}')
+        if [[ -z "$part" ]]; then
+            warn "Could not find root partition for $img"
+            sudo losetup -d "$loop"
+            continue
+        fi
+        sudo zerofree "/dev/mapper/$part" || warn "zerofree failed on /dev/mapper/$part"
+        sudo kpartx -d "$loop"
+        sudo losetup -d "$loop"
     done
-    exit $exit_code
 }
 
-trap cleanup EXIT INT TERM
+# The clean-up runs on EXIT only. Ctrl-C and "kill" just end the script, which then runs it:
+# with the clean-up on all three, it ran twice.
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Validate architecture
 validate_arch() {
-    local arch="$1"
-    case "${ARCH}" in
+    case "${1:-}" in
         arm64|amd64) return 0 ;;
-        *) error "Unsupported architecture: ${ARCH}" && exit 1 ;;
+        *) error "Unsupported architecture: ${1:-}"; exit 1 ;;
     esac
 }
 
@@ -109,7 +115,7 @@ wait_for_device() {
     info "Waiting for device: $device"
     while [[ ! -b "$device" && $count -lt $timeout ]]; do
         sleep 1
-        ((count++))
+        count=$((count + 1))
         [[ $DEBUG -eq 1 ]] && info "Waiting... ($count/$timeout)"
     done
     
@@ -157,7 +163,8 @@ setup_loop_device() {
     sleep 2
     sudo udevadm settle
     
-    local base_name=$(basename "$LOOP_DEV")
+    local base_name
+    base_name=$(basename "$LOOP_DEV")
     ESP_PART="/dev/mapper/${base_name}p1"
     ROOT_PART="/dev/mapper/${base_name}p2"
     
@@ -182,26 +189,30 @@ setup_loop_device() {
 
 # Bootstrap or restore cached rootfs
 setup_rootfs() {
-    local arch="$1"
     local cache_file="${CACHE_DIR}/debootstrap-${DISTRO}-${ARCH}.tar.gz"
     
     sudo mount "$ROOT_PART" "$ROOTFS"
     
+    # A cached base system (local builds only) is used for a week. After that it is downloaded
+    # again, so a local build does not start from a base that is months old.
+    if [[ -n "$(find "$cache_file" -mtime +7 2>/dev/null)" ]]; then
+        info "The cached base system is older than a week, downloading a new one"
+        sudo rm -f "$cache_file"
+    fi
+
     if [[ -f "$cache_file" ]]; then
         log "Restoring cached rootfs ($(du -sh "$cache_file" | cut -f1))"
         sudo tar -xzf "$cache_file" -C "$ROOTFS"
     else
         log "Running debootstrap for ${ARCH}"
         
-        # Install zstd on host if available for faster debootstrap
-        if command -v apt-get >/dev/null 2>&1 && ! command -v zstd >/dev/null 2>&1; then
-            info "Installing zstd for faster debootstrap"
-            sudo apt-get update -qq ${APT_REDIRECT} || true
-            sudo apt-get install -y -qq zstd ${APT_REDIRECT} || true
-        fi
-        
-        sudo debootstrap --arch="${ARCH}" --variant=minbase "$DISTRO" "$ROOTFS" \
-            http://deb.debian.org/debian
+        # The base system is only used when Debian's signature on it is good: the key file must
+        # be on the build machine (package debian-archive-keyring), and a missing key or a bad
+        # signature stops the build. Without --force-check-gpg debootstrap only prints a warning.
+        # ca-certificates: the package sources of the image use https://
+        sudo debootstrap --arch="${ARCH}" --variant=minbase --include=ca-certificates \
+            --keyring="${DEBIAN_KEYRING}" --force-check-gpg \
+            "$DISTRO" "$ROOTFS" https://deb.debian.org/debian
         
         if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
             info "Skipping cache save on GitHub Actions runner"
@@ -232,186 +243,11 @@ mount_for_chroot() {
 
 # Configure base system in chroot
 configure_base_system() {
-    local arch="$1"
-    
     group_log "Configuring base system"
-    
-    # Copy GRUB modules for amd64 compatibility
-    if [[ "${ARCH}" == "amd64" && -d "/usr/lib/grub/x86_64-efi" ]]; then
-        sudo mkdir -p "${ROOTFS}/usr/lib/grub/amd64-efi"
-        sudo cp -r /usr/lib/grub/x86_64-efi/* "${ROOTFS}/usr/lib/grub/amd64-efi/"
-    fi
-    
-    # Create chroot script
-    cat > /tmp/chroot_setup.sh <<'CHROOT_EOF'
-set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
-export ARCH="$1"
-export ROOT_UUID="$2" 
-export ESP_UUID="$3"
-export DEBUG="$4"
-readonly APT_QUIET=$([[ $DEBUG -eq 1 ]] && echo "" || echo "-qq")
-readonly BASH_DEBUG_FLAG=$([[ $DEBUG -eq 1 ]] && echo "x" || echo "")
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-
-# Configure APT for faster downloads
-echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99nolang
-echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/99norecommends
-
-# Update package lists
-apt-get update
-
-log "Installing base system packages"
-# Install essential packages first
-if [[ $DEBUG -eq 1 ]]; then
-  apt-get install -y $APT_QUIET \
-  apt-utils locales systemd systemd-sysv
-else
-  apt-get install -y $APT_QUIET \
-  apt-utils locales systemd systemd-sysv > /dev/null 2>&1
-fi
-
-LANG=en_GB.UTF-8
-
-sed -i "s/# *\(${LANG} UTF-8\)/\1/" /etc/locale.gen
-# Configure locale early
-locale-gen
-update-locale LANG=${LANG}
-
-log "Installing kernel, bootloader, and utilities"
-# Define package lists
-KERNEL_PACKAGES=(
-  linux-image-${ARCH}
-  linux-headers-${ARCH}
-  grub-efi-${ARCH}
-  grub-efi-${ARCH}-bin
-  grub-common
-  grub2-common
-)
-
-SYSTEM_UTILITIES=(
-  wget
-  psmisc
-  procps
-  iputils-ping
-  logrotate
-  openssl
-  sudo
-  nano
-  net-tools
-  libnss-mdns
-  dbus
-  gnupg
-  iproute2
-  dhcpcd5
-  ssh
-  zstd
-  avahi-daemon
-  vim.tiny
-  dialog
-  file
-  whiptail
-  kbd
-)
-
-VIRTUALIZATION_SUPPORT=(
-  hyperv-daemons
-  spice-vdagent
-  qemu-guest-agent
-  cloud-guest-utils
-)
-
-# Install packages
-if [[ $DEBUG -eq 1 ]]; then
-  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}"
-  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}"
-  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" || true
-else
-  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}" > /dev/null 2>&1
-  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}" > /dev/null 2>&1
-  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" > /dev/null 2>&1 || true
-fi
-
-log "Setting up GRUB bootloader"
-# Configure GRUB
-grub-install \
-    --target=${ARCH}-efi \
-    --efi-directory=/boot/efi \
-    --boot-directory=/boot \
-    --bootloader-id=debian \
-    --no-nvram \
-    --removable \
-    --recheck
-
-# GRUB configuration with serial console and resolution
-cat > /etc/default/grub <<GRUB_EOF
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
-GRUB_DISTRIBUTOR="Homebridge VM on ${ARCH}"
-GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
-GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0 root=UUID=$ROOT_UUID"
-GRUB_TERMINAL="console serial"
-GRUB_SERIAL_COMMAND="serial --speed=921600 --unit=0 --word=8 --parity=no --stop=1"
-GRUB_GFXMODE=1024x768
-GRUB_GFXPAYLOAD_LINUX=keep
-GRUB_EOF
-
-update-grub
-
-log "Configuring fstab"
-# Create fstab
-cat > /etc/fstab <<FSTAB_EOF
-UUID=$ROOT_UUID / ext4 defaults,noatime 0 1
-UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1
-FSTAB_EOF
-
-log "Updating initramfs"
-# Configure initramfs
-echo "RESUME=none" > /etc/initramfs-tools/conf.d/resume
-update-initramfs -c -k all
-
-# Create fallback EFI bootloader
-mkdir -p /boot/efi/EFI/BOOT
-BOOT_FILE=$(find /boot/efi/EFI -name "grub*.efi" ! -path "*/BOOT/*" | head -1)
-if [[ -n "$BOOT_FILE" ]]; then
-    case "$BOOT_FILE" in
-        *x64*) cp "$BOOT_FILE" /boot/efi/EFI/BOOT/BOOTX64.EFI ;;
-        *aa64*) cp "$BOOT_FILE" /boot/efi/EFI/BOOT/BOOTAA64.EFI ;;
-    esac
-fi
-
-# System configuration
-echo "homebridge-vm" > /etc/hostname
-cat > /etc/hosts <<HOSTS_EOF
-127.0.0.1 localhost
-127.0.1.1 homebridge-vm
-::1       localhost ip6-localhost ip6-loopback
-HOSTS_EOF
-
-# Set root password
-# echo "root:root" | chpasswd
-
-# Clean package cache
-apt-get clean
-rm -rf /var/lib/apt/lists/*
-CHROOT_EOF
-
-    # Execute chroot script
-
-    sudo chroot "$ROOTFS" /bin/bash -eu${BASH_DEBUG_FLAG} /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < /tmp/chroot_setup.sh
-    rm -f /tmp/chroot_setup.sh
+    # Run scripts/chroot-base-setup.sh inside the new system
+    # shellcheck disable=SC2024  # the script file is read by the build user, as meant; only chroot needs root
+    sudo chroot "$ROOTFS" /bin/bash "-eu${BASH_DEBUG_FLAG}" /dev/stdin "${ARCH}" "$ROOT_UUID" "$ESP_UUID" "$DEBUG" < "${SCRIPT_DIR}/scripts/chroot-base-setup.sh"
     group_end
 }
 
@@ -430,21 +266,24 @@ install_staged_assets() {
         packages=$(grep -v '^#' "$assets_dir/00-packages" | tr '\n' ' ' | xargs)
         if [[ -n "$packages" ]]; then
             info "Installing packages: $packages"
-            sudo chroot "$ROOTFS" /bin/bash -euc${BASH_DEBUG_FLAG} "
+            # The output of apt-get is kept in a file and only shown when a command fails
+            # (with DEBUG=1 it is shown as it comes).
+            local show_output="false"
+            [[ $DEBUG -eq 1 ]] && show_output="true"
+            sudo chroot "$ROOTFS" /bin/bash "-euc${BASH_DEBUG_FLAG}" "
                 export DEBIAN_FRONTEND=noninteractive
-                apt-get update ${APT_REDIRECT}
-                apt-get install -y $APT_QUIET $packages ${APT_REDIRECT}
+                run() {
+                    if $show_output; then \"\$@\"; return; fi
+                    \"\$@\" > /tmp/stage-packages.log 2>&1 || { cat /tmp/stage-packages.log >&2; return 1; }
+                }
+                run apt-get update
+                run apt-get install -y $APT_QUIET $packages
+                rm -f /tmp/stage-packages.log
                 apt-get clean
             "
         fi
     fi
-    
-    # Copy files
-#    if [[ -d "$assets_dir/files" ]]; then
-#        info "Copying asset files"
-#        sudo cp -r "$assets_dir/files/." "$ROOTFS/"
-#    fi
-    
+
     # Run scripts
     for script in "$assets_dir"/[0-9][0-9]-run.sh; do
         [[ ! -f "$script" ]] && continue
@@ -459,6 +298,8 @@ install_staged_assets() {
                 export HOMEBRIDGE_APT_PKG_VERSION='${HOMEBRIDGE_APT_PKG_VERSION:-}'
                 export FFMPEG_FOR_HOMEBRIDGE_VERSION='${FFMPEG_FOR_HOMEBRIDGE_VERSION:-}'
                 export RELEASE_STREAM='${RELEASE_STREAM:-stable}'
+                export ARCH='${ARCH}'
+                export FFMPEG_SHA256='${FFMPEG_SHA256:-}'
                 
                 on_chroot() {
                     chroot '$SCRIPT_DIR/$ROOTFS' /bin/bash -euo${BASH_DEBUG_FLAG} pipefail \"\$@\"
@@ -471,24 +312,58 @@ install_staged_assets() {
     done
 }
 
+# Prints the version text of the image. It goes into /etc/hb-release, the login message, the
+# manifest and HOMEBRIDGE_VM_IMAGE_VERSION.
+#   - The release workflow passes the release tag (for example 2026-11-21 or beta-2026-11-21),
+#     so a user can match a VM to its release on GitHub.
+#   - A local build with no tag gets the date, the stream and the CPU type.
+# Usage: image_version <release tag or nothing> <stream> <arch>
+image_version() {
+    local version="${1:-}"
+    [[ -z "$version" ]] && version="$(date +%Y%m%d)-${2}-${3}"
+    # the text is written into shell files inside the image, so only plain characters are allowed
+    if [[ ! "$version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+        error "Not a usable version text: ${version}"
+        return 1
+    fi
+    echo "$version"
+}
+
+# Prints the version of a package from <stream>/package.json, where the dependency bot keeps it.
+# The build stops when the entry is missing or is not one exact version: "null", a range or a
+# tag would otherwise reach "apt-get install homebridge=null".
+# Usage: pinned_version <stream> <npm package name>
+pinned_version() {
+    local version
+    version="$(jq -r --arg name "$2" '.dependencies[$name] // empty' "${SCRIPT_DIR}/${1}/package.json" | sed 's/^\^//')"
+    if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+        error "${1}/package.json has no exact version for ${2} (found: '${version}')"
+        return 1
+    fi
+    echo "$version"
+}
+
 # Main function
 main() {
     local ARCH="${1:-}"
-    [[ -z "${ARCH}" ]] && { error "Usage: $0 <architecture> [arm64|amd64]"; exit 1; }
+    [[ -z "${ARCH}" ]] && { error "Usage: $0 <arm64|amd64> [stable|beta|alpha] [release tag]"; exit 1; }
     local RELEASE_STREAM="${2:-stable}"
+    local RELEASE_TAG="${3:-${BUILD_VERSION:-}}"
 
-    if [[ "${RELEASE_STREAM}" != "stable" && "${RELEASE_STREAM}" != "beta" && "${RELEASE_STREAM}" != "alpha" ]] then
+    if [[ "${RELEASE_STREAM}" != "stable" && "${RELEASE_STREAM}" != "beta" && "${RELEASE_STREAM}" != "alpha" ]]; then
         error "Invalid release stream: ${RELEASE_STREAM}. Must be 'stable', 'beta' or 'alpha'."
         exit 1
     fi
 
     validate_arch "${ARCH}"
-    
+
+    # The paths below are relative to the repo, so the script works from any folder.
+    cd "${SCRIPT_DIR}"
+
     # Setup directories and variables
     readonly IMG_NAME="homebridge-vm-image-${RELEASE_STREAM}-${ARCH}" 
     readonly WORKDIR="work-${ARCH}"
     readonly ROOTFS="${WORKDIR}/rootfs"
-    readonly MOUNTDIR="${WORKDIR}/mnt"  
     readonly ESP_MOUNTDIR="${WORKDIR}/esp"
     readonly OUTPUT_DIR="output"
     readonly CACHE_DIR="cache"
@@ -500,38 +375,53 @@ main() {
     
     # Cleanup and create directories
     sudo rm -rf "$WORKDIR" "$OUTPUT_DIR"/*
-    mkdir -p "$ROOTFS" "$MOUNTDIR" "$ESP_MOUNTDIR" "$OUTPUT_DIR" "$CACHE_DIR"
+    mkdir -p "$ROOTFS" "$ESP_MOUNTDIR" "$OUTPUT_DIR" "$CACHE_DIR"
     
     # Build process
     group_log "Creating and partitioning disk image"
     create_image "$IMG_PATH" "$SIZE_MB"
     setup_loop_device "$IMG_PATH" 
-    setup_rootfs "${ARCH}"
+    setup_rootfs
     mount_for_chroot
     group_end
 
-    configure_base_system "${ARCH}"
+    configure_base_system
     
     group_log "Installing Homebridge VM customizations"
     # Install customizations, these are copied from homebridge-raspbian-image
-    export BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d)-${RELEASE_STREAM}-${ARCH}}"
+    BUILD_VERSION="$(image_version "$RELEASE_TAG" "$RELEASE_STREAM" "$ARCH")"
+    export BUILD_VERSION
 
-    export HOMEBRIDGE_APT_PKG_NPM_VERSION=$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
-    export HOMEBRIDGE_APT_PKG_VERSION=$( echo ${HOMEBRIDGE_APT_PKG_NPM_VERSION} | sed 's/-/~/' )
-    export FFMPEG_FOR_HOMEBRIDGE_VERSION=v$(jq -r '.dependencies["ffmpeg-for-homebridge"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
+    # The versions to build, from <stream>/package.json. The npm version "2.1.0-beta.4" is the
+    # apt version "2.1.0~beta.4".
+    HOMEBRIDGE_APT_PKG_NPM_VERSION="$(pinned_version "${RELEASE_STREAM}" "@homebridge/homebridge-apt-pkg")"
+    # shellcheck disable=SC2001  # sed on purpose: in a ${x/-/~} form bash would turn "~" into the home folder
+    HOMEBRIDGE_APT_PKG_VERSION="$(sed 's/-/~/' <<< "${HOMEBRIDGE_APT_PKG_NPM_VERSION}")"
+    FFMPEG_FOR_HOMEBRIDGE_VERSION="v$(pinned_version "${RELEASE_STREAM}" "ffmpeg-for-homebridge")"
+    export HOMEBRIDGE_APT_PKG_NPM_VERSION HOMEBRIDGE_APT_PKG_VERSION FFMPEG_FOR_HOMEBRIDGE_VERSION
 
     log "Using homebridge-apt-pkg NPM version: ${BLUE}${HOMEBRIDGE_APT_PKG_NPM_VERSION}${NC}"
     log "Using homebridge-apt-pkg version: ${BLUE}${HOMEBRIDGE_APT_PKG_VERSION}${NC}"
     log "Using ffmpeg-for-homebridge version: ${BLUE}${FFMPEG_FOR_HOMEBRIDGE_VERSION}${NC}"
+
+    # The ffmpeg file is unpacked into / of the image as root. Its SHA-256 checksum is asked from
+    # GitHub here, and the ffmpeg stage only unpacks a download that matches it.
+    local FFMPEG_ARCH="aarch64"
+    [[ "${ARCH}" == "amd64" ]] && FFMPEG_ARCH="x86_64"
+    FFMPEG_SHA256="$("${SCRIPT_DIR}/scripts/ffmpeg-checksum.sh" "${FFMPEG_FOR_HOMEBRIDGE_VERSION}" "${FFMPEG_ARCH}")"
+    export FFMPEG_SHA256
+    log "Expected ffmpeg checksum: ${BLUE}${FFMPEG_SHA256}${NC}"
     
-    for stage in $(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
+    group_end
+    local stage
+    while IFS= read -r stage; do
       group_log "Stage: $stage"
       install_staged_assets "$stage"
       group_end
-    done   
-    group_end
-    local APT_MANIFEST_FILE
-    APT_MANIFEST_FILE=$(ls "${ROOTFS}/opt/homebridge/homebridge_apt_pkg"*.manifest 2>/dev/null | head -n 1)
+    done < <(find assets -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+    # the manifest file of the Homebridge apt package (its name holds the version)
+    local apt_manifests=("${ROOTFS}"/opt/homebridge/homebridge_apt_pkg*.manifest)
+    local APT_MANIFEST_FILE="${apt_manifests[0]}"
     local APT_MANIFEST=""
     if [[ -f "$APT_MANIFEST_FILE" ]]; then
         # Preserve all lines from the manifest file except header lines, keeping original line returns
@@ -554,18 +444,20 @@ main() {
         [[ -n "$APT_MANIFEST" ]] && printf "%s\n" "$APT_MANIFEST"
         echo "| ffmpeg for homebridge | ${FFMPEG_FOR_HOMEBRIDGE_VERSION} |"
         echo "| Homebridge APT Package | ${HOMEBRIDGE_APT_PKG_NPM_VERSION} |"
-    } > ${MANIFEST_FILE}
+    } > "${MANIFEST_FILE}"
 
-    sudo cp ${MANIFEST_FILE} "${ROOTFS}/opt/homebridge/"
+    sudo cp "${MANIFEST_FILE}" "${ROOTFS}/opt/homebridge/"
 
-    # Append environment variables to source.sh
-    # Only append source-vm.sh sourcing block if not already present
-    if ! sudo grep -q "source /opt/homebridge/source-vm.sh" "${ROOTFS}/opt/homebridge/source.sh"; then
-        echo "# Appended by homebridge-vm-image" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-        echo "if [ -f '/opt/homebridge/source-vm.sh' ]; then" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-        echo "  . /opt/homebridge/source-vm.sh" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
-        echo "fi" | sudo tee -a "${ROOTFS}/opt/homebridge/source.sh" > /dev/null
+    # The Homebridge apt package's source.sh loads /opt/homebridge/source-vm.sh by itself, so
+    # nothing is added to that file here. Stop the build if the package ever stops doing so:
+    # the VM settings would then silently be missing in Homebridge.
+    if ! sudo grep -q '/opt/homebridge/source-vm.sh' "${ROOTFS}/opt/homebridge/source.sh"; then
+        error "The Homebridge apt package's source.sh no longer loads /opt/homebridge/source-vm.sh"
+        exit 1
     fi
+
+    # Last step: take out what must not be the same in every copy of the image
+    sudo "${SCRIPT_DIR}/scripts/seal-image.sh" "${ROOTFS}"
 
     log ""
     log "==> Build completed: $IMG_PATH ($(du -sh "$IMG_PATH" | cut -f1))"
@@ -573,11 +465,12 @@ main() {
     log ""
     while IFS= read -r line; do
         info "$line"
-    done < ${MANIFEST_FILE}
+    done < "${MANIFEST_FILE}"
     log ""
 }
 
 
-
-# Run main function
-main "$@"
+# Run main function (not when a test loads this file to look at its functions)
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
