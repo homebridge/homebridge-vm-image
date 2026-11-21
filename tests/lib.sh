@@ -142,9 +142,17 @@ base_setup() {
   printf '# en_GB.UTF-8 UTF-8\n' > "$W/root/etc/locale.gen"
   echo "deb http://deb.debian.org/debian trixie main" > "$W/root/etc/apt/sources.list"
   local tool
-  for tool in apt-get locale-gen update-locale grub-install update-grub update-initramfs debconf-set-selections systemctl; do
+  # debconf-set-selections: what it is given is kept in $W/debconf-selections
+  fake debconf-set-selections 'cat >> "'"$W"'/debconf-selections"'
+  rm -f "$W/debconf-selections"
+  for tool in apt-get locale-gen update-locale update-grub update-initramfs systemctl; do
     [ -x "$W/bin/$tool" ] || fake "$tool"
   done
+  # grub-install "writes" the boot loader to both places, as the real one does with --force-extra-removable
+  if [ ! -x "$W/bin/grub-install" ] || grep -q 'base_setup default' "$W/bin/grub-install"; then
+    fake grub-install '# base_setup default' 'mkdir -p "'"$W"'/root/boot/efi/EFI/BOOT" "'"$W"'/root/boot/efi/EFI/debian"' \
+      'for f in BOOT/BOOTX64.EFI BOOT/BOOTAA64.EFI debian/grubx64.efi debian/grubaa64.efi; do echo grub > "'"$W"'/root/boot/efi/EFI/$f"; done'
+  fi
   in_sandbox "$REPO/scripts/chroot-base-setup.sh" > "$W/chroot-base-setup.sh"
   PATH="$W/bin:$PATH" bash -eu "$W/chroot-base-setup.sh" "${1:-arm64}" ROOT-UUID ESP-UUID 0 > "$W/base-setup.log" 2>&1
   BASE_SETUP_CODE=$?

@@ -21,8 +21,6 @@ PACKAGES=(
   parted e2fsprogs dosfstools kpartx udev zerofree
   # tools the build script calls
   sudo psmisc jq gzip
-  # the boot loader files of the build machine (build-debian-image.sh copies them for amd64)
-  "grub-efi-${ARCH}-bin"
   # the boot test (scripts/boot-test.sh): starts the built image as a virtual machine
   qemu-utils python3 curl
 )
