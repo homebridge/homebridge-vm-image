@@ -6,6 +6,8 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DISTRO="trixie"
 readonly SIZE_MB=5120  # 5GB total disk size
 readonly ESP_SIZE_MB=256
+# Debian's signing keys on the build machine (package debian-archive-keyring)
+readonly DEBIAN_KEYRING="/usr/share/keyrings/debian-archive-keyring.gpg"
 
 # Debug settings - set DEBUG=1 for verbose output
 readonly DEBUG="${DEBUG:-0}"
@@ -201,9 +203,13 @@ setup_rootfs() {
             sudo apt-get install -y -qq zstd ${APT_REDIRECT} || true
         fi
         
+        # The base system is only used when Debian's signature on it is good: the key file must
+        # be on the build machine (package debian-archive-keyring), and a missing key or a bad
+        # signature stops the build. Without --force-check-gpg debootstrap only prints a warning.
         # ca-certificates: the package sources of the image use https://
-        sudo debootstrap --arch="${ARCH}" --variant=minbase --include=ca-certificates "$DISTRO" "$ROOTFS" \
-            http://deb.debian.org/debian
+        sudo debootstrap --arch="${ARCH}" --variant=minbase --include=ca-certificates \
+            --keyring="${DEBIAN_KEYRING}" --force-check-gpg \
+            "$DISTRO" "$ROOTFS" https://deb.debian.org/debian
         
         if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
             info "Skipping cache save on GitHub Actions runner"
