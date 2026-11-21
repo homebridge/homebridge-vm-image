@@ -363,6 +363,167 @@ $NGINX_REDIRECT_HTTP_TO_HTTPS
   fi
 }
 
+# ---------------------------------------------------------------------------------------------
+# Fixes for VMs that were made from an older image (decided by BP, 2026-11-21).
+#
+# An image is made once, but a VM lives for years, and a new image does not change a VM that is
+# already in use. "Update" brings such a VM up to what a new image has:
+#   1. the Debian package sources for security fixes and updates,
+#   2. SSH host keys that were made on this VM,
+#   3. a service that keeps the clock right.
+# Each part looks first whether it is needed. On a VM from a current image nothing is needed,
+# nothing is asked and nothing is changed.
+# ---------------------------------------------------------------------------------------------
+
+# a new image writes this file when it made its SSH host keys on the first start
+HB_SSH_KEYS_MARKER=/var/lib/hb-image/ssh-host-keys-made
+HB_DEBIAN_EXTRA_LIST=/etc/apt/sources.list.d/debian-security-updates.list
+
+# Prints the code name of the Debian release (bookworm, trixie ...), or nothing.
+debian_codename() {
+  sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2> /dev/null | tr -d '"' | head -n 1
+}
+
+# True when apt has no source for Debian's security fixes.
+repair_needs_sources() {
+  HB_CODENAME=$(debian_codename)
+  case "$HB_CODENAME" in
+    "" | *[!a-z]*) return 1 ;;
+  esac
+  ! grep -rqs -- "${HB_CODENAME}-security" /etc/apt/sources.list /etc/apt/sources.list.d/
+}
+
+# True when the SSH host keys were not made on this VM.
+repair_needs_ssh_keys() {
+  [ -x /usr/bin/ssh-keygen ] && [ ! -e "$HB_SSH_KEYS_MARKER" ]
+}
+
+# True when no service keeps the clock right.
+repair_needs_time_sync() {
+  [ ! -e /lib/systemd/system/systemd-timesyncd.service ] && [ ! -e /usr/lib/systemd/system/systemd-timesyncd.service ] \
+    && ! command -v chronyd > /dev/null 2>&1 && ! command -v ntpd > /dev/null 2>&1
+}
+
+# Adds the Debian sources for security fixes and updates, and reads the package lists.
+repair_sources() {
+  HB_CODENAME=$(debian_codename)
+  {
+    echo "# Added by hb-config: the Debian sources for security fixes and updates."
+    echo "# Images made before December 2026 only had the main source, which gets no security fixes."
+    echo "deb https://deb.debian.org/debian-security ${HB_CODENAME}-security main"
+    echo "deb https://deb.debian.org/debian ${HB_CODENAME}-updates main"
+  } > "$HB_DEBIAN_EXTRA_LIST"
+  chmod 644 "$HB_DEBIAN_EXTRA_LIST"
+
+  if ! apt-get update; then
+    # without working lists the new file would break every later "apt update": take it out again
+    rm -f "$HB_DEBIAN_EXTRA_LIST"
+    apt-get update > /dev/null 2>&1
+    return 1
+  fi
+}
+
+# Installs the Debian updates that are waiting. The Homebridge package is left as it is:
+# "Update Homebridge" in the main menu is the place for that.
+repair_install_updates() {
+  HB_WAS_HELD=$(apt-mark showhold 2> /dev/null | grep -cx homebridge)
+  apt-mark hold homebridge > /dev/null 2>&1
+  DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold dist-upgrade
+  HB_UPGRADE_CODE=$?
+  [ "$HB_WAS_HELD" = "0" ] && apt-mark unhold homebridge > /dev/null 2>&1
+  return "$HB_UPGRADE_CODE"
+}
+
+# Makes a fresh set of SSH host keys for this VM.
+# The new keys are made first, in a folder of their own. The keys in use are only replaced when
+# all of that worked, so the SSH server is never left without keys.
+repair_ssh_keys() {
+  HB_KEY_TMP=$(mktemp -d) || return 1
+  # "ssh-keygen -A -f <folder>" writes the keys to <folder>/etc/ssh
+  HB_NEW_KEYS="$HB_KEY_TMP/etc/ssh"
+  mkdir -p "$HB_NEW_KEYS"
+  if ! ssh-keygen -A -f "$HB_KEY_TMP" > /dev/null 2>&1 || ! ls "$HB_NEW_KEYS"/ssh_host_*_key > /dev/null 2>&1; then
+    rm -rf "$HB_KEY_TMP"
+    return 1
+  fi
+  rm -f /etc/ssh/ssh_host_*
+  for HB_KEY_FILE in "$HB_NEW_KEYS"/ssh_host_*; do
+    case "$HB_KEY_FILE" in
+      *.pub) install -m 644 "$HB_KEY_FILE" /etc/ssh/ ;;
+      *) install -m 600 "$HB_KEY_FILE" /etc/ssh/ ;;
+    esac
+  done
+  rm -rf "$HB_KEY_TMP"
+  mkdir -p "$(dirname "$HB_SSH_KEYS_MARKER")"
+  : > "$HB_SSH_KEYS_MARKER"
+  # the server reads the new keys. Connections that are open now stay open.
+  systemctl restart ssh > /dev/null 2>&1 || systemctl restart sshd > /dev/null 2>&1
+  return 0
+}
+
+# Installs and starts the service that keeps the clock right.
+repair_time_sync() {
+  apt-get install -y systemd-timesyncd || return 1
+  systemctl enable --now systemd-timesyncd > /dev/null 2>&1
+  return 0
+}
+
+do_system_repair() {
+  HB_TODO=""
+  repair_needs_sources && HB_TODO="${HB_TODO}\n* Add the Debian package sources for security fixes and updates. Without them this VM gets no Debian security fixes."
+  repair_needs_time_sync && HB_TODO="${HB_TODO}\n* Install the service that keeps the clock right (systemd-timesyncd)."
+  repair_needs_ssh_keys && HB_TODO="${HB_TODO}\n* Make a fresh set of SSH host keys for this VM (you are asked again before this is done)."
+
+  [ -n "$HB_TODO" ] || return 0
+
+  if ! whiptail --title "Fixes for this VM" --yesno "This VM was made from an older image. Newer images have these fixes built in:\n${HB_TODO}\n\nApply them now? This needs a network connection." 20 76 2; then
+    return 0
+  fi
+
+  HB_DONE=""
+  HB_FAILED=""
+
+  if repair_needs_sources; then
+    if repair_sources; then
+      HB_DONE="${HB_DONE}\n* The Debian sources for security fixes and updates were added."
+      if whiptail --title "Fixes for this VM" --yesno "The Debian sources were added.\n\nInstall the Debian updates that are waiting now? This can take several minutes. Homebridge itself is not updated by this.\n\nYou can also do it later with:\nsudo apt update && sudo apt full-upgrade" 20 76 2; then
+        if repair_install_updates; then
+          HB_DONE="${HB_DONE}\n* The waiting Debian updates were installed. A new kernel is used after the next restart."
+          ASK_TO_REBOOT=1
+        else
+          HB_FAILED="${HB_FAILED}\n* The Debian updates could not be installed. Review the log above, then run: sudo apt full-upgrade"
+        fi
+      fi
+    else
+      HB_FAILED="${HB_FAILED}\n* The Debian sources could not be added (no network?). Nothing was changed."
+    fi
+  fi
+
+  if repair_needs_time_sync; then
+    if repair_time_sync; then
+      HB_DONE="${HB_DONE}\n* The time sync service was installed and started."
+    else
+      HB_FAILED="${HB_FAILED}\n* The time sync service could not be installed."
+    fi
+  fi
+
+  if repair_needs_ssh_keys; then
+    if whiptail --title "Fixes for this VM" --yesno "Make a fresh set of SSH host keys for this VM?\n\nNewer images make them on the first start of each VM. This VM was made from an older image.\n\nAfter this, your SSH program says ONE time that the host key has changed. That is expected. Remove the old key on your computer with:\n\nssh-keygen -R $(get_hostname).local\n\n(and the same with the IP address, if you connect by IP address), then connect again. A connection that is open now stays open." 22 76 2; then
+      if repair_ssh_keys; then
+        HB_DONE="${HB_DONE}\n* Fresh SSH host keys were made for this VM."
+      else
+        HB_FAILED="${HB_FAILED}\n* The SSH host keys could not be made. The old keys were left in place."
+      fi
+    fi
+  fi
+
+  if [ -n "$HB_FAILED" ]; then
+    whiptail --title "Fixes for this VM" --msgbox "Done:${HB_DONE:-\n(nothing)}\n\nNot done:${HB_FAILED}\n\nChoose Update again to try once more." 20 76 1
+  elif [ -n "$HB_DONE" ]; then
+    whiptail --title "Fixes for this VM" --msgbox "Done:${HB_DONE}" 20 76 1
+  fi
+}
+
 # version_older <a> <b>: true when version a is older than version b
 version_older() {
   [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
@@ -378,8 +539,9 @@ hb_latest_release_tag() {
     | sed -n 's#^.*/releases/tag/\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)$#\1#p'
 }
 
-# Menu entry "Update"
+# Menu entry "Update": first the fixes for VMs from an older image, then this tool itself.
 do_update() {
+  do_system_repair
   do_update_tool
 }
 
@@ -467,7 +629,7 @@ while true; do
     "3 Restore Config" "Delete config, plugins and backups, then install Homebridge again" \
     "4 Nginx Options" "Configure Homebridge Nginx settings" \
     "5 Advanced Options" "Advanced Options ie expand file system, hostname, timezone" \
-    "8 Update" "Update this tool to the latest version" \
+    "8 Update" "Update this tool, and apply fixes for VMs from an older image" \
     "9 About" "Information about this configuration tool" \
     3>&1 1>&2 2>&3)
   RET=$?
