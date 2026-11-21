@@ -9,8 +9,9 @@ export ARCH="$1"
 export ROOT_UUID="$2" 
 export ESP_UUID="$3"
 export DEBUG="$4"
-readonly APT_QUIET=$([[ $DEBUG -eq 1 ]] && echo "" || echo "-qq")
-readonly BASH_DEBUG_FLAG=$([[ $DEBUG -eq 1 ]] && echo "x" || echo "")
+APT_QUIET="-qq"
+[[ $DEBUG -eq 1 ]] && APT_QUIET=""
+readonly APT_QUIET
 
 # Colors for output
 RED='\033[0;31m'
@@ -24,6 +25,23 @@ log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
 error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
 info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
+
+# quiet <command...>: runs the command. Its output is only shown when the command fails, so a
+# failed step says why. With DEBUG=1 the output is shown as it comes.
+quiet() {
+  if [[ $DEBUG -eq 1 ]]; then
+    "$@"
+    return
+  fi
+  local output
+  output="$(mktemp)"
+  if ! "$@" > "$output" 2>&1; then
+    cat "$output" >&2
+    rm -f "$output"
+    return 1
+  fi
+  rm -f "$output"
+}
 
 # Configure APT for faster downloads
 echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99nolang
@@ -54,13 +72,7 @@ apt-get -y dist-upgrade
 
 log "Installing base system packages"
 # Install essential packages first
-if [[ $DEBUG -eq 1 ]]; then
-  apt-get install -y $APT_QUIET \
-  apt-utils locales systemd systemd-sysv
-else
-  apt-get install -y $APT_QUIET \
-  apt-utils locales systemd systemd-sysv > /dev/null 2>&1
-fi
+quiet apt-get install -y $APT_QUIET apt-utils locales systemd systemd-sysv
 
 LANG=en_GB.UTF-8
 
@@ -120,16 +132,12 @@ VIRTUALIZATION_SUPPORT=(
   cloud-guest-utils
 )
 
-# Install packages
-if [[ $DEBUG -eq 1 ]]; then
-  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}"
-  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}"
-  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" || true
-else
-  apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}" > /dev/null 2>&1
-  apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}" > /dev/null 2>&1
-  apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}" > /dev/null 2>&1 || true
-fi
+# Install packages. Every list must install: a name that Debian no longer has stops the build
+# and says which one. (The VM helpers were once allowed to fail, all four together and unseen.
+# One of them grows the disk, and the boot test needs another.)
+quiet apt-get install -y $APT_QUIET "${KERNEL_PACKAGES[@]}"
+quiet apt-get install -y $APT_QUIET "${SYSTEM_UTILITIES[@]}"
+quiet apt-get install -y $APT_QUIET "${VIRTUALIZATION_SUPPORT[@]}"
 
 log "Setting up GRUB bootloader"
 # GRUB's own name for the CPU type. Debian calls 64-bit Intel/AMD "amd64"; GRUB calls it "x86_64".

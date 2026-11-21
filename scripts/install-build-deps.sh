@@ -19,8 +19,8 @@ PACKAGES=(
   debootstrap debian-archive-keyring ca-certificates
   # the disk image: partitions, file systems, loop devices
   parted e2fsprogs dosfstools kpartx udev zerofree
-  # tools the build script calls
-  sudo psmisc jq gzip
+  # tools the build script calls (zstd: debootstrap unpacks the Debian packages with it)
+  sudo psmisc jq gzip zstd
   # the boot test (scripts/boot-test.sh): starts the built image as a virtual machine
   qemu-utils python3 curl
 )
