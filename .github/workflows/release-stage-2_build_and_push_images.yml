@@ -88,6 +88,9 @@ jobs:
 
       # Step 2: Start the build process
       - name: run build-debian-image.sh script
+        env:
+          # read-only: the build asks GitHub for the checksum of the ffmpeg download
+          GH_TOKEN: ${{ github.token }}
         run: |
           ./build-debian-image.sh "$ARCH" "$RELEASE_STREAM" "$HOMEBRIDGE_VM_IMAGE_VERSION"
 

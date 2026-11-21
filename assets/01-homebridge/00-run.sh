@@ -53,16 +53,31 @@ install -m 633 files/bashrc.partial "${ROOTFS_DIR}/tmp/bashrc.partial"
 #
 echo "$BUILD_VERSION" > "${ROOTFS_DIR}/etc/hb-release"
 
+# The fingerprint of the key that signs the Homebridge package repo (repo.homebridge.io/KEY.gpg).
+# Every Homebridge apt user has this key. If it is ever replaced, this value must change with it.
+HB_KEY_FINGERPRINT="ACAA60814A7524504F07DE07DF5B0FE88C8F5D92"
+
 on_chroot << EOF
 
 set -e
 
-# Original had a sudo tee ....but the build failed with that 'sudo: unable to resolve host b23313a4fe2b: Name or service not known
-curl -sSfL https://repo.homebridge.io/KEY.gpg | gpg --dearmor | tee /usr/share/keyrings/homebridge.gpg  > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io ${RELEASE_STREAM} main" | tee /etc/apt/sources.list.d/homebridge.list > /dev/null
+# The key of the Homebridge package repo is downloaded, and only used when it is the known key.
+HB_KEY_TMP=\$(mktemp -d)
+export GNUPGHOME="\$HB_KEY_TMP/gnupg"
+mkdir -m 700 "\$GNUPGHOME"
+curl -sSfL https://repo.homebridge.io/KEY.gpg -o "\$HB_KEY_TMP/KEY.gpg" < /dev/null
+HB_KEY_FOUND=\$(gpg --show-keys --with-colons "\$HB_KEY_TMP/KEY.gpg" < /dev/null | awk -F: '\$1 == "fpr" { print \$10; exit }')
+if [ "\$HB_KEY_FOUND" != "${HB_KEY_FINGERPRINT}" ]; then
+  echo "The key from repo.homebridge.io is not the known Homebridge key (found: \$HB_KEY_FOUND)" >&2
+  exit 1
+fi
+gpg --dearmor < "\$HB_KEY_TMP/KEY.gpg" > /usr/share/keyrings/homebridge.gpg
+rm -rf "\$HB_KEY_TMP"
+unset GNUPGHOME
+echo "deb [signed-by=/usr/share/keyrings/homebridge.gpg] https://repo.homebridge.io ${RELEASE_STREAM} main" > /etc/apt/sources.list.d/homebridge.list
 
-apt-get update
-apt-get install homebridge=${HOMEBRIDGE_APT_PKG_VERSION} -y
+apt-get update < /dev/null
+apt-get install -y homebridge=${HOMEBRIDGE_APT_PKG_VERSION} < /dev/null
 
 # empty motd
 > /etc/motd
