@@ -312,11 +312,29 @@ install_staged_assets() {
     done
 }
 
+# Prints the version text of the image. It goes into /etc/hb-release, the login message, the
+# manifest and HOMEBRIDGE_VM_IMAGE_VERSION.
+#   - The release workflow passes the release tag (for example 2026-11-21 or beta-2026-11-21),
+#     so a user can match a VM to its release on GitHub.
+#   - A local build with no tag gets the date, the stream and the CPU type.
+# Usage: image_version <release tag or nothing> <stream> <arch>
+image_version() {
+    local version="${1:-}"
+    [[ -z "$version" ]] && version="$(date +%Y%m%d)-${2}-${3}"
+    # the text is written into shell files inside the image, so only plain characters are allowed
+    if [[ ! "$version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+        error "Not a usable version text: ${version}"
+        return 1
+    fi
+    echo "$version"
+}
+
 # Main function
 main() {
     local ARCH="${1:-}"
-    [[ -z "${ARCH}" ]] && { error "Usage: $0 <architecture> [arm64|amd64]"; exit 1; }
+    [[ -z "${ARCH}" ]] && { error "Usage: $0 <arm64|amd64> [stable|beta|alpha] [release tag]"; exit 1; }
     local RELEASE_STREAM="${2:-stable}"
+    local RELEASE_TAG="${3:-${BUILD_VERSION:-}}"
 
     if [[ "${RELEASE_STREAM}" != "stable" && "${RELEASE_STREAM}" != "beta" && "${RELEASE_STREAM}" != "alpha" ]] then
         error "Invalid release stream: ${RELEASE_STREAM}. Must be 'stable', 'beta' or 'alpha'."
@@ -355,7 +373,8 @@ main() {
     
     group_log "Installing Homebridge VM customizations"
     # Install customizations, these are copied from homebridge-raspbian-image
-    export BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d)-${RELEASE_STREAM}-${ARCH}}"
+    BUILD_VERSION="$(image_version "$RELEASE_TAG" "$RELEASE_STREAM" "$ARCH")"
+    export BUILD_VERSION
 
     export HOMEBRIDGE_APT_PKG_NPM_VERSION=$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' ${RELEASE_STREAM}/package.json | sed 's/\^//')
     export HOMEBRIDGE_APT_PKG_VERSION=$( echo ${HOMEBRIDGE_APT_PKG_NPM_VERSION} | sed 's/-/~/' )

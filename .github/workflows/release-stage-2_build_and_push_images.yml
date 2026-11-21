@@ -99,7 +99,8 @@ jobs:
         run: |
           # the apt package version the image must hold (npm "2.1.0-beta.4" is apt "2.1.0~beta.4")
           APT_VERSION="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' "${RELEASE_STREAM}/package.json" | sed -e 's/^\^//' -e 's/-/~/')"
-          sudo ./scripts/boot-test.sh "output/homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.img" "$ARCH" - "$APT_VERSION"
+          # the image must also know its own release tag
+          sudo ./scripts/boot-test.sh "output/homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.img" "$ARCH" "$HOMEBRIDGE_VM_IMAGE_VERSION" "$APT_VERSION"
 
       # Step 4: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
