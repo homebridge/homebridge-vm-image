@@ -66,7 +66,9 @@ jobs:
         arch: [arm64, amd64]
         include:
           - arch: arm64
-            runs-on: ubuntu-24.04-arm
+            runs-on: ubuntu-26.04-arm
+          # Pinned, like the arm64 runner: ubuntu-latest moved to Ubuntu 26.04 on 8 Nov 2026
+          # and every amd64 build has failed since
           - arch: amd64
             runs-on: ubuntu-latest
     runs-on: ${{ matrix.runs-on }}
@@ -79,7 +81,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog qemu-user-static gzip sudo udev kpartx psmisc jq zerofree        
+          sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog gzip sudo udev kpartx psmisc jq zerofree
           sudo apt-get install -y grub-efi-${{ matrix.arch }}-bin
 
       # Step 2: Start the build process
