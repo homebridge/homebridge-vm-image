@@ -22,7 +22,11 @@ runs:
         # the key is fetched at build time, and apt then trusts everything that key signed.
         ORACLE_KEY_FINGERPRINT="B9F8D658297AF3EFC18D5CDFA2F683C52980AECF"
         KEY_FILE="$(mktemp)"
-        wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O "$KEY_FILE"
+        # From Oracle's download server (the same host as the apt repo), with retries: two packaging
+        # jobs fetch it at the same moment, and www.virtualbox.org once answered one of them with an
+        # error (Stage 4 run 45456329106)
+        curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+          https://download.virtualbox.org/virtualbox/debian/oracle_vbox_2016.asc -o "$KEY_FILE"
         FOUND_FINGERPRINT="$(gpg --show-keys --with-colons "$KEY_FILE" | awk -F: '$1 == "fpr" { print $10; exit }')"
         if [[ "$FOUND_FINGERPRINT" != "$ORACLE_KEY_FINGERPRINT" ]]; then
           echo "::error::The VirtualBox signing key has fingerprint '${FOUND_FINGERPRINT}', expected '${ORACLE_KEY_FINGERPRINT}'"
