@@ -26,7 +26,7 @@ vm_env() { # vm_env <answer of systemd-detect-virt> [exit code]
   PATH="$W/bin:$PATH" dash -euc ". '$FILES/vm-env.sh'; echo \"VM_SOFTWARE=[\${VM_SOFTWARE-unset}]\"" 2>&1
 }
 is "the settings file is plain sh" dash -n "$FILES/vm-env.sh"
-same "QEMU (UTM): named, and nothing else is printed" "$(vm_env qemu)" "VM_SOFTWARE=[QEMU / UTM]"
+same "QEMU: named after the UTM package (as the old image did), and nothing else is printed" "$(vm_env qemu)" "VM_SOFTWARE=[UTM]"
 same "KVM (Proxmox and others)" "$(vm_env kvm)" "VM_SOFTWARE=[KVM]"
 same "VirtualBox" "$(vm_env oracle)" "VM_SOFTWARE=[VirtualBox]"
 same "Hyper-V is known (it printed 'Unknown VM' before)" "$(vm_env microsoft)" "VM_SOFTWARE=[Hyper-V]"

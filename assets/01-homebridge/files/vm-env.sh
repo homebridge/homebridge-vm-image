@@ -11,7 +11,9 @@
 # systemd-detect-virt names the VM program. A program it does not know leaves VM_SOFTWARE unset.
 
 case "$(systemd-detect-virt 2> /dev/null || true)" in
-  qemu) VM_SOFTWARE="QEMU / UTM" ;;
+  # qemu: the UTM package (the only QEMU-based package we ship). The name is what users report
+  # back, so it follows the package, not the hypervisor under it.
+  qemu) VM_SOFTWARE="UTM" ;;
   kvm) VM_SOFTWARE="KVM" ;;
   oracle) VM_SOFTWARE="VirtualBox" ;;
   microsoft) VM_SOFTWARE="Hyper-V" ;;
