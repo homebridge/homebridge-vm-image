@@ -69,7 +69,6 @@ jobs:
           HOMEBRIDGE_VM_IMAGE_VERSION="${RELEASE_STREAM}-$(date +%Y-%m-%d)"
         fi
         echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> "$GITHUB_OUTPUT"
-        echo "::notice::HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}"
         {
           echo "### Homebridge VM image: ${RELEASE_STREAM}"
           echo
@@ -135,15 +134,6 @@ jobs:
           retention-days: 7
           name: homebridge-image-${{ matrix.arch }}
           path: output/*
-
-      - name: Steps complete
-        env:
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          echo "::notice::Homebridge VM image version: ${HOMEBRIDGE_VM_IMAGE_VERSION}"
-          echo "::notice::Run ID: ${RUN_ID}"
-          echo "::notice::Architecture: ${ARCH}"
-          echo "::notice::Release Stream: ${RELEASE_STREAM}"
 
       # Written even when a step failed, so the summary shows where the build stopped
       - name: Job summary

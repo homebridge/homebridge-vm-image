@@ -87,13 +87,6 @@ jobs:
             ./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.ova
             ./output/homebridge-vm-image-${{ inputs.release_stream }}-${{ matrix.arch }}.vdi.gz
 
-      - name: Packaging complete
-        run: |
-          echo "::notice::Homebridge VM image version: ${TAG}"
-          echo "::notice::Run ID: ${BUILD_RUN_ID}"
-          echo "::notice::Architecture: ${ARCH}"
-          echo "::notice::Release Stream: ${RELEASE_STREAM}"
-
   # Adds the packages to the release. Only this job gets the token that can write.
   publish-to-release:
     needs: [package-for-virtual-box]

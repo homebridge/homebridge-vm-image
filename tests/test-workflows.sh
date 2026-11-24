@@ -87,7 +87,8 @@ job_rights $S3 cleanup-old-releases-and-tags "contents:read"
 job_rights $S3 finalize-stable-release "none"
 for kind in hyperv:package-for-hyperv utm:package-for-utm-vm virtualbox:package-for-virtual-box; do
   job_rights "release-stage-4_package-for-${kind%%:*}.yml" "${kind##*:}" "actions:read,contents:read"
-  job_rights "release-stage-4_package-for-${kind%%:*}.yml" publish-to-release "none"
+  # read: a sparse checkout of the script that writes the job summary
+  job_rights "release-stage-4_package-for-${kind%%:*}.yml" publish-to-release "contents:read"
 done
 same "every job is in the list above" "$(grep -c '^job ' "$W/workflow-facts")" "20"
 

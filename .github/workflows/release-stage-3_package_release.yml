@@ -157,7 +157,6 @@ jobs:
         TITLE: ${{ steps.set_title.outputs.release_title }}
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
       run: |
-        echo "::notice::Release ${TITLE} created successfully."
         ./scripts/release-files-summary.sh "$TAG" "Release ${TITLE}: disk images" >> "$GITHUB_STEP_SUMMARY"
 
   invoke-appliance-packaging:

@@ -190,14 +190,6 @@ jobs:
           if-no-files-found: error
           path: output\${{ env.VM_NAME }}.zip
 
-      - name: Packaging complete
-        run: |
-          echo "::notice::Homebridge VM image version: $env:TAG"
-          echo "::notice::Run ID: $env:BUILD_RUN_ID"
-          echo "::notice::Architecture: $env:ARCH"
-          echo "::notice::Release Stream: $env:RELEASE_STREAM"
-          echo "::notice::Hyper-V Version: $env:HYPERV_VERSION"
-
   # Adds the four packages to the release. Only this job gets the token that can write.
   publish-to-release:
     needs: [package-for-hyperv]
