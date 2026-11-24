@@ -82,9 +82,8 @@ jobs:
         arch: [arm64, amd64]
         include:
           - arch: arm64
+            # GitHub has no "latest" label for arm runners: use the newest one
             runs-on: ubuntu-26.04-arm
-          # Pinned, like the arm64 runner: ubuntu-latest moved to Ubuntu 26.04 on 8 Nov 2026
-          # and every amd64 build has failed since
           - arch: amd64
             runs-on: ubuntu-latest
     runs-on: ${{ matrix.runs-on }}

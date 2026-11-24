@@ -13,7 +13,7 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     container:
@@ -47,7 +47,7 @@ jobs:
   # actionlint checks the workflow files: YAML, expressions, and the shell lines inside them
   actionlint:
     name: Lint workflows
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -69,7 +69,7 @@ jobs:
 
   tests:
     name: Script tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     # The same Debian release as the image, so sh, sed, jq and nginx behave as they do in the VM.
@@ -105,9 +105,9 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            runs-on: ubuntu-24.04-arm
+            runs-on: ubuntu-26.04-arm
           - arch: amd64
-            runs-on: ubuntu-24.04
+            runs-on: ubuntu-latest
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

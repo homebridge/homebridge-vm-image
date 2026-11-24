@@ -39,7 +39,7 @@ jobs:
   # Builds the packages. This job installs a program from outside (VirtualBox), so it gets no
   # token that can write: the files go to the release in the next job.
   package-for-virtual-box:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read  # checkout
       actions: read   # download the image that the Stage 2 run built
