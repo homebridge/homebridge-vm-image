@@ -41,6 +41,21 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v7
 
+    - name: Check Release Branch
+      env:
+        RELEASE_STREAM: ${{ inputs.release_stream }}
+      run: |
+        # Only beta and alpha may build from a pre-release branch (e.g. beta-2026.11.18).
+        # Stable must come from latest, so a branch can never publish a stable release.
+        if [[ "$RELEASE_STREAM" != "beta" && "$RELEASE_STREAM" != "alpha" && "$GITHUB_REF_NAME" != "latest" ]]; then
+          echo "::error::${RELEASE_STREAM} releases must be built from the latest branch, not ${GITHUB_REF_NAME}"
+          exit 1
+        fi
+        if [[ "$GITHUB_REF_NAME" != "latest" && ! "$GITHUB_REF_NAME" =~ ^${RELEASE_STREAM}-[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+          echo "::error::${RELEASE_STREAM} releases must be built from latest or a ${RELEASE_STREAM}-YYYY.M.D branch, not ${GITHUB_REF_NAME}"
+          exit 1
+        fi
+
     - name: Set Docker Homebridge version
       id: docker_version
       run: |
@@ -117,7 +132,7 @@ jobs:
       uses: ./.github/actions/trigger-and-wait-workflow
       with:
         workflow-file: 'release-stage-3_package_release.yml'
-        ref: 'latest'
+        ref: ${{ github.ref_name }}  # stay on the branch that was built
         github-token: ${{ secrets.GH_TOKEN }}
         timeout-minutes: '120'
         workflow-fields: |
