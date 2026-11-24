@@ -98,7 +98,7 @@ leave_setup() {
 prompt_username() {
     local message
     while true; do
-        if ! USERNAME=$(whiptail --title "$TITLE" --inputbox "\nEnter the username for the new account:" 10 60 3>&1 1>&2 2>&3); then
+        if ! USERNAME=$(whiptail --title "$TITLE" --inputbox "\nEnter the user name for the new account.\n\nLower-case letters, digits and -, starting with a letter, at most 32 characters (for example: pi, admin, john)." 14 60 3>&1 1>&2 2>&3); then
             confirm_leave && leave_setup
             continue
         fi
@@ -115,7 +115,7 @@ prompt_password() {
     # The console has no keyboard layout setting: it reads the keys as a US keyboard.
     local note="Note: this console reads the keys as a US keyboard. Letters a-x and digits are the same on most keyboards. Symbols, and y and z, can differ: a password typed here may then need other keys over SSH."
     while true; do
-        if ! PASSWORD=$(whiptail --title "$TITLE" --passwordbox "\nEnter password for $USERNAME:\n\n$note" 16 60 3>&1 1>&2 2>&3); then
+        if ! PASSWORD=$(whiptail --title "$TITLE" --passwordbox "\nEnter a password for $USERNAME (6 to 32 characters). Nothing is shown while you type.\n\n$note" 18 60 3>&1 1>&2 2>&3); then
             confirm_leave && leave_setup
             continue
         fi
@@ -149,7 +149,7 @@ create_user() {
     return 0
 }
 
-display_message "Welcome to the Homebridge VM Image Setup!\n\nThis setup will guide you through creating a new user account for your Homebridge VM."
+whiptail --title "$TITLE" --msgbox "Welcome to the Homebridge VM Image Setup!\n\nThis makes the account for the Linux system of this VM. You need it to:\n  * log in here, or over SSH (ssh <name>@homebridge-vm.local)\n  * run the admin tool: sudo hb-config (updates, repairs, UI port)\n\nIt is NOT the login of the Homebridge web page: you make that in the browser, the first time you open http://homebridge-vm.local\n\nWrite the name and password down. This VM has no other account to reset a forgotten password with.\n\nCancel (Esc) leaves the setup: Homebridge keeps running." 24 70
 
 while true; do
     prompt_username
@@ -165,4 +165,4 @@ done
 systemctl disable first-boot-homebridge > /dev/null 2>&1
 systemctl daemon-reload
 
-display_message "User '$USERNAME' created successfully!\n\nYou can now log in with this username and the password you provided."
+display_message "User '$USERNAME' created successfully!\n\nKeep the name and password safe. Use them to:\n  * log in here, or: ssh $USERNAME@homebridge-vm.local\n  * run the admin tool: sudo hb-config\n\nSet up Homebridge in your browser: http://homebridge-vm.local"
