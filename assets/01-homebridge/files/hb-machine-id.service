@@ -1,13 +1,14 @@
 [Unit]
 Description=Give this VM a machine id of its own
-# Runs at every start, early, and only changes something while the machine id is the VM's UUID
+# Runs at every start and only changes something while the machine id is the VM's UUID
 # (see /usr/local/sbin/hb-machine-id). Not ConditionFirstBoot=: the image holds an empty
 # /etc/machine-id, and systemd does not count an empty file as a first start.
-DefaultDependencies=no
+#
 # After systemd-machine-id-commit: on a first start with a read-only root, systemd puts a
-# read-only copy over /etc/machine-id and only writes the file once the root is writable.
-After=systemd-remount-fs.service systemd-machine-id-commit.service
-Before=systemd-journal-flush.service sysinit.target
+# read-only copy over /etc/machine-id and only writes the file late in the start
+# (after first-boot-complete.target). So this is an ordinary unit with the default ordering:
+# ordering it before sysinit.target made a loop in the start order.
+After=systemd-machine-id-commit.service
 
 [Service]
 Type=oneshot
@@ -15,4 +16,4 @@ RemainAfterExit=yes
 ExecStart=/usr/local/sbin/hb-machine-id
 
 [Install]
-WantedBy=sysinit.target
+WantedBy=multi-user.target

@@ -31,7 +31,12 @@ same "no VM UUID: ends with code 0" "$code" "0"
 is "the script is plain sh" dash -n "$SCRIPT"
 unit_value() { sed -n "s/^$2=//p" "$1" | tr '\n' ' ' | sed 's/ $//'; }
 same "it is not limited to a first start (an empty machine-id file is not one)" "$(unit_value "$UNIT" ConditionFirstBoot)" ""
-has "the new id is written once systemd has saved the id to the disk (before that the file can be a read-only copy)" "$UNIT" "After=systemd-remount-fs.service systemd-machine-id-commit.service"
+same "the new id is written once systemd has saved the id to the disk (before that the file can be a read-only copy)" "$(unit_value "$UNIT" After)" "systemd-machine-id-commit.service"
+# systemd-machine-id-commit runs late (after first-boot-complete.target): ordering this unit
+# early as well made a loop in the start order, which the boot test found
+same "no early ordering (no Before=)" "$(unit_value "$UNIT" Before)" ""
+same "the default ordering is kept" "$(unit_value "$UNIT" DefaultDependencies)" ""
+same "it is started with the system" "$(unit_value "$UNIT" WantedBy)" "multi-user.target"
 has "the image installs the script" "$REPO/assets/01-homebridge/00-run.sh" 'files/hb-machine-id "${ROOTFS_DIR}/usr/local/sbin/"'
 has "the image switches the unit on" "$REPO/assets/01-homebridge/00-run.sh" "systemctl enable hb-machine-id"
 
