@@ -204,6 +204,13 @@ This workflow can be started by hand at any time.
 
 These workflows can be run again; they replace the packages of the release.
 
+**One UTM package, one VM UUID and network address.** UTM will not import a package without a VM
+UUID and a network card address, so every VM made from the same `.utm.tgz` starts with the same
+two. The machine id is fixed in the VM: `hb-machine-id.service` replaces an id taken from the VM
+UUID with a random one. The network address can only be changed in UTM: to run two VMs from the
+same package on one network, give one of them a new address (VM settings → Network → Random).
+VirtualBox makes new addresses when it imports an OVA.
+
 ### What must not change by accident
 
 Users, the wiki and other Homebridge projects use these by name:

@@ -31,6 +31,8 @@ install -m 755 files/updateIssueVMName "${ROOTFS_DIR}/usr/local/sbin/"
 
 # Makes the SSH host keys on the first start (the image holds none, see scripts/seal-image.sh)
 install -m 644 files/hb-ssh-host-keys.service "${ROOTFS_DIR}/etc/systemd/system/"
+install -m 644 files/hb-machine-id.service "${ROOTFS_DIR}/etc/systemd/system/"
+install -m 755 files/hb-machine-id "${ROOTFS_DIR}/usr/local/sbin/"
 
 # Lets the Homebridge UI restart and shut down the VM: its two buttons run "sudo -n shutdown".
 # The file allows the homebridge user these three commands and nothing else.
@@ -112,6 +114,7 @@ systemctl daemon-reload
 systemctl enable homebridge
 systemctl enable first-boot-homebridge
 systemctl enable hb-ssh-host-keys
+systemctl enable hb-machine-id
 systemctl enable hb-expand-rootfs
 systemctl enable hb-vm-issue
 EOF
