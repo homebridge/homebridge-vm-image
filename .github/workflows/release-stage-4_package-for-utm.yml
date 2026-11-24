@@ -120,9 +120,18 @@ jobs:
   publish-to-release:
     needs: [package-for-utm-vm]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # check out the script that writes the job summary
     env:
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: Checkout the summary script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/release-files-summary.sh
+          sparse-checkout-cone-mode: false
+
       - name: Download the package
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -145,3 +154,4 @@ jobs:
         run: |
           ls -l packages
           gh release upload "$TAG" packages/homebridge-vm-image-"${RELEASE_STREAM}"-*.utm.tgz --clobber
+          ./scripts/release-files-summary.sh "$TAG" "UTM packages" '\.utm\.tgz$' >> "$GITHUB_STEP_SUMMARY"

@@ -70,6 +70,13 @@ jobs:
         fi
         echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> "$GITHUB_OUTPUT"
         echo "::notice::HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}"
+        {
+          echo "### Homebridge VM image: ${RELEASE_STREAM}"
+          echo
+          echo "| Release tag | Branch |"
+          echo "|---|---|"
+          echo "| \`${HOMEBRIDGE_VM_IMAGE_VERSION}\` | \`${GITHUB_REF_NAME}\` |"
+        } >> "$GITHUB_STEP_SUMMARY"
 
   build-img-file:
     needs: set-versions
@@ -104,6 +111,7 @@ jobs:
 
       # Step 2: Start the build process
       - name: run build-debian-image.sh script
+        id: build
         env:
           # read-only: the build asks GitHub for the checksum of the ffmpeg download
           GH_TOKEN: ${{ github.token }}
@@ -113,6 +121,7 @@ jobs:
       # Step 3: Start the image as a virtual machine and check it from the inside.
       # When this step fails, nothing is uploaded and Stage 3 (the release) is never started.
       - name: Boot test
+        id: boot-test
         run: |
           # the apt package version the image must hold (npm "2.1.0-beta.4" is apt "2.1.0~beta.4")
           APT_VERSION="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' "${RELEASE_STREAM}/package.json" | sed -e 's/^\^//' -e 's/-/~/')"
@@ -135,6 +144,25 @@ jobs:
           echo "::notice::Run ID: ${RUN_ID}"
           echo "::notice::Architecture: ${ARCH}"
           echo "::notice::Release Stream: ${RELEASE_STREAM}"
+
+      # Written even when a step failed, so the summary shows where the build stopped
+      - name: Job summary
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BOOT_OUTCOME: ${{ steps.boot-test.outcome }}
+        run: |
+          icon() { case "$1" in success) echo "✅ passed" ;; failure) echo "❌ failed" ;; *) echo "⏭️ ${1:-not run}" ;; esac; }
+          IMG="output/homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.img"
+          SIZE="$( [ -f "$IMG" ] && du -h --apparent-size "$IMG" | cut -f1 || echo "—")"
+          APT_PKG="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"] // "—"' "${RELEASE_STREAM}/package.json" 2> /dev/null || echo "—")"
+          {
+            echo "### ${ARCH} image"
+            echo
+            echo "| Build | Boot test | Image size | homebridge-apt-pkg |"
+            echo "|---|---|---|---|"
+            echo "| $(icon "$BUILD_OUTCOME") | $(icon "$BOOT_OUTCOME") | ${SIZE} | \`${APT_PKG}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   invoke-package-and-release:
     name: Invoke Stage 3 - Package and Release

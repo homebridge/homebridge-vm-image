@@ -155,8 +155,10 @@ jobs:
     - name: Release created
       env:
         TITLE: ${{ steps.set_title.outputs.release_title }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
       run: |
         echo "::notice::Release ${TITLE} created successfully."
+        ./scripts/release-files-summary.sh "$TAG" "Release ${TITLE}: disk images" >> "$GITHUB_STEP_SUMMARY"
 
   invoke-appliance-packaging:
     needs: [create-release]
@@ -306,3 +308,4 @@ jobs:
         gh release edit "$TAG" \
           --prerelease=false \
           --latest
+        echo "✅ \`${TAG}\` is now the latest release." >> "$GITHUB_STEP_SUMMARY"

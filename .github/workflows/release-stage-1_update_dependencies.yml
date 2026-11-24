@@ -87,6 +87,7 @@ jobs:
             [[ -n "$CANDIDATE" ]] && BRANCH="$CANDIDATE"
           fi
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "**${STREAM}** builds from \`${BRANCH}\`." >> "$GITHUB_STEP_SUMMARY"
           echo "::notice::${STREAM} stream builds from branch ${BRANCH}"
 
       - name: Create Dependency Bot App Token
