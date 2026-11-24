@@ -53,6 +53,10 @@ same "a good name and password: ends with code 0" "$code" "0"
 has "the account is made with sudo rights" "$W/calls.log" "useradd -m -s /bin/bash -G sudo alice"
 same "the password is set for that account" "$(cat "$W/chpasswd-input")" "alice:secret12"
 has "the wizard is switched off afterwards" "$W/calls.log" "systemctl disable first-boot-homebridge"
+# systemd prints "Started ..." on the console while the system starts: the wizard waits for the
+# start to finish before it draws, so those lines do not land on top of its first screen
+same "the wizard waits for the system start before its first screen" \
+  "$(grep -n -E 'systemctl is-system-running --wait|whiptail' "$W/calls.log" | head -n 1 | grep -c 'is-system-running')" "1"
 has "the user is told it worked" "$W/calls.log" "User 'alice' created successfully"
 
 wizard CANCEL YES

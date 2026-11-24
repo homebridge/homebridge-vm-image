@@ -19,6 +19,11 @@ NC='\033[0m' # No Color
 warn() { echo -e "${YELLOW}WARN:${NC} $*" >&2; }
 error() { echo -e "${RED}ERROR:${NC} $*" >&2; }
 
+# The wizard starts while the rest of the system is still starting (it must not hold that up),
+# and systemd prints its "Started ..." lines on this console. Wait until the start is done, at
+# most 2 minutes, so those lines come before the wizard and not on top of it.
+timeout 120 systemctl is-system-running --wait > /dev/null 2>&1 || true
+
 # Clear the screen for a clean setup experience
 clear
 
