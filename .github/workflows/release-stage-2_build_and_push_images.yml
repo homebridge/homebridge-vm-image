@@ -119,8 +119,12 @@ jobs:
 
       # Step 3: Start the image as a virtual machine and check it from the inside.
       # When this step fails, nothing is uploaded and Stage 3 (the release) is never started.
+      # amd64 only: GitHub's arm runners have no /dev/kvm (no nested virtualization), so an arm64
+      # image could only be booted with an emulated CPU, which does not finish in time. The arm64
+      # image is checked on real hardware (UTM on Apple Silicon) before a release is promoted.
       - name: Boot test
         id: boot-test
+        if: matrix.arch == 'amd64'
         run: |
           # the apt package version the image must hold (npm "2.1.0-beta.4" is apt "2.1.0~beta.4")
           APT_VERSION="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' "${RELEASE_STREAM}/package.json" | sed -e 's/^\^//' -e 's/-/~/')"
@@ -143,6 +147,8 @@ jobs:
           BOOT_OUTCOME: ${{ steps.boot-test.outcome }}
         run: |
           icon() { case "$1" in success) echo "✅ passed" ;; failure) echo "❌ failed" ;; *) echo "⏭️ ${1:-not run}" ;; esac; }
+          BOOT="$(icon "$BOOT_OUTCOME")"
+          [ "$ARCH" = "arm64" ] && BOOT="⏭️ not run on arm64 (no KVM on GitHub's arm runners)"
           IMG="output/homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.img"
           SIZE="$( [ -f "$IMG" ] && du -h --apparent-size "$IMG" | cut -f1 || echo "—")"
           APT_PKG="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"] // "—"' "${RELEASE_STREAM}/package.json" 2> /dev/null || echo "—")"
@@ -151,7 +157,7 @@ jobs:
             echo
             echo "| Build | Boot test | Image size | homebridge-apt-pkg |"
             echo "|---|---|---|---|"
-            echo "| $(icon "$BUILD_OUTCOME") | $(icon "$BOOT_OUTCOME") | ${SIZE} | \`${APT_PKG}\` |"
+            echo "| $(icon "$BUILD_OUTCOME") | ${BOOT} | ${SIZE} | \`${APT_PKG}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   invoke-package-and-release:

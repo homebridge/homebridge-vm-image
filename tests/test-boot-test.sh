@@ -84,7 +84,8 @@ stage2 = yaml.safe_load(open(os.path.join(folder, "release-stage-2_build_and_pus
 steps = [step.get("name", "") for step in stage2["jobs"]["build-img-file"]["steps"]]
 print("order", steps.index("run build-debian-image.sh script") < steps.index("Boot test") < steps.index("Upload Homebridge Image"))
 boot = stage2["jobs"]["build-img-file"]["steps"][steps.index("Boot test")]
-print("boot-can-fail", "continue-on-error" not in boot and "if" not in boot)
+# the only condition allowed: amd64 only (GitHub's arm runners have no KVM to boot arm64 with)
+print("boot-can-fail", "continue-on-error" not in boot and boot.get("if") in (None, "matrix.arch == 'amd64'"))
 print("release-needs-build", "build-img-file" in stage2["jobs"]["invoke-package-and-release"]["needs"])
 stage3 = yaml.safe_load(open(os.path.join(folder, "release-stage-3_package_release.yml")))
 print("latest-needs", stage3["jobs"]["finalize-stable-release"]["needs"])

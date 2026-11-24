@@ -99,7 +99,7 @@ The timezone is looked up once, the first time the VM starts with a network, and
 - **`scripts/local-build-in-docker.sh [arch] [stream]`**
   Runs `build-debian-image.sh` in a Docker container, for macOS and other non-Linux hosts.
 - **`scripts/boot-test.sh <image> <arch> [release tag] [apt version]`**
-  Starts a built image as a real VM under QEMU (UEFI, GRUB, kernel, systemd) and checks it from the inside with `scripts/boot-test-checks.sh`. The release workflow runs it on every image before anything is published.
+  Starts a built image as a real VM under QEMU (UEFI, GRUB, kernel, systemd) and checks it from the inside with `scripts/boot-test-checks.sh`. The release workflow runs it on the amd64 image before anything is published. GitHub's arm runners have no KVM, so the arm64 image is checked on real hardware (UTM on Apple Silicon) instead.
 
 #### Platform-Specific Packaging
 
@@ -179,7 +179,7 @@ For each release stream (stable, beta, alpha), one after the other:
 
 1. Sets the release tag: `YYYY-MM-DD` for stable, `beta-YYYY-MM-DD` and `alpha-YYYY-MM-DD` for the others.
 2. Builds the image for arm64 and amd64, each on a runner of that CPU type.
-3. **Boot test:** starts each image as a VM and checks it. A failed test stops here: nothing is uploaded and no release is made.
+3. **Boot test (amd64):** starts the image as a VM and checks it. A failed test stops here: nothing is uploaded and no release is made. arm64 is not booted on GitHub (its arm runners have no KVM); check it in UTM before promoting a release.
 4. Uploads the images as artifacts, starts Stage 3 and waits for it.
 
 This workflow can be started by hand at any time.
