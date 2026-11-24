@@ -50,7 +50,14 @@ check "ffmpeg runs" ffmpeg -version
 
 same "loading the VM settings prints nothing (as root, the way hb-shell does)" "$(bash -c '. /opt/homebridge/source.sh' 2>&1)" ""
 same "the Homebridge start log has no shell error and no 'Unknown VM' line" "$(journalctl -b -u homebridge --no-pager | grep -ciE 'Unknown VM|not found')" "0"
-same "the settings name the VM program" "$(sh -c '. /opt/homebridge/source-vm.sh; echo "$VM_SOFTWARE"')" "QEMU / UTM"
+# The boot test runs the image in QEMU: with KVM (a native runner) systemd-detect-virt says "kvm",
+# without it (emulated CPU) "qemu". Both are right, so either name passes.
+VM_SOFTWARE_FOUND="$(sh -c '. /opt/homebridge/source-vm.sh; echo "$VM_SOFTWARE"')"
+case "$VM_SOFTWARE_FOUND" in
+  "QEMU / UTM" | "KVM") VM_SOFTWARE_OK="yes" ;;
+  *) VM_SOFTWARE_OK="no: '$VM_SOFTWARE_FOUND'" ;;
+esac
+same "the settings name the VM program (QEMU / UTM, or KVM)" "$VM_SOFTWARE_OK" "yes"
 check "the login screen names the VM program" grep -q 'VM Software:' /etc/issue
 
 same "the UI's restart and shut down buttons can work: the homebridge user may run these, and only these, as root" \
