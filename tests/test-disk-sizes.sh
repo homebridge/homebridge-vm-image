@@ -36,6 +36,11 @@ same "a release uses 50 GB" "$(sed -n 's/^VDISK_SIZE="${VDISK_SIZE:-\(.*\)}"$/\1
 
 HYPERV="$REPO/.github/workflows/release-stage-4_package-for-hyperv.yml"
 has "the Hyper-V package uses 50 GB too" "$HYPERV" "VDISK_SIZE: 50G"
-has "the Hyper-V disk is grown before the VM is made" "$HYPERV" 'resize -f vhdx $vhdxPath $env:VDISK_SIZE'
+# qemu-img can not resize a VHDX file ("Image format driver does not support resize"), so the
+# raw image is grown, and only then converted
+has "the Hyper-V disk is grown before the VM is made" "$HYPERV" 'resize -f raw $imgPath $env:VDISK_SIZE'
+hasnt "the Hyper-V job never resizes the VHDX itself" "$HYPERV" 'resize -f vhdx'
+same "the raw image is grown before it is converted" \
+  "$(grep -n -E 'resize -f raw \$imgPath|convert -f raw -O vhdx' "$HYPERV" | cut -d: -f2 | grep -oE 'resize|convert' | tr '\n' ' ')" "resize convert "
 
 finish

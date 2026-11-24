@@ -93,14 +93,16 @@ jobs:
           if (!(Test-Path $qemuImgExe)) {
             throw "qemu-img.exe not found after installation"
           }
+          # The same disk size as the other packages. qemu-img can not resize a VHDX file, so the
+          # raw image is grown first (as scripts/convert-img-to-virtual-disk.sh does). The VHDX
+          # stays small (a dynamic disk only stores used blocks), and the system grows into the
+          # disk on its first start.
+          & $qemuImgExe resize -f raw $imgPath $env:VDISK_SIZE
+          if ($LASTEXITCODE -ne 0) { throw "qemu-img resize failed" }
           Write-Host "Converting $imgPath to $vhdxPath using $qemuImgExe..."
           & $qemuImgExe convert -f raw -O vhdx $imgPath $vhdxPath
           if ($LASTEXITCODE -ne 0) { throw "qemu-img convert failed" }
           Write-Host "Converted $imgPath to $vhdxPath"
-          # The same disk size as the other packages. The file stays small (a dynamic disk only
-          # stores used blocks), and the system grows into the disk on its first start.
-          & $qemuImgExe resize -f vhdx $vhdxPath $env:VDISK_SIZE
-          if ($LASTEXITCODE -ne 0) { throw "qemu-img resize failed" }
           & $qemuImgExe info $vhdxPath
 
       - name: List Downloaded Artifacts
