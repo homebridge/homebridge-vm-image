@@ -19,7 +19,7 @@ has "the local Docker build installs the same list" "$REPO/scripts/Dockerfile" '
 # Runners stay on latest (no "latest" label exists for arm, so that one is the newest);
 # the test only checks that pull requests try the list on the same runners as the release build.
 CI_RUNNERS=$(sed -n '/^  build-host-packages:/,$p' "$CI" | sed -n 's/^ *runs-on: \(ubuntu.*\)$/\1/p' | sort | tr '\n' ' ')
-BUILD_RUNNERS=$(grep -A2 -E '^ +- arch: (arm64|amd64)$' "$STAGE2" | sed -n 's/^ *runs-on: //p' | sort | tr '\n' ' ')
+BUILD_RUNNERS=$(grep -A2 -E '^ +- arch: (arm64|amd64)$' "$STAGE2" | sed -n 's/^ *runs-on: \(ubuntu.*\)$/\1/p' | sort | tr '\n' ' ')
 same "pull requests try the list on the runner images of the release build" "$BUILD_RUNNERS" "$CI_RUNNERS"
 
 finish

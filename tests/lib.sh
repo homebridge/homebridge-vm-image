@@ -176,6 +176,7 @@ run_stage() {
     export ARCH="${ARCH:-arm64}" FFMPEG_SHA256="${FFMPEG_SHA256-0000000000000000000000000000000000000000000000000000000000000000}"
     export CHROOT_SCRIPT="$W/chroot-script"
     # shellcheck disable=SC2317  # called by the stage script
+    # shellcheck disable=SC2329 # a stub, called by the code under test
     on_chroot() { cat >> "$CHROOT_SCRIPT"; }
     export -f on_chroot
     # shellcheck disable=SC1090  # the stage script is named by the test

@@ -74,9 +74,11 @@ echo >> "$MANIFEST"
 if [[ "$BUILD_BRANCH" != "latest" ]]; then
   REPO_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-homebridge/homebridge-vm-image}"
   log "Adding pre-release branch section for branch: ${BUILD_BRANCH}"
-  echo -e "\n## Pre-release Changes (not yet in stable)\n" >> "$MANIFEST"
-  echo "Built from branch [\`${BUILD_BRANCH}\`](${REPO_URL}/tree/${BUILD_BRANCH})." >> "$MANIFEST"
-  echo >> "$MANIFEST"
+  {
+    echo -e "\n## Pre-release Changes (not yet in stable)\n"
+    echo "Built from branch [\`${BUILD_BRANCH}\`](${REPO_URL}/tree/${BUILD_BRANCH})."
+    echo
+  } >> "$MANIFEST"
   if git rev-parse --verify --quiet origin/latest >/dev/null; then
     # Pull requests merged into the branch, then the individual commits they brought in
     BRANCH_PRS=$(git log --merges --format='%s' origin/latest..HEAD | grep -oE 'pull request #[0-9]+' | grep -oE '#[0-9]+' | sort -u || true)

@@ -9,6 +9,7 @@ BUILD="$REPO/build-debian-image.sh"
 
 # the function as it is in the build script
 # shellcheck disable=SC2317  # called by the function under test
+# shellcheck disable=SC2329 # a stub, called by the code under test
 error() { echo "ERROR: $*" >&2; }
 eval "$(sed -n '/^image_version() {$/,/^}$/p' "$BUILD")"
 

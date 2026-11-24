@@ -43,6 +43,7 @@ load_build() {
   cleanup() { :; }
   OUTPUT_DIR="$W/out"; mkdir -p "$OUTPUT_DIR"; : > "$OUTPUT_DIR/x.img"
   eval "$(sed -n '/^cleanup() {$/,/^}$/p' "$BUILD")"
+  # shellcheck disable=SC2329 # a stub, called by the code under test
   zero_free_blocks() { echo "ZEROED"; }
   ( exit 1; ) ; ( false; cleanup ) 2>&1 | plain
 ) > "$W/cleanup-failed.log" 2>&1
@@ -51,6 +52,7 @@ has "after a failed build the failure is reported" "$W/cleanup-failed.log" "Buil
 (
   load_build
   OUTPUT_DIR="$W/out"
+  # shellcheck disable=SC2329 # a stub, called by the code under test
   zero_free_blocks() { echo "ZEROED"; }
   ( true; cleanup ) 2>&1 | plain
 ) > "$W/cleanup-ok.log" 2>&1
