@@ -23,7 +23,7 @@ inside() {
   [ "${1:-}" = "no-ffmpeg" ] || fake ffmpeg 'echo "ffmpeg version 8.0"'
   # only the stand-ins and the basic tools are on the PATH, so a real ffmpeg on this machine is not found
   ( cd "$W/in" && sed -E "s#(^|[[:space:]=\"'>])/(etc|usr|opt|root|var)/#\1$W/in/\2/#g" "$W/chroot-script" > "$W/in/script" \
-    && mkdir -p usr/share/keyrings etc/apt/sources.list.d etc/systemd/system usr/local/lib/homebridge-vm root var/lib \
+    && mkdir -p usr/share/keyrings etc/apt/sources.list.d etc/systemd/system opt/homebridge root var/lib \
     && : > etc/nsswitch.conf && PATH="$W/bin:/usr/bin:/bin" bash -e "$W/in/script" ) > "$W/inside.log" 2>&1
 }
 

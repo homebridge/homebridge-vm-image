@@ -39,13 +39,8 @@ install -m 755 files/hb-machine-id "${ROOTFS_DIR}/usr/local/sbin/"
 install -v -d "${ROOTFS_DIR}/etc/sudoers.d"
 install -m 0440 files/010_homebridge-nopasswd "${ROOTFS_DIR}/etc/sudoers.d/"
 
-# VM detection and the image versions.
-#   - vm-env.sh holds them. It belongs to root and sits outside /opt/homebridge, so the user
-#     Homebridge runs as can not change what root loads.
-#   - /opt/homebridge/source-vm.sh is the name the Homebridge apt package loads. It only loads
-#     the file above.
-install -v -d "${ROOTFS_DIR}/usr/local/lib/homebridge-vm"
-install -m 644 files/vm-env.sh "${ROOTFS_DIR}/usr/local/lib/homebridge-vm/"
+# VM detection and the image versions: /opt/homebridge/source-vm.sh, the name the Homebridge
+# apt package loads
 install -v -d "${ROOTFS_DIR}/opt/homebridge/"
 install -m 644 files/source-vm.sh "${ROOTFS_DIR}/opt/homebridge/"
 #
@@ -99,13 +94,13 @@ echo "8581" > /etc/hb-ui-port
 # prioritise dns over mdns
 sed -i 's/files mdns4_minimal \[NOTFOUND=return\] dns/files dns mdns4_minimal \[NOTFOUND=return\]/' /etc/nsswitch.conf
 
-# Store versions in vm-env.sh
+# Store versions in source-vm.sh
 {
   echo "# Appended by 00-run.sh"
   echo "export HOMEBRIDGE_VM_IMAGE_VERSION=${BUILD_VERSION}"
   echo "export FFMPEG_FOR_HOMEBRIDGE_VERSION=${FFMPEG_FOR_HOMEBRIDGE_VERSION}"
   echo "export HOMEBRIDGE_APT_PKG_VERSION=${HOMEBRIDGE_APT_PKG_VERSION}"
-} >> /usr/local/lib/homebridge-vm/vm-env.sh
+} >> /opt/homebridge/source-vm.sh
 
 # the build stops when sudo would refuse its rules
 visudo -c > /dev/null

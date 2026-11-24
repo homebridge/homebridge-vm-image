@@ -4,10 +4,8 @@
 # Only when VM_SOFTWARE is set. Runs at every start: the name can change (a newer image, or a
 # disk moved to another VM program), so a line that is there already is replaced, not kept.
 
-# The root-owned file is loaded directly, never the copy in /opt/homebridge (that folder is
-# given to the user Homebridge runs as).
-# shellcheck source=vm-env.sh
-source /usr/local/lib/homebridge-vm/vm-env.sh
+# shellcheck source=source-vm.sh
+. /opt/homebridge/source-vm.sh
 
 if [ -z "${VM_SOFTWARE:-}" ]; then
     echo "VM_SOFTWARE is not set or empty, exiting without updating /etc/issue"

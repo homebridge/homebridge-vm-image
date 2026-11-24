@@ -9,7 +9,7 @@ Builds a Debian 13 disk image with Homebridge installed, for arm64 and amd64, an
 - **Never** run `build-debian-image.sh`, `scripts/package-for-*.sh` or `scripts/convert-img-to-virtual-disk.sh` directly on a development machine. They need root rights and use loop devices. Use `scripts/local-build-in-docker.sh`.
 - Do not change release tags, release file names, or the paths listed under "What must not change by accident" in `README.md`.
 - `assets/01-homebridge/files/hb-config` is a `/bin/sh` script (dash). No bash-only syntax. Set `HB_CONFIG_VERSION` to the date when the file changes.
-- `assets/01-homebridge/files/vm-env.sh` and `source-vm.sh` are loaded by `/bin/sh` scripts of the Homebridge apt package. Plain sh only, and they must print nothing.
+- `assets/01-homebridge/files/source-vm.sh` is loaded by `/bin/sh` scripts of the Homebridge apt package. Plain sh only, and it must print nothing.
 - Anything that must differ per VM (keys, ids) is removed in `scripts/seal-image.sh` and made on the first start. Never add such a thing to the image.
 - Workflows: `permissions: {}` at the top, rights per job, actions pinned by commit, and workflow values passed to shell lines through `env:`, never pasted into the line. `tests/test-workflows.sh` checks this.
 

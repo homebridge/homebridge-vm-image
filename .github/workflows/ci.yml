@@ -40,7 +40,6 @@ jobs:
           # hb-config and the files the Homebridge package loads are /bin/sh scripts (dash in the VM)
           dash -n assets/01-homebridge/files/hb-config
           dash -n assets/01-homebridge/files/source-vm.sh
-          dash -n assets/01-homebridge/files/vm-env.sh
           dash -n assets/04-tzupdate/files/hb-timezone-once
           python3 -m py_compile scripts/boot-test-guest.py
 
