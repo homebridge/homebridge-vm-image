@@ -18,6 +18,8 @@ inside() {
   fake tar 'exit 0'
   fake apt-get 'exit 0'
   fake systemctl 'exit 0'
+  # the stage checks the security-update settings as apt reads them
+  fake apt-config "echo 'Unattended-Upgrade::Origins-Pattern:: \"label=Debian-Security\";'; echo 'Unattended-Upgrade::Automatic-Reboot \"false\";'"
   fake visudo 'exit 0'
   fake gpg "case \"\$*\" in *--show-keys*) echo 'pub:-:4096:1:DF5B0FE88C8F5D92:1:::-:::scESC::::::23::0:'; echo \"fpr:::::::::\$(cat '$W/key-fingerprint'):\" ;; *) cat ;; esac"
   [ "${1:-}" = "no-ffmpeg" ] || fake ffmpeg 'echo "ffmpeg version 8.0"'

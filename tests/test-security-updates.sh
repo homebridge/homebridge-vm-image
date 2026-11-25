@@ -5,11 +5,11 @@
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
-STAGE="$REPO/assets/06-security-updates"
+STAGE="$REPO/assets/01-homebridge"
 
-same "the stage installs unattended-upgrades" "$(cat "$STAGE/00-packages")" "unattended-upgrades"
+has "the stage installs unattended-upgrades" "$STAGE/00-packages" "unattended-upgrades"
 
-run_stage 06-security-updates 00-run.sh
+run_stage 01-homebridge 00-run.sh
 same "the stage ends with code 0" "$STAGE_CODE" "0"
 
 CONF="$W/root/etc/apt/apt.conf.d/52unattended-upgrades-homebridge"

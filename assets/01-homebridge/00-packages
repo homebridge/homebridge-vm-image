@@ -15,3 +15,5 @@ jq
 libavahi-compat-libdnssd-dev
 # plugins that are installed from a git address
 git
+# automatic Debian security fixes (settings in 00-run.sh)
+unattended-upgrades
