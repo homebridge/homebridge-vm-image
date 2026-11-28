@@ -1,0 +1,5 @@
+# actionlint's built-in list of GitHub runner labels lags behind GitHub. Labels listed here are
+# real GitHub-hosted runners that the pinned actionlint does not know yet.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04-arm

@@ -1,40 +1,17 @@
 #!/usr/bin/env bash
 
-BASH_DEBUG="" # "" or "x" for debugging
-
-set -euo${BASH_DEBUG} pipefail
+set -euo pipefail
+# for debugging: set -x
 
 # VirtualBox OVA Validation Script
 # Validates that the OVA file boots and serves the Homebridge web interface.
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
-
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-group_log() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::group::$*"
-    else
-        log "--- $* ---"
-    fi
-}
-group_end() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::endgroup::"
-    fi
-}
+# The shared helpers: log, warn, error, info, group_log, group_end
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 OVA_FILE="${1:-}"
 VM_NAME="homebridge-validation-vm"
-VM_RAM="1024"
 
 TEST_URL="http://localhost:8581"
 
@@ -82,7 +59,7 @@ start_vm() {
   VM_LOG_FOLDER="$(VBoxManage showvminfo "${VM_NAME}" --machinereadable 2>/dev/null | grep -E '^LogFldr=' | cut -d'"' -f2)"
   info "VM log folder: '$VM_LOG_FOLDER'"
   # Wait for VM to power on (max 60s)
-  for i in {1..12}; do
+  for _ in {1..12}; do
     sleep 5
     VM_STATE=$(VBoxManage showvminfo "${VM_NAME}" --machinereadable | grep -E '^VMState=' | cut -d'"' -f2)
     if [[ "$VM_STATE" == "running" ]]; then
@@ -101,7 +78,7 @@ start_vm() {
 
 wait_for_homebridge() {
   log "⏳ Waiting for ${TEST_URL} to become available..."
-  for i in {1..12}; do
+  for _ in {1..12}; do
     sleep 5
     STATUS=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" ${TEST_URL}|| echo "000")
     log "HTTP status from Homebridge UI: $STATUS"

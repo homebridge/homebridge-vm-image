@@ -1,2 +1,3 @@
+# Libraries that USB and serial plugins build against (Zigbee and Z-Wave sticks and the like)
 libusb-1.0-0-dev
 libudev-dev

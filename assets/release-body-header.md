@@ -19,5 +19,5 @@
 
 | CPU Architecture | Description |
 |:-------:|:-------:|
-| amd64 | 64 Bit Intel X86 and AMD Cpu's |
-| arm64 | 64 Bit Arm CPU's including M based Mac's |
+| amd64 | 64 Bit Intel X86 and AMD CPUs |
+| arm64 | 64 Bit Arm CPUs including M based Macs |

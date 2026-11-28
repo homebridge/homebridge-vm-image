@@ -4,28 +4,9 @@ set -euo pipefail
 
 # Homebridge UTM Package Validation Script
 
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
-
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
-group_log() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::group::$*"
-    else
-        log "===> $* <==="
-    fi
-}
-group_end() {
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        echo -e "::endgroup::"
-    fi
-}
+# The shared helpers: log, warn, error, info, group_log, group_end
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 UTM_BUNDLE="${1:-}"
 VM_NAME="homebridge-validation-utm"
@@ -56,7 +37,7 @@ check_dependencies() {
 
 prepare_validation_bundle() {
   group_log "📦 Preparing validation bundle..."
-  rm -rf "$VALIDATION_DIR"/*
+  rm -rf "${VALIDATION_DIR:?}"/*
   if [[ -f "$UTM_BUNDLE" && "$UTM_BUNDLE" == *.tgz ]]; then
     log "Expanding UTM bundle archive: $UTM_BUNDLE"
     tar -xzf "$UTM_BUNDLE" -C "$VALIDATION_DIR"
@@ -94,7 +75,7 @@ configure_networking_shared() {
     exit 1
   fi
   if command -v /usr/libexec/PlistBuddy &> /dev/null; then
-    /usr/libexec/PlistBuddy -c "Set :Networking:0:Mode shared" "$PLIST"
+    /usr/libexec/PlistBuddy -c "Set :Network:0:Mode Shared" "$PLIST"
     log "✅ Networking set to 'Shared Network' in config.plist"
   else
     error "PlistBuddy not found. Cannot modify config.plist networking mode."

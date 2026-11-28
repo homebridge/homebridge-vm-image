@@ -31,22 +31,22 @@ concurrency:
   group: stage-2-build-and-push
   cancel-in-progress: false
 
+# No rights by default. Each job below asks for what it needs.
+permissions: {}
+
 jobs:
   set-versions:
     runs-on: ubuntu-latest
     outputs:
-      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
+      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ steps.release_tag.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-
+    # Only beta and alpha may build from a pre-release branch (e.g. beta-2026.11.18).
+    # Stable must come from latest, so a branch can never publish a stable release.
     - name: Check Release Branch
       env:
         RELEASE_STREAM: ${{ inputs.release_stream }}
       run: |
-        # Only beta and alpha may build from a pre-release branch (e.g. beta-2026.11.18).
-        # Stable must come from latest, so a branch can never publish a stable release.
         if [[ "$RELEASE_STREAM" != "beta" && "$RELEASE_STREAM" != "alpha" && "$GITHUB_REF_NAME" != "latest" ]]; then
           echo "::error::${RELEASE_STREAM} releases must be built from the latest branch, not ${GITHUB_REF_NAME}"
           exit 1
@@ -56,87 +56,135 @@ jobs:
           exit 1
         fi
 
-    - name: Set Docker Homebridge version
-      id: docker_version
+    - name: Set the release tag
+      id: release_tag
+      env:
+        RELEASE_STREAM: ${{ inputs.release_stream }}
       run: |
-        if [[ "${{ inputs.release_stream }}" == "stable" ]]; then
-          export HOMEBRIDGE_VM_IMAGE_VERSION="$(date +%Y-%m-%d)"
+        # stable: YYYY-MM-DD, beta and alpha: <stream>-YYYY-MM-DD
+        # (the wiki, the clean-up and the release notes use these forms)
+        if [[ "$RELEASE_STREAM" == "stable" ]]; then
+          HOMEBRIDGE_VM_IMAGE_VERSION="$(date +%Y-%m-%d)"
         else
-          export HOMEBRIDGE_VM_IMAGE_VERSION="${{ inputs.release_stream }}-$(date +%Y-%m-%d)"
+          HOMEBRIDGE_VM_IMAGE_VERSION="${RELEASE_STREAM}-$(date +%Y-%m-%d)"
         fi
-        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> $GITHUB_OUTPUT
-
-    - name: Output versions
-      run: |
-        echo "::group::Version Information"
-        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${{ steps.docker_version.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-        echo "::endgroup::"
+        echo "HOMEBRIDGE_VM_IMAGE_VERSION=${HOMEBRIDGE_VM_IMAGE_VERSION}" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Homebridge VM image: ${RELEASE_STREAM}"
+          echo
+          echo "| Release tag | Branch |"
+          echo "|---|---|"
+          echo "| \`${HOMEBRIDGE_VM_IMAGE_VERSION}\` | \`${GITHUB_REF_NAME}\` |"
+        } >> "$GITHUB_STEP_SUMMARY"
 
   build-img-file:
     needs: set-versions
+    permissions:
+      contents: read
     strategy:
-      max-parallel: 1
+      # both CPU types are built at the same time, each on a runner of its own type
       fail-fast: false
       matrix:
         arch: [arm64, amd64]
         include:
           - arch: arm64
+            # GitHub has no "latest" label for arm runners: use the newest one
             runs-on: ubuntu-26.04-arm
-          # Pinned, like the arm64 runner: ubuntu-latest moved to Ubuntu 26.04 on 8 Nov 2026
-          # and every amd64 build has failed since
           - arch: amd64
             runs-on: ubuntu-latest
     runs-on: ${{ matrix.runs-on }}
+    env:
+      ARCH: ${{ matrix.arch }}
+      RELEASE_STREAM: ${{ inputs.release_stream }}
+      HOMEBRIDGE_VM_IMAGE_VERSION: ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Setup build environemnt
       - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y debootstrap parted e2fsprogs dosfstools dialog gzip sudo udev kpartx psmisc jq zerofree
-          sudo apt-get install -y grub-efi-${{ matrix.arch }}-bin
+        run: sudo ./scripts/install-build-deps.sh "$ARCH"
 
       # Step 2: Start the build process
       - name: run build-debian-image.sh script
+        id: build
+        env:
+          # read-only: the build asks GitHub for the checksum of the ffmpeg download
+          GH_TOKEN: ${{ github.token }}
         run: |
-          ./build-debian-image.sh "${{ matrix.arch}}" "${{ inputs.release_stream }}" "${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          ./build-debian-image.sh "$ARCH" "$RELEASE_STREAM" "$HOMEBRIDGE_VM_IMAGE_VERSION"
 
-      # Step 3: Upload the IMG file as an artifact
+      # Step 3: Start the image as a virtual machine and check it from the inside.
+      # When this step fails, nothing is uploaded and Stage 3 (the release) is never started.
+      # amd64 only: GitHub's arm runners have no /dev/kvm (no nested virtualization), so an arm64
+      # image could only be booted with an emulated CPU, which does not finish in time. The arm64
+      # image is checked on real hardware (UTM on Apple Silicon) before a release is promoted.
+      - name: Boot test
+        id: boot-test
+        if: matrix.arch == 'amd64'
+        run: |
+          # the apt package version the image must hold (npm "2.1.0-beta.4" is apt "2.1.0~beta.4")
+          APT_VERSION="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"]' "${RELEASE_STREAM}/package.json" | sed -e 's/^\^//' -e 's/-/~/')"
+          # the image must also know its own release tag
+          sudo ./scripts/boot-test.sh "output/homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.img" "$ARCH" "$HOMEBRIDGE_VM_IMAGE_VERSION" "$APT_VERSION"
+
+      # Step 4: Upload the IMG file as an artifact
       - name: Upload Homebridge Image
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 7
           name: homebridge-image-${{ matrix.arch }}
           path: output/*
 
-      - name: Steps complete
+      # Written even when a step failed, so the summary shows where the build stopped
+      - name: Job summary
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BOOT_OUTCOME: ${{ steps.boot-test.outcome }}
         run: |
-          echo "::notice::Homebridge VM image version: ${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
-          echo "::notice::Run ID: ${{ github.run_id }}"
-          echo "::notice::Architecture: ${{ matrix.arch }}"
-          echo "::notice::Release Stream: ${{ inputs.release_stream }}"
+          icon() { case "$1" in success) echo "✅ passed" ;; failure) echo "❌ failed" ;; *) echo "⏭️ ${1:-not run}" ;; esac; }
+          BOOT="$(icon "$BOOT_OUTCOME")"
+          [ "$ARCH" = "arm64" ] && BOOT="⏭️ not run on arm64 (no KVM on GitHub's arm runners)"
+          IMG="output/homebridge-vm-image-${RELEASE_STREAM}-${ARCH}.img"
+          SIZE="$( [ -f "$IMG" ] && du -h --apparent-size "$IMG" | cut -f1 || echo "—")"
+          APT_PKG="$(jq -r '.dependencies["@homebridge/homebridge-apt-pkg"] // "—"' "${RELEASE_STREAM}/package.json" 2> /dev/null || echo "—")"
+          {
+            echo "### ${ARCH} image"
+            echo
+            echo "| Build | Boot test | Image size | homebridge-apt-pkg |"
+            echo "|---|---|---|---|"
+            echo "| $(icon "$BUILD_OUTCOME") | ${BOOT} | ${SIZE} | \`${APT_PKG}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   invoke-package-and-release:
     name: Invoke Stage 3 - Package and Release
     needs: [set-versions, build-img-file]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # checkout (the local action)
+      actions: write  # start the Stage 3 workflow and read its state
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
+    # This step fails when Stage 3 or a Stage 4 packaging workflow fails.
     - name: Trigger and Wait for ${{ inputs.release_stream }} Stage 3 Workflow
       uses: ./.github/actions/trigger-and-wait-workflow
       with:
         workflow-file: 'release-stage-3_package_release.yml'
         ref: ${{ github.ref_name }}  # stay on the branch that was built
-        github-token: ${{ secrets.GH_TOKEN }}
-        timeout-minutes: '120'
+        github-token: ${{ github.token }}
+        # Stage 3 also waits for the three Stage 4 packaging workflows
+        timeout-minutes: '240'
         workflow-fields: |
           release_stream=${{ inputs.release_stream }}
-          run_id="${{ github.run_id }}"
-          HOMEBRIDGE_VM_IMAGE_VERSION="${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}"
+          run_id=${{ github.run_id }}
+          HOMEBRIDGE_VM_IMAGE_VERSION=${{ needs.set-versions.outputs.HOMEBRIDGE_VM_IMAGE_VERSION }}
         run-name: "${{ inputs.release_stream }}:${{ github.run_id }}"

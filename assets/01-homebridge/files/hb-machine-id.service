@@ -1,0 +1,16 @@
+[Unit]
+Description=Give this VM a machine id of its own
+# systemd fills the empty /etc/machine-id of the image from the VM's UUID, and a UTM package
+# carries a fixed UUID, so VMs made from one package would share the id. While the id is the
+# VM's UUID, this replaces it with a random one; the start after that uses the new id.
+# After systemd-machine-id-commit: before it, /etc/machine-id can be a read-only copy.
+After=systemd-machine-id-commit.service
+ConditionPathExists=/sys/class/dmi/id/product_uuid
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'vm=$$(tr -d - < /sys/class/dmi/id/product_uuid | tr A-F a-f); [ -n "$$vm" ] && [ "$$(cat /etc/machine-id)" = "$$vm" ] || exit 0; systemd-id128 new > /etc/machine-id; echo "hb-machine-id: the machine id was the VM UUID; this VM now has a random one"'
+
+[Install]
+WantedBy=multi-user.target

@@ -6,48 +6,30 @@
 set -e
 
 BUILD_START=$(date +%s)
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
-info() { echo -e "${BLUE}[$(date +'%H:%M:%S')] INFO:${NC} $*" >&2; }
 
 echo "🧪 Homebridge VM Image Local Test Build"
 echo "======================================="
 
-# Detect architecture
-detect_arch() {
-  case "$(uname -m)" in
-    arm64|aarch64) echo "arm64" ;;
-    x86_64) echo "amd64" ;;
-    *) echo "amd64" ;;  # fallback to amd64 for unknown architectures
-  esac
-}
 
-RELEASE_STREAM="${2:-stable}"
-ARCH="${1:-$(detect_arch)}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib.sh
+source "${REPO_ROOT}/scripts/lib.sh"
+
+# Usage: local-build-in-docker.sh [arm64|amd64] [stable|beta|alpha]
+ARCH="${1:-$(detect_arch)}"
+RELEASE_STREAM="${2:-stable}"
 DOCKERFILE="$REPO_ROOT/scripts/Dockerfile"
 
-# Generate a checksum for the Dockerfile
-DOCKERFILE_HASH=$(sha256sum "$DOCKERFILE" | awk '{print $1}')
+# Generate a checksum for the Dockerfile and the package list it installs
+DOCKERFILE_HASH=$(cat "$DOCKERFILE" "$REPO_ROOT/scripts/install-build-deps.sh" | sha256sum | awk '{print $1}')
 
 # Use the checksum as part of the image tag
 DOCKER_IMAGE_TAG="homebridge-vm-builder:${RELEASE_STREAM}-$ARCH-$DOCKERFILE_HASH"
 
 if [[ "$ARCH" == "arm64" ]]; then
   BASE_IMAGE="arm64v8/ubuntu:24.04"
-  GRUB_EFI_PKG="grub-efi-arm64-bin"
 elif [[ "$ARCH" == "amd64" ]]; then
   BASE_IMAGE="ubuntu:24.04"
-  GRUB_EFI_PKG="grub-efi-amd64-bin"
 else
   error "Unsupported architecture: $ARCH"
   exit 1
@@ -63,7 +45,7 @@ if ! docker image inspect "$DOCKER_IMAGE_TAG" > /dev/null 2>&1; then
   info "==> Dockerfile has changed or image does not exist. Building the Docker image."
   docker build \
     --build-arg BASE_IMAGE="$BASE_IMAGE" \
-    --build-arg GRUB_EFI_PKG="$GRUB_EFI_PKG" \
+    --build-arg ARCH="$ARCH" \
     -t "$DOCKER_IMAGE_TAG" \
     -f "$DOCKERFILE" \
     "$REPO_ROOT"
@@ -76,7 +58,7 @@ docker run --rm -it \
   --privileged \
   -v "$REPO_ROOT":/repo/ \
   --workdir /repo \
-  --name homebridge-vm-build-${RELEASE_STREAM}-${ARCH} \
+  --name "homebridge-vm-build-${RELEASE_STREAM}-${ARCH}" \
   "$DOCKER_IMAGE_TAG" \
   bash ./build-debian-image.sh "$ARCH" "${RELEASE_STREAM}" 
 

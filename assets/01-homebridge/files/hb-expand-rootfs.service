@@ -1,0 +1,13 @@
+[Unit]
+Description=Grow the root file system to the size of the virtual disk
+# Runs at every start, with no questions asked, so the system also fills its disk when nobody
+# ever opens the console. It does nothing when the file system already fills the disk.
+After=systemd-remount-fs.service
+Before=homebridge.service first-boot-homebridge.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/expandVirtualFilesystem
+
+[Install]
+WantedBy=multi-user.target

@@ -1,36 +1,30 @@
 #!/usr/bin/env bash
 
-BASH_DEBUG="" # "" or "x" for debugging
-
-set -euo${BASH_DEBUG} pipefail
+set -euo pipefail
+# for debugging: set -x
 
 # VirtualBox Appliance Packaging Script
 # Supports multiple release streams: alpha, beta, stable
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Auto-detect architecture based on host system
-detect_default_arch() {
-  case "$(uname -m)" in
-    arm64|aarch64) echo "arm64" ;;
-    x86_64) echo "amd64" ;;
-    *) echo "amd64" ;;  # fallback to amd64 for unknown architectures
-  esac
-}
+# shellcheck source=lib.sh
+source "${REPO_ROOT}/scripts/lib.sh"
 
-ARCH="${1:-$(detect_default_arch)}"
+# Usage: package-for-virtual-box.sh [arm64|amd64] [stable|beta|alpha]
+ARCH="${1:-$(detect_arch)}"
 RELEASE_STREAM="${2:-stable}" # Default to "stable" if not provided
 
 # Validate architecture
 if [[ "$ARCH" != "arm64" && "$ARCH" != "amd64" ]]; then
-  echo -e "\033[0;31mERROR:\033[0m Unsupported architecture: $ARCH"
+  error "Unsupported architecture: $ARCH"
   echo "Supported architectures: amd64, arm64"
   exit 1
 fi
 
 # Validate release stream
 if [[ "$RELEASE_STREAM" != "alpha" && "$RELEASE_STREAM" != "beta" && "$RELEASE_STREAM" != "stable" ]]; then
-  echo -e "\033[0;31mERROR:\033[0m Unsupported release stream: $RELEASE_STREAM"
+  error "Unsupported release stream: $RELEASE_STREAM"
   echo "Supported release streams: alpha, beta, stable"
   exit 1
 fi
@@ -44,16 +38,6 @@ TMP_VDI_FILE="$OUTPUT_DIR/tmp/${VM_NAME}.vdi"
 OVA_FILE="$OUTPUT_DIR/${VM_NAME}.ova"
 MANIFEST_FILE="$OUTPUT_DIR/${VM_NAME}.manifest"
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*" >&2; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')] WARN:${NC} $*" >&2; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')] ERROR:${NC} $*" >&2; }
 
 check_dependencies() {
   log "🔍 Checking dependencies..."
@@ -71,7 +55,7 @@ convert_image_to_vdi() {
   local img_gz_file="$OUTPUT_DIR/${VM_NAME}.img.gz"
   local img_file="$OUTPUT_DIR/${VM_NAME}.img"
 
-  mkdir -p $OUTPUT_DIR/tmp
+  mkdir -p "$OUTPUT_DIR/tmp"
 
   if [[ -f "$TMP_VDI_FILE" ]]; then
     rm -f "$TMP_VDI_FILE"
@@ -94,9 +78,8 @@ convert_image_to_vdi() {
       exit 1
     fi
     log "Resizing VDI to ${VDISK_SIZE_MB}..."
-    VBoxManage modifymedium "$TMP_VDI_FILE" --resize ${VDISK_SIZE_MB}
+    VBoxManage modifymedium "$TMP_VDI_FILE" --resize "${VDISK_SIZE_MB}"
     log "✅ Conversion to VDI completed: $TMP_VDI_FILE"
-    mkdir -p $OUTPUT_DIR/tmp
     cp -f "$TMP_VDI_FILE" "$VDI_FILE"
     gzip -f "$VDI_FILE"
     ls -l "$VDI_FILE.gz"
@@ -146,7 +129,20 @@ package_as_ova() {
   fi
 
   log "📦 Packaging VirtualBox Appliance (OVA)..."
-  VBoxManage createvm --name "$VM_NAME" --register --ostype="Debian12_${ARCH}" --platform-architecture=$( [[ "$ARCH" == "arm64" ]] && echo "arm" || echo "x86" )
+  # VirtualBox's own names for "Debian, 64-bit": Debian_64 on Intel/AMD and Debian_arm64 on ARM.
+  # They do not name a Debian version, so they stay right when the image moves to a new Debian.
+  local os_type platform
+  if [[ "$ARCH" == "arm64" ]]; then
+    os_type="Debian_arm64"
+    platform="arm"
+  else
+    os_type="Debian_64"
+    platform="x86"
+  fi
+  if ! VBoxManage list ostypes | grep -qE "^ID:[[:space:]]+${os_type}\$"; then
+    warn "This VirtualBox does not list the system type ${os_type}"
+  fi
+  VBoxManage createvm --name "$VM_NAME" --register --ostype="$os_type" --platform-architecture="$platform"
   VBoxManage modifyvm "$VM_NAME" \
     --memory "$VM_RAM" \
     --cpus 2 \
@@ -173,13 +169,14 @@ package_as_ova() {
     --medium "$TMP_VDI_FILE"
 
   log "Configuring VM settings..."
+  # Shared clipboard and drag and drop need the VirtualBox guest additions inside the VM.
+  # The image does not have them, so both are off (decided by BP, 2026-11-21).
   VBoxManage modifyvm "$VM_NAME" \
-    --clipboard-mode bidirectional \
-    --draganddrop bidirectional
+    --clipboard-mode disabled \
+    --draganddrop disabled
 
   VBoxManage modifyvm "$VM_NAME" --iconfile "${REPO_ROOT}/assets/homebridge-icon.png"
-  VBoxManage modifyvm "$VM_NAME" --os-type="Debian12_${ARCH}"
-  VBoxManage modifyvm "$VM_NAME" --description "$(cat ${MANIFEST_FILE})"
+  VBoxManage modifyvm "$VM_NAME" --description "$(cat "${MANIFEST_FILE}")"
 
   log "Exporting to OVA..."
   VBoxManage export "$VM_NAME" --output "$OVA_FILE"
@@ -204,7 +201,7 @@ main() {
   echo "  Name: $VM_NAME"
   echo "  Architecture: $ARCH"
   echo "  Release Stream: $RELEASE_STREAM"
-  echo "  $(cat ${MANIFEST_FILE}| grep 'Release Version: ')"
+  echo "  $(grep 'Release Version: ' "${MANIFEST_FILE}")"
   echo "  RAM: ${VM_RAM}MB"
   echo "  VDI Size: ${VDISK_SIZE_MB}MB"
   echo "  OVA File: $OVA_FILE"

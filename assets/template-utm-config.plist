@@ -41,7 +41,7 @@
 	<key>Information</key>
 	<dict>
 		<key>Icon</key>
-		<string>string homebridge-icon.png</string>
+		<string>homebridge-icon.png</string>
 		<key>IconCustom</key>
 		<true/>
 		<key>Name</key>
@@ -82,7 +82,7 @@
 		<key>BalloonDevice</key>
 		<false/>
 		<key>DebugLog</key>
-		<true/>
+		<false/>
 		<key>Hypervisor</key>
 		<true/>
 		<key>PS2Controller</key>

@@ -1,14 +1,19 @@
-apt-transport-https
+# Packages for Homebridge and its plugins. One name per line; lines that start with # are comments.
+# for the Homebridge package repo and the downloads of the build (https, curl)
 ca-certificates
 curl
-gnupg-agent
-software-properties-common
-python3-setuptools
-python3-pip
+# plugins that build native code when they are installed (node-gyp needs python3 with setuptools)
 gcc
 g++
 make
-ntpdate
+python3-setuptools
+# pip installs the timezone tool in stage 04-tzupdate
+python3-pip
+# hb-config and the nginx pre-start script read config.json with it
 jq
+# plugins that use Bonjour through the system library
 libavahi-compat-libdnssd-dev
+# plugins that are installed from a git address
 git
+# automatic Debian security fixes (settings in 00-run.sh)
+unattended-upgrades
